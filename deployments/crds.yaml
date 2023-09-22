@@ -1,0 +1,144 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: virtualmachinenetworkconfigs.kubevirtiphelper.k8s.binbash.org
+spec:
+  group: kubevirtiphelper.k8s.binbash.org
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                vmname:
+                  type: string
+                  pattern: '^[\w-]+$'
+                networkconfig:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      ipaddress:
+                        type: string
+                        pattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
+                      macaddress:
+                        type: string
+                        pattern: '^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+                      networkname:
+                        type: string
+                        pattern: '^[\w\/-]+$'
+            status:
+              type: object
+              properties:
+                networkconfig:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      macaddress:
+                        type: string
+                        pattern: '^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+                      networkname:
+                        type: string
+                        pattern: '^[\w\/-]+$'
+                      status:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}
+  scope: Namespaced
+  names:
+    plural: virtualmachinenetworkconfigs
+    singular: virtualmachinenetworkconfig
+    kind: VirtualMachineNetworkConfig
+    shortNames:
+      - vmnetcfg
+      - vmnetcfgs
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ippools.kubevirtiphelper.k8s.binbash.org
+spec:
+  group: kubevirtiphelper.k8s.binbash.org
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                ipv4config:
+                  type: object
+                  properties:
+                    serverip:
+                      type: string
+                      pattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
+                    subnet:
+                      type: string
+                      pattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/\d{1,2}$'
+                    pool:
+                      type: object
+                      properties:
+                        start:
+                          type: string
+                          pattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
+                        end:
+                          type: string
+                          pattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
+                        exclude:
+                          type: array
+                          items:
+                            type: string
+                            pattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
+                    router:
+                      type: string
+                      pattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
+                    dns:
+                      type: array
+                      items:
+                        type: string
+                        pattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
+                networkname:
+                  type: string
+                  pattern: '^[\w\/-]+$'
+            status:
+              type: object
+              properties:
+                lastupdate:
+                  type: string
+                  format: date-time
+                lastupdatebeforestart:
+                  type: string
+                  format: date-time
+                ipv4:
+                  type: object
+                  properties:
+                    allocated:
+                      type: object
+                      additionalProperties:
+                        type: string
+                    used:
+                      type: integer
+                    available:
+                      type: integer
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: ippools
+    singular: ippool
+    kind: IPPool
+    shortNames:
+      - ippool
+      - ippools
