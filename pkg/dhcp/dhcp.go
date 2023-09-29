@@ -10,15 +10,19 @@ import (
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/insomniacslk/dhcp/dhcpv4/server4"
+	"github.com/insomniacslk/dhcp/rfc1035label"
 )
 
 type DHCPLease struct {
-	ServerIP   net.IP
-	ClientIP   net.IP
-	SubnetMask net.IPMask
-	Router     net.IP
-	DNS        []net.IP
-	Reference  string
+	ServerIP     net.IP
+	ClientIP     net.IP
+	SubnetMask   net.IPMask
+	Router       net.IP
+	DNS          []net.IP
+	DomainName   string
+	DomainSearch []string
+	LeaseTime    int
+	Reference    string
 }
 
 type DHCPAllocator struct {
@@ -37,7 +41,18 @@ func NewDHCPAllocator() *DHCPAllocator {
 	}
 }
 
-func (a *DHCPAllocator) AddLease(hwAddr string, serverIP string, clientIP string, subnetMask string, routerIP string, DNSServers []string, ref string) (err error) {
+func (a *DHCPAllocator) AddLease(
+	hwAddr string,
+	serverIP string,
+	clientIP string,
+	subnetMask string,
+	routerIP string,
+	DNSServers []string,
+	domainName string,
+	domainSearch []string,
+	leaseTime int,
+	ref string,
+) (err error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
@@ -53,6 +68,9 @@ func (a *DHCPAllocator) AddLease(hwAddr string, serverIP string, clientIP string
 	for i := 0; i < len(DNSServers); i++ {
 		lease.DNS = append(lease.DNS, net.ParseIP(DNSServers[i]))
 	}
+	lease.DomainName = domainName
+	lease.DomainSearch = domainSearch
+	lease.LeaseTime = leaseTime
 	lease.Reference = ref
 
 	a.leases[hwAddr] = lease
@@ -130,13 +148,17 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 		return
 	}
 
-	log.Debugf("(dhcp.dhcpHandler) LEASE FOUND: hwaddr=%s, serverip=%s, clientip=%s, mask=%s, router=%s, dns=%+v",
+	log.Debugf("(dhcp.dhcpHandler) LEASE FOUND: hwaddr=%s, serverip=%s, clientip=%s, mask=%s, router=%s, dns=%+v, domainname=%s, domainsearch=%+v, leasetime=%d, reference=%s",
 		m.ClientHWAddr.String(),
 		lease.ServerIP.String(),
 		lease.ClientIP.String(),
 		lease.SubnetMask.String(),
 		lease.Router.String(),
 		lease.DNS,
+		lease.DomainName,
+		lease.DomainSearch,
+		lease.LeaseTime,
+		lease.Reference,
 	)
 
 	reply.ClientIPAddr = lease.ClientIP
@@ -155,11 +177,26 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 	// TODO: maybe add these options as wel to the IPPool object
 	//reply.UpdateOption(dhcpv4.OptBroadcastAddress(net.IP{192, 168, 10, 255}))
 	//reply.UpdateOption(dhcpv4.OptClassIdentifier("k8s"))
-	//reply.UpdateOption(dhcpv4.OptDomainName("example.com"))
 
-	// TODO: this should be a configuration option in the IPPool object
-	// TODO: make this default 1 year instead of 30 minutes (only for testing)
-	reply.UpdateOption(dhcpv4.OptIPAddressLeaseTime(30 * time.Minute))
+	if lease.DomainName != "" {
+		reply.UpdateOption(dhcpv4.OptDomainName(lease.DomainName))
+	}
+
+	if len(lease.DomainSearch) > 0 {
+		dsl := rfc1035label.NewLabels()
+		dsl.Labels = append(dsl.Labels, lease.DomainSearch...)
+		// for _, label := range lease.DomainSearch {
+		// 	dsl.Labels = append(dsl.Labels, label)
+		// }
+
+		reply.UpdateOption(dhcpv4.OptDomainSearch(dsl))
+	}
+
+	if lease.LeaseTime > 0 {
+		reply.UpdateOption(dhcpv4.OptIPAddressLeaseTime(time.Duration(lease.LeaseTime) * time.Second))
+	} else {
+		reply.UpdateOption(dhcpv4.OptIPAddressLeaseTime(1800 * time.Second))
+	}
 
 	switch mt := m.MessageType(); mt {
 	case dhcpv4.MessageTypeDiscover:

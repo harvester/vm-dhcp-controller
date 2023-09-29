@@ -65,11 +65,14 @@ type IPPoolSpec struct {
 }
 
 type IPv4Config struct {
-	ServerIP string   `json:"serverip,omitempty"`
-	Subnet   string   `json:"subnet,omitempty"`
-	Pool     Pool     `json:"pool,omitempty"`
-	Router   string   `json:"router,omitempty"`
-	DNS      []string `json:"dns,omitempty"`
+	ServerIP     string   `json:"serverip,omitempty"`
+	Subnet       string   `json:"subnet,omitempty"`
+	Pool         Pool     `json:"pool,omitempty"`
+	Router       string   `json:"router,omitempty"`
+	DNS          []string `json:"dns,omitempty"`
+	DomainName   string   `json:"domainname,omitempty"`
+	DomainSearch []string `json:"domainsearch,omitempty"`
+	LeaseTime    int      `json:"leasetime,omitempty"`
 }
 
 type Pool struct {

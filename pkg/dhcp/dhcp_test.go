@@ -10,44 +10,56 @@ func TestDHCP(t *testing.T) {
 	td := New()
 
 	testLeases := []struct {
-		hwAddr     string
-		serverIP   string
-		clientIP   string
-		subnetMask string
-		routerIP   string
-		DNSServers []string
-		Reference  string
-		want       error
+		hwAddr       string
+		serverIP     string
+		clientIP     string
+		subnetMask   string
+		routerIP     string
+		DNSServers   []string
+		domainName   string
+		domainSearch []string
+		leaseTime    int
+		Reference    string
+		want         error
 	}{
 		{
-			hwAddr:     "aa:bb:cc:dd:ee:ff",
-			serverIP:   "0.0.0.0",
-			clientIP:   "192.168.0.10",
-			subnetMask: "192.168.0.254",
-			routerIP:   "192.168.0.254",
-			DNSServers: []string{"8.8.8.8", "8.8.4.4"},
-			Reference:  "",
-			want:       nil,
+			hwAddr:       "aa:bb:cc:dd:ee:ff",
+			serverIP:     "0.0.0.0",
+			clientIP:     "192.168.0.10",
+			subnetMask:   "192.168.0.254",
+			routerIP:     "192.168.0.254",
+			DNSServers:   []string{"8.8.8.8", "8.8.4.4"},
+			domainName:   "example.com",
+			domainSearch: []string{"example.com"},
+			leaseTime:    300,
+			Reference:    "",
+			want:         nil,
 		},
 		{
-			hwAddr:     "aa:bb:cc:dd:ee:ff",
-			serverIP:   "0.0.0.0",
-			clientIP:   "192.168.0.10",
-			subnetMask: "192.168.0.254",
-			routerIP:   "192.168.0.254",
-			DNSServers: []string{"8.8.8.8", "8.8.4.4"},
-			Reference:  "",
-			want:       fmt.Errorf("lease for hwaddr aa:bb:cc:dd:ee:ff already exists"),
+			hwAddr:       "aa:bb:cc:dd:ee:ff",
+			serverIP:     "0.0.0.0",
+			clientIP:     "192.168.0.10",
+			subnetMask:   "192.168.0.254",
+			routerIP:     "192.168.0.254",
+			DNSServers:   []string{"8.8.8.8", "8.8.4.4"},
+			domainName:   "example.com",
+			domainSearch: []string{"example.com"},
+			leaseTime:    300,
+			Reference:    "",
+			want:         fmt.Errorf("lease for hwaddr aa:bb:cc:dd:ee:ff already exists"),
 		},
 		{
-			hwAddr:     "00:01:02:03:04:05",
-			serverIP:   "0.0.0.0",
-			clientIP:   "192.168.0.11",
-			subnetMask: "192.168.0.254",
-			routerIP:   "192.168.0.254",
-			DNSServers: []string{"8.8.8.8", "8.8.4.4"},
-			Reference:  "someref",
-			want:       nil,
+			hwAddr:       "00:01:02:03:04:05",
+			serverIP:     "0.0.0.0",
+			clientIP:     "192.168.0.11",
+			subnetMask:   "192.168.0.254",
+			routerIP:     "192.168.0.254",
+			DNSServers:   []string{"8.8.8.8", "8.8.4.4"},
+			domainName:   "example.com",
+			domainSearch: []string{"example.com"},
+			leaseTime:    300,
+			Reference:    "someref",
+			want:         nil,
 		},
 	}
 
@@ -60,6 +72,9 @@ func TestDHCP(t *testing.T) {
 			testLeases[i].subnetMask,
 			testLeases[i].routerIP,
 			testLeases[i].DNSServers,
+			testLeases[i].domainName,
+			testLeases[i].domainSearch,
+			testLeases[i].leaseTime,
 			testLeases[i].Reference,
 		); got != testLeases[i].want {
 			if got == nil || testLeases[i].want == nil {

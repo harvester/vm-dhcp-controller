@@ -13,7 +13,7 @@ the lease database or run a seperate service outside your Kubernetes cluster.
 Another use case, and this is the main reason why this project was started, is that when you have for example small IP ranges and/or 
 limited available IP addresses in a range, you want to avoid that the pool gets exausted with unused IP leases from deleted Virtual 
 Machines because they are not expired yet. When using a classic DHCP service you can solve this by putting the lease time very short 
-so they will expire faster when they are not claimed anymore. However if a Virtual Machine is down for a certian amount of time and 
+so they will expire faster when they are not claimed anymore. However if a Virtual Machine is down for a certain amount of time and 
 this exceeds the lease time the IP can be re-assigned to another Virtual Machine. This could be a problem when you run for example 
 Kubernetes with ETCD in those Virtual Machines. ETCD members cannnot find each other anymore and the cluster won't come up.
 
@@ -148,6 +148,10 @@ spec:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    domainname: example.com
+    domainsearch:
+      - example.com
+    leasetime: 300
   networkname: <NAMESPACE>/<NETWORKATTACHMENTDEFINITION_NAME>
 EOF
 ) | kubectl create -f -
