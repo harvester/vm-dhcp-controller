@@ -75,7 +75,7 @@ spec:
     spec:
       containers:
       - name: kubevirt-ip-helper
-        image: <DOCKER_REGISTRY_URI>/kubevirt-ip-helper:latest
+        image: ghcr.io/joeyloman/kubevirt-ip-helper:latest
         command:
         - /bin/sh
         - '-ec'

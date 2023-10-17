@@ -72,20 +72,6 @@ kubectl create -f deployments/deployment.yaml
 
 Before executing the above command, edit the deployment.yaml and:
 
-Set the proper image source:
-```YAML
-spec:
-  [..]
-  template:
-    [..]
-    spec:
-      containers:
-      - name: kubevirt-ip-helper
-        image: <DOCKER_REGISTRY_URI>/kubevirt-ip-helper:latest
-```
-
-> **_NOTE:_** Make sure to replace the \<DOCKER_REGISTRY_URI> placeholder.
-
 Configure the Multus NetworkAttachmentDefinition name and namespace:
 ```YAML
 spec:

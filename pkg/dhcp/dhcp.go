@@ -195,7 +195,8 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 	if lease.LeaseTime > 0 {
 		reply.UpdateOption(dhcpv4.OptIPAddressLeaseTime(time.Duration(lease.LeaseTime) * time.Second))
 	} else {
-		reply.UpdateOption(dhcpv4.OptIPAddressLeaseTime(1800 * time.Second))
+		// default lease time: 1 year
+		reply.UpdateOption(dhcpv4.OptIPAddressLeaseTime(31536000 * time.Second))
 	}
 
 	switch mt := m.MessageType(); mt {
