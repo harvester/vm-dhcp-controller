@@ -1,6 +1,6 @@
 module github.com/joeyloman/kubevirt-ip-helper
 
-go 1.20
+go 1.21
 
 replace k8s.io/apimachinery => k8s.io/apimachinery v0.24.0
 
