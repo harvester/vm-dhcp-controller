@@ -33,11 +33,15 @@ func Register(ctx context.Context) *handler {
 }
 
 func (h *handler) Run() {
-	// TODO: flag parse kubeconfig and context
+	var kubeconfig_file string
 
-	// temp
-	homedir := os.Getenv("HOME")
-	kubeconfig_file := filepath.Join(homedir, ".kube", "config")
+	kubeconfig_file = os.Getenv("KUBECONFIG")
+	if kubeconfig_file == "" {
+		homedir := os.Getenv("HOME")
+		kubeconfig_file = filepath.Join(homedir, ".kube", "config")
+	}
+
+	kubeconfig_context := os.Getenv("KUBECONTEXT")
 
 	// initialize the ipam service
 	h.ipam = ipam.New()
@@ -55,7 +59,7 @@ func (h *handler) Run() {
 		h.dhcp,
 		h.cache,
 		kubeconfig_file,
-		"",
+		kubeconfig_context,
 		nil,
 		nil,
 	)
@@ -74,7 +78,7 @@ func (h *handler) Run() {
 		h.dhcp,
 		h.cache,
 		kubeconfig_file,
-		"",
+		kubeconfig_context,
 		nil,
 		nil,
 	)
@@ -83,9 +87,8 @@ func (h *handler) Run() {
 	}
 	go h.vmnetcfgEventHandler.EventListener()
 
-	// TODO: make this 30 as a default
 	// give the vmnetcfg handler some time to settle before collecting all the vms
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 30)
 
 	// initialize the vmEventListener handler
 	h.vmEventHandler = vm.NewEventHandler(
@@ -94,7 +97,7 @@ func (h *handler) Run() {
 		h.dhcp,
 		h.cache,
 		kubeconfig_file,
-		"",
+		kubeconfig_context,
 		nil,
 		nil,
 		nil,
@@ -111,5 +114,5 @@ func (h *handler) Run() {
 }
 
 func handleErr(err error) {
-	log.Errorf("(app.handleErr) %s", err.Error())
+	log.Panicf("(app.handleErr) %s", err.Error())
 }

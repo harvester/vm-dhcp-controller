@@ -11,8 +11,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// https://github.com/kubevirt/client-go/blob/v0.59.0/examples/listvms/list-vms.go
-
 var progname string = "kubevirt-ip-helper"
 
 func init() {

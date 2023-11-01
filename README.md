@@ -26,7 +26,7 @@ The kubevirt-ip-helper application will solve this by controlling the following:
 ## How does the kubevirt-ip-helper work?
 
 When KubeVirt Virtual Machines are created the kubevirt-ip-helper controllers picks them up and creates static DHCP reservations 
-in the form of Virtual Machines Network Configuration objects and then assign them to an IPPool so they will be picked up by 
+in the form of VirtualMachineNetworkConfiguration objects and then assign them to an IPPool so they will be picked up by 
 the internal DHCP service. The following image gives an overview about the internals of the kubevirt-ip-helper:
 
 ![kubevirt-ip-helper](image/kubevirt-ip-helper.png)

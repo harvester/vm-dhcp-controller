@@ -185,9 +185,6 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 	if len(lease.DomainSearch) > 0 {
 		dsl := rfc1035label.NewLabels()
 		dsl.Labels = append(dsl.Labels, lease.DomainSearch...)
-		// for _, label := range lease.DomainSearch {
-		// 	dsl.Labels = append(dsl.Labels, label)
-		// }
 
 		reply.UpdateOption(dhcpv4.OptDomainSearch(dsl))
 	}
