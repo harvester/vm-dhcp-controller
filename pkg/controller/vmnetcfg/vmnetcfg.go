@@ -30,18 +30,6 @@ func (c *Controller) updateVirtualMachineNetworkConfig(eventAction string, vmnet
 		return
 	}
 
-	// first check for duplicate mac address registrations
-	// for _, v := range vmnetcfg.Spec.NetworkConfig {
-	// 	if c.dhcp.CheckLease(v.MACAddress) {
-	// 		lease := c.dhcp.GetLease(v.MACAddress)
-	// 		if lease.Reference != fmt.Sprintf("%s/%s", vmnetcfg.Namespace, vmnetcfg.Spec.VMName) {
-	// 			// abort if the hwaddr belongs to another instance
-	// 			return fmt.Errorf("hwaddr %s belongs to %s instead of %s/%s",
-	// 				v.MACAddress, lease.Reference, vmnetcfg.Namespace, vmnetcfg.Spec.VMName)
-	// 		}
-	// 	}
-	// }
-
 	newVmNetCfg := vmnetcfg.DeepCopy()
 	newVmNetCfgs := []kihv1.NetworkConfig{}
 	newNetCfgStatusList := []kihv1.NetworkConfigStatus{}
