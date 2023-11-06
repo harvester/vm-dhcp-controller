@@ -21,6 +21,7 @@ type DHCPLease struct {
 	DNS          []net.IP
 	DomainName   string
 	DomainSearch []string
+	NTP          []net.IP
 	LeaseTime    int
 	Reference    string
 }
@@ -50,11 +51,20 @@ func (a *DHCPAllocator) AddLease(
 	DNSServers []string,
 	domainName string,
 	domainSearch []string,
+	NTPServers []string,
 	leaseTime int,
 	ref string,
 ) (err error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
+
+	if hwAddr == "" {
+		return fmt.Errorf("hwaddr is empty")
+	}
+
+	if _, err := net.ParseMAC(hwAddr); err != nil {
+		return fmt.Errorf("hwaddr %s is not valid", hwAddr)
+	}
 
 	if a.CheckLease(hwAddr) {
 		return fmt.Errorf("lease for hwaddr %s already exists", hwAddr)
@@ -70,6 +80,23 @@ func (a *DHCPAllocator) AddLease(
 	}
 	lease.DomainName = domainName
 	lease.DomainSearch = domainSearch
+	for i := 0; i < len(NTPServers); i++ {
+		hostip := net.ParseIP(NTPServers[i])
+		if hostip.To4() != nil {
+			lease.NTP = append(lease.NTP, net.ParseIP(NTPServers[i]))
+		} else {
+			hostips, err := net.LookupIP(NTPServers[i])
+			if err != nil {
+				log.Errorf("(dhcp.AddLease) cannot get any ip addresses from ntp domainname entry %s: %s", NTPServers[i], err)
+			}
+			for _, ip := range hostips {
+				if ip.To4() != nil {
+					lease.NTP = append(lease.NTP, ip)
+				}
+
+			}
+		}
+	}
 	lease.LeaseTime = leaseTime
 	lease.Reference = ref
 
@@ -106,12 +133,16 @@ func (a *DHCPAllocator) DeleteLease(hwAddr string) (err error) {
 
 func (a *DHCPAllocator) Usage() {
 	for hwaddr, lease := range a.leases {
-		log.Infof("(dhcp.Usage) lease: hwaddr=%s, clientip=%s, netmask=%s, router=%s, dns=%+v, ref=%s",
+		log.Infof("(dhcp.Usage) lease: hwaddr=%s, clientip=%s, netmask=%s, router=%s, dns=%+v, domain=%s, domainsearch=%+v, ntp=%+v, leasetime=%d, ref=%s",
 			hwaddr,
 			lease.ClientIP.String(),
 			lease.SubnetMask.String(),
 			lease.Router.String(),
 			lease.DNS,
+			lease.DomainName,
+			lease.DomainSearch,
+			lease.NTP,
+			lease.LeaseTime,
 			lease.Reference,
 		)
 	}
@@ -148,7 +179,7 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 		return
 	}
 
-	log.Debugf("(dhcp.dhcpHandler) LEASE FOUND: hwaddr=%s, serverip=%s, clientip=%s, mask=%s, router=%s, dns=%+v, domainname=%s, domainsearch=%+v, leasetime=%d, reference=%s",
+	log.Debugf("(dhcp.dhcpHandler) LEASE FOUND: hwaddr=%s, serverip=%s, clientip=%s, mask=%s, router=%s, dns=%+v, domainname=%s, domainsearch=%+v, ntp=%+v, leasetime=%d, reference=%s",
 		m.ClientHWAddr.String(),
 		lease.ServerIP.String(),
 		lease.ClientIP.String(),
@@ -157,6 +188,7 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 		lease.DNS,
 		lease.DomainName,
 		lease.DomainSearch,
+		lease.NTP,
 		lease.LeaseTime,
 		lease.Reference,
 	)
@@ -172,11 +204,10 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 	reply.UpdateOption(dhcpv4.OptServerIdentifier(lease.ServerIP))
 	reply.UpdateOption(dhcpv4.OptSubnetMask(lease.SubnetMask))
 	reply.UpdateOption(dhcpv4.OptRouter(lease.Router))
-	reply.UpdateOption(dhcpv4.OptDNS(lease.DNS...))
 
-	// TODO: maybe add these options as wel to the IPPool object
-	//reply.UpdateOption(dhcpv4.OptBroadcastAddress(net.IP{192, 168, 10, 255}))
-	//reply.UpdateOption(dhcpv4.OptClassIdentifier("k8s"))
+	if len(lease.DNS) > 0 {
+		reply.UpdateOption(dhcpv4.OptDNS(lease.DNS...))
+	}
 
 	if lease.DomainName != "" {
 		reply.UpdateOption(dhcpv4.OptDomainName(lease.DomainName))
@@ -187,6 +218,10 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 		dsl.Labels = append(dsl.Labels, lease.DomainSearch...)
 
 		reply.UpdateOption(dhcpv4.OptDomainSearch(dsl))
+	}
+
+	if len(lease.NTP) > 0 {
+		reply.UpdateOption(dhcpv4.OptNTPServers(lease.NTP...))
 	}
 
 	if lease.LeaseTime > 0 {

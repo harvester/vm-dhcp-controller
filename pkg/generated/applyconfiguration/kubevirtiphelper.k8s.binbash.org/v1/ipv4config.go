@@ -21,11 +21,15 @@ package v1
 // IPv4ConfigApplyConfiguration represents an declarative configuration of the IPv4Config type for use
 // with apply.
 type IPv4ConfigApplyConfiguration struct {
-	ServerIP *string                 `json:"serverip,omitempty"`
-	Subnet   *string                 `json:"subnet,omitempty"`
-	Pool     *PoolApplyConfiguration `json:"pool,omitempty"`
-	Router   *string                 `json:"router,omitempty"`
-	DNS      []string                `json:"dns,omitempty"`
+	ServerIP     *string                 `json:"serverip,omitempty"`
+	Subnet       *string                 `json:"subnet,omitempty"`
+	Pool         *PoolApplyConfiguration `json:"pool,omitempty"`
+	Router       *string                 `json:"router,omitempty"`
+	DNS          []string                `json:"dns,omitempty"`
+	DomainName   *string                 `json:"domainname,omitempty"`
+	DomainSearch []string                `json:"domainsearch,omitempty"`
+	NTP          []string                `json:"ntp,omitempty"`
+	LeaseTime    *int                    `json:"leasetime,omitempty"`
 }
 
 // IPv4ConfigApplyConfiguration constructs an declarative configuration of the IPv4Config type for use with
@@ -73,5 +77,41 @@ func (b *IPv4ConfigApplyConfiguration) WithDNS(values ...string) *IPv4ConfigAppl
 	for i := range values {
 		b.DNS = append(b.DNS, values[i])
 	}
+	return b
+}
+
+// WithDomainName sets the DomainName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DomainName field is set to the value of the last call.
+func (b *IPv4ConfigApplyConfiguration) WithDomainName(value string) *IPv4ConfigApplyConfiguration {
+	b.DomainName = &value
+	return b
+}
+
+// WithDomainSearch adds the given value to the DomainSearch field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the DomainSearch field.
+func (b *IPv4ConfigApplyConfiguration) WithDomainSearch(values ...string) *IPv4ConfigApplyConfiguration {
+	for i := range values {
+		b.DomainSearch = append(b.DomainSearch, values[i])
+	}
+	return b
+}
+
+// WithNTP adds the given value to the NTP field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the NTP field.
+func (b *IPv4ConfigApplyConfiguration) WithNTP(values ...string) *IPv4ConfigApplyConfiguration {
+	for i := range values {
+		b.NTP = append(b.NTP, values[i])
+	}
+	return b
+}
+
+// WithLeaseTime sets the LeaseTime field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the LeaseTime field is set to the value of the last call.
+func (b *IPv4ConfigApplyConfiguration) WithLeaseTime(value int) *IPv4ConfigApplyConfiguration {
+	b.LeaseTime = &value
 	return b
 }
