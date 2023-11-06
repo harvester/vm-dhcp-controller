@@ -18,6 +18,7 @@ func TestDHCP(t *testing.T) {
 		DNSServers   []string
 		domainName   string
 		domainSearch []string
+		NTPServers   []string
 		leaseTime    int
 		Reference    string
 		want         error
@@ -31,6 +32,7 @@ func TestDHCP(t *testing.T) {
 			DNSServers:   []string{"8.8.8.8", "8.8.4.4"},
 			domainName:   "example.com",
 			domainSearch: []string{"example.com"},
+			NTPServers:   []string{"localhost", "127.0.0.2"},
 			leaseTime:    300,
 			Reference:    "",
 			want:         nil,
@@ -44,6 +46,7 @@ func TestDHCP(t *testing.T) {
 			DNSServers:   []string{"8.8.8.8", "8.8.4.4"},
 			domainName:   "example.com",
 			domainSearch: []string{"example.com"},
+			NTPServers:   []string{},
 			leaseTime:    300,
 			Reference:    "",
 			want:         fmt.Errorf("lease for hwaddr aa:bb:cc:dd:ee:ff already exists"),
@@ -57,9 +60,66 @@ func TestDHCP(t *testing.T) {
 			DNSServers:   []string{"8.8.8.8", "8.8.4.4"},
 			domainName:   "example.com",
 			domainSearch: []string{"example.com"},
+			NTPServers:   []string{},
 			leaseTime:    300,
 			Reference:    "someref",
 			want:         nil,
+		},
+		{
+			hwAddr:       "01:02:03:04:05:06",
+			serverIP:     "",
+			clientIP:     "",
+			subnetMask:   "",
+			routerIP:     "",
+			DNSServers:   []string{},
+			domainName:   "",
+			domainSearch: []string{},
+			NTPServers:   []string{},
+			leaseTime:    0,
+			Reference:    "",
+			want:         nil,
+		},
+		{
+			hwAddr:       "ZZ:01:02:03:04:05",
+			serverIP:     "",
+			clientIP:     "",
+			subnetMask:   "",
+			routerIP:     "",
+			DNSServers:   []string{},
+			domainName:   "",
+			domainSearch: []string{},
+			NTPServers:   []string{},
+			leaseTime:    0,
+			Reference:    "",
+			want:         fmt.Errorf("hwaddr ZZ:01:02:03:04:05 is not valid"),
+		},
+		{
+			hwAddr:       "00-01:02:03:04:05",
+			serverIP:     "",
+			clientIP:     "",
+			subnetMask:   "",
+			routerIP:     "",
+			DNSServers:   []string{},
+			domainName:   "",
+			domainSearch: []string{},
+			NTPServers:   []string{},
+			leaseTime:    0,
+			Reference:    "",
+			want:         fmt.Errorf("hwaddr 00-01:02:03:04:05 is not valid"),
+		},
+		{
+			hwAddr:       "",
+			serverIP:     "",
+			clientIP:     "",
+			subnetMask:   "",
+			routerIP:     "",
+			DNSServers:   []string{},
+			domainName:   "",
+			domainSearch: []string{},
+			NTPServers:   []string{},
+			leaseTime:    0,
+			Reference:    "",
+			want:         fmt.Errorf("hwaddr is empty"),
 		},
 	}
 
@@ -74,6 +134,7 @@ func TestDHCP(t *testing.T) {
 			testLeases[i].DNSServers,
 			testLeases[i].domainName,
 			testLeases[i].domainSearch,
+			testLeases[i].NTPServers,
 			testLeases[i].leaseTime,
 			testLeases[i].Reference,
 		); got != testLeases[i].want {

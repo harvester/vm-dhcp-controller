@@ -181,6 +181,7 @@ func (c *Controller) updateVirtualMachineNetworkConfig(eventAction string, vmnet
 			pool.(kihv1.IPPool).Spec.IPv4Config.DNS,
 			pool.(kihv1.IPPool).Spec.IPv4Config.DomainName,
 			pool.(kihv1.IPPool).Spec.IPv4Config.DomainSearch,
+			pool.(kihv1.IPPool).Spec.IPv4Config.NTP,
 			pool.(kihv1.IPPool).Spec.IPv4Config.LeaseTime,
 			ref,
 		)

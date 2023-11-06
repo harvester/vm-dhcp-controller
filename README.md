@@ -137,6 +137,9 @@ spec:
     domainname: example.com
     domainsearch:
       - example.com
+    ntp:
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
     leasetime: 300
   networkname: <NAMESPACE>/<NETWORKATTACHMENTDEFINITION_NAME>
 EOF

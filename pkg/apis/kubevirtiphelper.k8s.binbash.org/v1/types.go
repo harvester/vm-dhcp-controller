@@ -72,6 +72,7 @@ type IPv4Config struct {
 	DNS          []string `json:"dns,omitempty"`
 	DomainName   string   `json:"domainname,omitempty"`
 	DomainSearch []string `json:"domainsearch,omitempty"`
+	NTP          []string `json:"ntp,omitempty"`
 	LeaseTime    int      `json:"leasetime,omitempty"`
 }
 

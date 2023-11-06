@@ -131,6 +131,16 @@ func (in *IPv4Config) DeepCopyInto(out *IPv4Config) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.DomainSearch != nil {
+		in, out := &in.DomainSearch, &out.DomainSearch
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.NTP != nil {
+		in, out := &in.NTP, &out.NTP
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
