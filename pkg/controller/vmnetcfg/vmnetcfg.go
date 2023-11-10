@@ -209,6 +209,11 @@ func (c *Controller) updateVirtualMachineNetworkConfig(eventAction string, vmnet
 				vmnetcfg.Namespace, vmnetcfg.Name, err)
 		}
 
+		if err := c.updateIPPoolMetrics(pool.(kihv1.IPPool).Name); err != nil {
+			log.Errorf("(vmnetcfg.updateVirtualMachineNetworkConfig) [%s/%s] %s",
+				vmnetcfg.Namespace, vmnetcfg.Name, err)
+		}
+
 		networkChange = true
 	}
 
@@ -219,11 +224,16 @@ func (c *Controller) updateVirtualMachineNetworkConfig(eventAction string, vmnet
 		log.Debugf("(vmnetcfg.updateVirtualMachineNetworkConfig) [%s/%s] no network changes detected, skipping object update",
 			vmnetcfg.Namespace, vmnetcfg.Name)
 
-		// only update the status when the status.networkconfig array has items
+		// only update the status and metrics when the status.networkconfig array has items
 		if len(newVmnetCfgStatus.NetworkConfig) > 0 {
 			if err := c.updateVirtualMachineNetworkConfigStatus(vmnetcfg, &newVmnetCfgStatus); err != nil {
 				log.Errorf("(vmnetcfg.updateVirtualMachineNetworkConfig) [%s/%s] %s",
 					vmnetcfg.ObjectMeta.Namespace, vmnetcfg.ObjectMeta.Name, err)
+			}
+
+			if err := c.updateVirtualMachineNetworkConfigMetrics(vmnetcfg.Namespace, vmnetcfg.Name); err != nil {
+				log.Errorf("(vmnetcfg.updateVirtualMachineNetworkConfig) [%s/%s] %s",
+					vmnetcfg.Namespace, vmnetcfg.Name, err)
 			}
 		}
 
@@ -247,6 +257,11 @@ func (c *Controller) updateVirtualMachineNetworkConfig(eventAction string, vmnet
 	if err := c.updateVirtualMachineNetworkConfigStatus(vmNetCfgObj, &newVmnetCfgStatus); err != nil {
 		log.Errorf("(vmnetcfg.updateVirtualMachineNetworkConfig) [%s/%s] %s",
 			vmNetCfgObj.ObjectMeta.Namespace, vmNetCfgObj.ObjectMeta.Name, err)
+	}
+
+	if err := c.updateVirtualMachineNetworkConfigMetrics(vmNetCfgObj.Namespace, vmNetCfgObj.Name); err != nil {
+		log.Errorf("(vmnetcfg.updateVirtualMachineNetworkConfig) [%s/%s] %s",
+			vmNetCfgObj.Namespace, vmNetCfgObj.Name, err)
 	}
 
 	return
@@ -283,6 +298,11 @@ func (c *Controller) cleanupNetworkInterface(vmnetcfg *kihv1.VirtualMachineNetwo
 			log.Errorf("(vmnetcfg.cleanupNetworkInterface) [%s/%s] %s",
 				vmnetcfg.Namespace, vmnetcfg.Name, err)
 		}
+
+		if err := c.updateIPPoolMetrics(pool.(kihv1.IPPool).Name); err != nil {
+			log.Errorf("(vmnetcfg.updateVirtualMachineNetworkConfig) [%s/%s] %s",
+				vmnetcfg.Namespace, vmnetcfg.Name, err)
+		}
 	}
 }
 
@@ -293,6 +313,8 @@ func (c *Controller) cleanupVirtualMachineNetworkConfig(vmnetcfg *kihv1.VirtualM
 	for i := 0; i < len(vmnetcfg.Spec.NetworkConfig); i++ {
 		c.cleanupNetworkInterface(vmnetcfg, &vmnetcfg.Spec.NetworkConfig[i])
 	}
+
+	c.deleteVirtualMachineNetworkConfigMetrics(vmnetcfg)
 
 	updatedVmNetCfg := vmnetcfg.DeepCopy()
 	newFinalizers := []string{}
@@ -378,4 +400,44 @@ func (c *Controller) updateVirtualMachineNetworkConfigStatus(vmnetcfg *kihv1.Vir
 		vmNetCfgStatusObj.Namespace, vmNetCfgStatusObj.Name)
 
 	return
+}
+
+func (c *Controller) updateIPPoolMetrics(poolName string) (err error) {
+	pool, err := c.kihClientset.KubevirtiphelperV1().IPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("(vmnetcfg.updateIPPoolMetrics) cannot get IPPool %s: %s", poolName, err.Error())
+	}
+
+	c.metrics.UpdateIPPoolUsed(pool.Name, pool.Spec.IPv4Config.Subnet, pool.Spec.NetworkName, pool.Status.IPv4.Used)
+	c.metrics.UpdateIPPoolAvailable(pool.Name, pool.Spec.IPv4Config.Subnet, pool.Spec.NetworkName, pool.Status.IPv4.Available)
+
+	return
+}
+
+func (c *Controller) updateVirtualMachineNetworkConfigMetrics(vmnetcfgNamespace string, vmnetcfgName string) (err error) {
+	vmnetcfg, err := c.kihClientset.KubevirtiphelperV1().VirtualMachineNetworkConfigs(vmnetcfgNamespace).Get(context.TODO(), vmnetcfgName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("(vmnetcfg.updateVirtualMachineNetworkConfigMetrics) cannot get VirtualMachineNetworkConfig %s/%s: %s",
+			vmnetcfgNamespace, vmnetcfgName, err.Error())
+	}
+
+	for _, netstat := range vmnetcfg.Status.NetworkConfig {
+		for _, netcfg := range vmnetcfg.Spec.NetworkConfig {
+			if netstat.MACAddress == netcfg.MACAddress {
+				c.metrics.UpdateVmNetCfgStatus(
+					fmt.Sprintf("%s/%s", vmnetcfgNamespace, vmnetcfgName),
+					netstat.NetworkName,
+					netstat.MACAddress,
+					netcfg.IPAddress,
+					netstat.Status,
+				)
+			}
+		}
+	}
+
+	return
+}
+
+func (c *Controller) deleteVirtualMachineNetworkConfigMetrics(vmnetcfg *kihv1.VirtualMachineNetworkConfig) {
+	c.metrics.DeleteVmNetCfgStatus(fmt.Sprintf("%s/%s", vmnetcfg.Namespace, vmnetcfg.Name))
 }
