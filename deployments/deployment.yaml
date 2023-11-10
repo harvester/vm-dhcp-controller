@@ -86,6 +86,8 @@ spec:
         env:
           - name: LOGLEVEL
             value: INFO
+          - name: METRICS_PORT
+            value: "8080"
         imagePullPolicy: Always
         resources:
           requests:
@@ -107,3 +109,37 @@ spec:
       schedulerName: default-scheduler
       serviceAccountName: kubevirt-ip-helper
       terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: kubevirt-ip-helper
+  name: kubevirt-ip-helper-metrics
+  namespace: kubevirt-ip-helper
+spec:
+  selector:
+    app: kubevirt-ip-helper
+  ports:
+    - name: metrics
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app: kubevirt-ip-helper
+  name: kubevirt-ip-helper
+  namespace: kubevirt-ip-helper
+spec:
+  endpoints:
+    - port: metrics
+      scheme: http
+  jobLabel: jobLabel
+  selector:
+    matchLabels:
+      app: kubevirt-ip-helper

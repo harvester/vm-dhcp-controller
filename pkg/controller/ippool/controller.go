@@ -15,6 +15,7 @@ import (
 	"github.com/joeyloman/kubevirt-ip-helper/pkg/dhcp"
 	kihclientset "github.com/joeyloman/kubevirt-ip-helper/pkg/generated/clientset/versioned"
 	"github.com/joeyloman/kubevirt-ip-helper/pkg/ipam"
+	"github.com/joeyloman/kubevirt-ip-helper/pkg/metrics"
 )
 
 type Controller struct {
@@ -24,6 +25,7 @@ type Controller struct {
 	cache        *kihcache.CacheAllocator
 	ipam         *ipam.IPAllocator
 	dhcp         *dhcp.DHCPAllocator
+	metrics      *metrics.MetricsAllocator
 	kihClientset *kihclientset.Clientset
 }
 
@@ -34,6 +36,7 @@ func NewController(
 	cache *kihcache.CacheAllocator,
 	ipam *ipam.IPAllocator,
 	dhcp *dhcp.DHCPAllocator,
+	metrics *metrics.MetricsAllocator,
 	kihClientset *kihclientset.Clientset,
 ) *Controller {
 	return &Controller{
@@ -43,6 +46,7 @@ func NewController(
 		cache:        cache,
 		ipam:         ipam,
 		dhcp:         dhcp,
+		metrics:      metrics,
 		kihClientset: kihClientset,
 	}
 }

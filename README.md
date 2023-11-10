@@ -157,6 +157,27 @@ Status information about the IP reservations are kept in the status fields in th
 
 By default only the startup, error and warning logs are enabled. More logging can be enabled by changing the LOGLEVEL environment setting in the kubevirt-ip-helper deployment. The supported loglevels are INFO, DEBUG and TRACE.
 
+### Metrics
+
+The following metrics are included in the application which can be used for monitoring:
+
+```YAML
+Name: kubevirtiphelper_ippool_used
+Description: Amount of IP addresses which are in use in an IPPool.
+```
+
+```YAML
+Dame: kubevirtiphelper_ippool_available
+Description: Amount of IP addresses which are available in an IPPool.
+```
+
+```YAML
+Name: kubevirtiphelper_vmnetcfg_status
+Description: Information and status of the VirtualMachineNetworkConfig objects.
+```
+
+Metrics are exported on port 8080 by default. This can be changed by adding the METRICS_PORT environment variable in the deployment. The deployment example also contains a servicemonitor object which can be automatically picked up by the Prometheus monitoring solution.
+
 # License
 
 Copyright (c) 2023 Joey Loman <joey@binbash.org>

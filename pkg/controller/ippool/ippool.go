@@ -66,6 +66,11 @@ func (c *Controller) registerIPPool(pool *kihv1.IPPool) (err error) {
 		return
 	}
 
+	// reset the pool metrics after restarting the process
+	if err = c.resetIPPoolMetrics(pool); err != nil {
+		return
+	}
+
 	// cache the pool with an empty status
 	if err = c.cache.Add(rPool); err != nil {
 		return
@@ -131,6 +136,18 @@ func (c *Controller) resetIPPoolStatus(pool *kihv1.IPPool) (uPool *kihv1.IPPool,
 		return uPool, fmt.Errorf("(ippool.resetIPPoolStatus) [%s] cannot update status of IPPool: %s",
 			cPool.Name, err.Error())
 	}
+
+	return
+}
+
+func (c *Controller) resetIPPoolMetrics(pool *kihv1.IPPool) (err error) {
+	cPool, err := c.kihClientset.KubevirtiphelperV1().IPPools().Get(context.TODO(), pool.Name, metav1.GetOptions{})
+	if err != nil {
+		return
+	}
+
+	c.metrics.UpdateIPPoolUsed(cPool.Name, cPool.Spec.IPv4Config.Subnet, cPool.Spec.NetworkName, cPool.Status.IPv4.Used)
+	c.metrics.UpdateIPPoolAvailable(cPool.Name, cPool.Spec.IPv4Config.Subnet, cPool.Spec.NetworkName, cPool.Status.IPv4.Available)
 
 	return
 }

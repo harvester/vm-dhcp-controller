@@ -14,6 +14,7 @@ import (
 	"github.com/joeyloman/kubevirt-ip-helper/pkg/controller/vmnetcfg"
 	"github.com/joeyloman/kubevirt-ip-helper/pkg/dhcp"
 	"github.com/joeyloman/kubevirt-ip-helper/pkg/ipam"
+	"github.com/joeyloman/kubevirt-ip-helper/pkg/metrics"
 )
 
 type handler struct {
@@ -21,6 +22,7 @@ type handler struct {
 	ipam                 *ipam.IPAllocator
 	dhcp                 *dhcp.DHCPAllocator
 	cache                *cache.CacheAllocator
+	metrics              *metrics.MetricsAllocator
 	ippoolEventHandler   *ippool.EventHandler
 	vmnetcfgEventHandler *vmnetcfg.EventHandler
 	vmEventHandler       *vm.EventHandler
@@ -49,6 +51,10 @@ func (h *handler) Run() {
 	// initialize the dhcp service
 	h.dhcp = dhcp.New()
 
+	// initialize the metrics service
+	h.metrics = metrics.New()
+	go h.metrics.Run()
+
 	// initialize the pool cache
 	h.cache = cache.New()
 
@@ -57,6 +63,7 @@ func (h *handler) Run() {
 		h.ctx,
 		h.ipam,
 		h.dhcp,
+		h.metrics,
 		h.cache,
 		kubeconfig_file,
 		kubeconfig_context,
@@ -76,6 +83,7 @@ func (h *handler) Run() {
 		h.ctx,
 		h.ipam,
 		h.dhcp,
+		h.metrics,
 		h.cache,
 		kubeconfig_file,
 		kubeconfig_context,
