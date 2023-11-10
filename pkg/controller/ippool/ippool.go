@@ -79,7 +79,7 @@ func (c *Controller) registerIPPool(pool *kihv1.IPPool) (err error) {
 	return
 }
 
-func (c *Controller) cleanupIPPoolObjects(pool kihv1.IPPool) (err error) {
+func (c *Controller) cleanupIPPoolObjects(pool *kihv1.IPPool) (err error) {
 	log.Debugf("(ippool.cleanupIPPoolObjects) [%s] starting cleanup of IPPool", pool.Name)
 
 	nic, err := util.GetNicFromIp(net.ParseIP(pool.Spec.IPv4Config.ServerIP))
@@ -87,8 +87,7 @@ func (c *Controller) cleanupIPPoolObjects(pool kihv1.IPPool) (err error) {
 		return
 	}
 
-	// TODO: remove
-	//log.Debugf("(ippool.cleanupIPPoolObjects) [%s] nic found: [%s]", pool.Name, nic)
+	log.Debugf("(ippool.cleanupIPPoolObjects) [%s] nic found: [%s]", pool.Name, nic)
 
 	if nic != "" {
 		err := c.dhcp.Stop(nic)
@@ -99,6 +98,7 @@ func (c *Controller) cleanupIPPoolObjects(pool kihv1.IPPool) (err error) {
 	}
 
 	c.ipam.DeleteSubnet(pool.Spec.NetworkName)
+	c.metrics.DeleteIPPool(pool.Name, pool.Spec.IPv4Config.Subnet, pool.Spec.NetworkName)
 	c.cache.Delete("pool", pool.Spec.NetworkName)
 
 	return
