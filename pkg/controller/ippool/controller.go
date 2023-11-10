@@ -86,7 +86,7 @@ func (c *Controller) sync(event Event) (err error) {
 			log.Errorf("(ippool.sync) failed to allocate new pool for %s: %s",
 				obj.(*kihv1.IPPool).GetName(), err.Error())
 
-			if err := c.cleanupIPPoolObjects(obj.(kihv1.IPPool)); err != nil {
+			if err := c.cleanupIPPoolObjects(obj.(*kihv1.IPPool)); err != nil {
 				log.Errorf("(ippool.sync) failed to cleanup pool %s: %s", event.poolName, err.Error())
 			}
 		}
@@ -96,9 +96,11 @@ func (c *Controller) sync(event Event) (err error) {
 		pool, err := c.cache.Get("pool", event.poolNetworkName)
 		if err != nil {
 			log.Errorf("(ippool.sync) %s", err)
-		}
-		if err := c.cleanupIPPoolObjects(pool.(kihv1.IPPool)); err != nil {
-			log.Errorf("(ippool.sync) failed to cleanup pool %s: %s", event.poolName, err.Error())
+		} else {
+			p := pool.(kihv1.IPPool)
+			if err := c.cleanupIPPoolObjects(&p); err != nil {
+				log.Errorf("(ippool.sync) failed to cleanup pool %s: %s", event.poolName, err.Error())
+			}
 		}
 	}
 

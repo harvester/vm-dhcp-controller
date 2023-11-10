@@ -92,7 +92,7 @@ func (m *MetricsAllocator) UpdateIPPoolAvailable(ippoolName string, subnet strin
 	}).Set(float64(available))
 }
 
-func (m *MetricsAllocator) DeleteIPPool(ippoolName string, subnet string, networkName string, used int) {
+func (m *MetricsAllocator) DeleteIPPool(ippoolName string, subnet string, networkName string) {
 	m.kubevirtiphelperIPPoolUsed.Delete(prometheus.Labels{
 		LabelIPPoolName:  ippoolName,
 		LabelSubnet:      subnet,
