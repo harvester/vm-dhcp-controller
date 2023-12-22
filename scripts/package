@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+source $(dirname $0)/version
+
+cd $(dirname $0)/..
+
+echo "Packaging..."
+
+# Copy out artifacts
+mkdir -p dist/artifacts
+cp bin/vm-dhcp-controller dist/artifacts/vm-dhcp-controller${SUFFIX}
+
+# Build container images
+IMAGE=${REPO}/harvester-vm-dhcp-controller:${TAG}
+DOCKERFILE=package/Dockerfile
+
+docker build -f ${DOCKERFILE} -t ${IMAGE} .
+echo Built ${IMAGE}
