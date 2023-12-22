@@ -34,7 +34,7 @@ func newCRD(group string, obj interface{}, customize func(crd.CRD) crd.CRD) crd.
 	crd := crd.CRD{
 		GVK: schema.GroupVersionKind{
 			Group:   group,
-			Version: "v1beta1",
+			Version: "v1alpha1",
 		},
 		Status:       true,
 		NonNamespace: false,
