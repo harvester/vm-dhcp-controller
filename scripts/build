@@ -10,4 +10,4 @@ mkdir -p bin
 LINKFLAGS="-X github.com/starbops/vm-dhcp-controller/main.AppVersion=$VERSION
            -X github.com/starbops/vm-dhcp-controller/main.GitCommit=$COMMIT"
 
-CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-controller cmd/main.go
+CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-controller

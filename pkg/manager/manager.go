@@ -1,4 +1,4 @@
-package main
+package manager
 
 import (
 	"log"
@@ -15,10 +15,9 @@ import (
 	"github.com/starbops/vm-dhcp-controller/pkg/server"
 )
 
-var (
-	AppVersion = "dev"
-	GitCommit  = "commit"
-)
+type VMDHCPControllerManager struct {
+	Name string
+}
 
 func init() {
 	scheme := runtime.NewScheme()
@@ -31,11 +30,9 @@ func init() {
 	if err := kubevirtv1.AddToScheme(scheme); err != nil {
 		log.Fatal(err)
 	}
-
 }
 
-func main() {
-
+func (m *VMDHCPControllerManager) Run() error {
 	ctx := signals.SetupSignalContext()
 
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -50,7 +47,7 @@ func main() {
 	eg, egctx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
-		return controllers.Start(egctx, config)
+		return controllers.StartManager(egctx, config)
 	})
 
 	eg.Go(func() error {
@@ -61,4 +58,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	return nil
 }

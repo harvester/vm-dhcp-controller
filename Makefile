@@ -18,4 +18,4 @@ $(TARGETS): .dapper
 
 .PHONY: run
 run: ## Run a controller from your host.
-	go run ./cmd/main.go
+	go run ./main.go $(ARGS)

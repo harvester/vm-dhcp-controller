@@ -73,7 +73,21 @@ func Register(ctx context.Context, restConfig *rest.Config) error {
 	return start.All(ctx, 1, networkFactory)
 }
 
-func Start(ctx context.Context, restConfig *rest.Config) error {
+func StartManager(ctx context.Context, restConfig *rest.Config) error {
+	if err := crd.Create(ctx, restConfig); err != nil {
+		return err
+	}
+
+	if err := Register(ctx, restConfig); err != nil {
+		return err
+	}
+
+	<-ctx.Done()
+
+	return nil
+}
+
+func StartAgent(ctx context.Context, restConfig *rest.Config) error {
 	if err := crd.Create(ctx, restConfig); err != nil {
 		return err
 	}
