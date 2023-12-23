@@ -13,3 +13,9 @@ $(TARGETS): .dapper
 .DEFAULT_GOAL := default
 
 .PHONY: $(TARGETS)
+
+##@ Local Run
+
+.PHONY: run
+run: ## Run a controller from your host.
+	go run ./cmd/main.go
