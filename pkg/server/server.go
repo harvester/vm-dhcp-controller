@@ -20,11 +20,26 @@ func NewServer(ctx context.Context) error {
 	return newServer(ctx, tmpDir)
 }
 
+func livenessProbeHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "OK")
+}
+
+func readinessProbeHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "OK")
+}
+
 func newServer(ctx context.Context, path string) error {
 	defer os.RemoveAll(tmpDir)
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/healthz", livenessProbeHandler)
+	mux.HandleFunc("/readyz", readinessProbeHandler)
+	mux.Handle("/files", http.FileServer(http.Dir(path)))
+
 	srv := http.Server{
 		Addr:    fmt.Sprintf(":%d", defaultPort),
-		Handler: http.FileServer(http.Dir(path)),
+		Handler: mux,
 	}
 
 	eg, _ := errgroup.WithContext(ctx)
