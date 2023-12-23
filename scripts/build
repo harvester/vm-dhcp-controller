@@ -6,10 +6,8 @@ cd $(dirname $0)/..
 echo "Building binaries..."
 
 mkdir -p bin
-if [ "$(uname)" = "Darwin" ]; then
-    LINKFLAGS="-extldflags -static"
-else
-    LINKFLAGS="-extldflags -static -s"
-fi
 
-CGO_ENABLED=0 go build -ldflags "-X main.VERSION=$VERSION $LINKFLAGS" -o bin/vm-dhcp-controller cmd/main.go
+LINKFLAGS="-X github.com/starbops/vm-dhcp-controller/main.AppVersion=$VERSION
+           -X github.com/starbops/vm-dhcp-controller/main.GitCommit=$COMMIT"
+
+CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-controller cmd/main.go

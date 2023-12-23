@@ -15,6 +15,11 @@ import (
 	"github.com/starbops/vm-dhcp-controller/pkg/server"
 )
 
+var (
+	AppVersion = "dev"
+	GitCommit  = "commit"
+)
+
 func init() {
 	scheme := runtime.NewScheme()
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
@@ -28,6 +33,7 @@ func init() {
 	}
 
 }
+
 func main() {
 
 	ctx := signals.SetupSignalContext()
