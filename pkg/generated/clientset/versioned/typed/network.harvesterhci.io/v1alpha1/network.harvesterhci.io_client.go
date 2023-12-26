@@ -37,8 +37,8 @@ type NetworkV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *NetworkV1alpha1Client) IPPools() IPPoolInterface {
-	return newIPPools(c)
+func (c *NetworkV1alpha1Client) IPPools(namespace string) IPPoolInterface {
+	return newIPPools(c, namespace)
 }
 
 func (c *NetworkV1alpha1Client) VirtualMachineNetworkConfigs(namespace string) VirtualMachineNetworkConfigInterface {

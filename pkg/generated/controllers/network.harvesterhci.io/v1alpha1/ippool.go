@@ -49,8 +49,8 @@ type IPPoolController interface {
 
 	OnChange(ctx context.Context, name string, sync IPPoolHandler)
 	OnRemove(ctx context.Context, name string, sync IPPoolHandler)
-	Enqueue(name string)
-	EnqueueAfter(name string, duration time.Duration)
+	Enqueue(namespace, name string)
+	EnqueueAfter(namespace, name string, duration time.Duration)
 
 	Cache() IPPoolCache
 }
@@ -59,16 +59,16 @@ type IPPoolClient interface {
 	Create(*v1alpha1.IPPool) (*v1alpha1.IPPool, error)
 	Update(*v1alpha1.IPPool) (*v1alpha1.IPPool, error)
 	UpdateStatus(*v1alpha1.IPPool) (*v1alpha1.IPPool, error)
-	Delete(name string, options *metav1.DeleteOptions) error
-	Get(name string, options metav1.GetOptions) (*v1alpha1.IPPool, error)
-	List(opts metav1.ListOptions) (*v1alpha1.IPPoolList, error)
-	Watch(opts metav1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.IPPool, err error)
+	Delete(namespace, name string, options *metav1.DeleteOptions) error
+	Get(namespace, name string, options metav1.GetOptions) (*v1alpha1.IPPool, error)
+	List(namespace string, opts metav1.ListOptions) (*v1alpha1.IPPoolList, error)
+	Watch(namespace string, opts metav1.ListOptions) (watch.Interface, error)
+	Patch(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.IPPool, err error)
 }
 
 type IPPoolCache interface {
-	Get(name string) (*v1alpha1.IPPool, error)
-	List(selector labels.Selector) ([]*v1alpha1.IPPool, error)
+	Get(namespace, name string) (*v1alpha1.IPPool, error)
+	List(namespace string, selector labels.Selector) ([]*v1alpha1.IPPool, error)
 
 	AddIndexer(indexName string, indexer IPPoolIndexer)
 	GetByIndex(indexName, key string) ([]*v1alpha1.IPPool, error)
@@ -154,12 +154,12 @@ func (c *iPPoolController) OnRemove(ctx context.Context, name string, sync IPPoo
 	c.AddGenericHandler(ctx, name, generic.NewRemoveHandler(name, c.Updater(), FromIPPoolHandlerToHandler(sync)))
 }
 
-func (c *iPPoolController) Enqueue(name string) {
-	c.controller.Enqueue("", name)
+func (c *iPPoolController) Enqueue(namespace, name string) {
+	c.controller.Enqueue(namespace, name)
 }
 
-func (c *iPPoolController) EnqueueAfter(name string, duration time.Duration) {
-	c.controller.EnqueueAfter("", name, duration)
+func (c *iPPoolController) EnqueueAfter(namespace, name string, duration time.Duration) {
+	c.controller.EnqueueAfter(namespace, name, duration)
 }
 
 func (c *iPPoolController) Informer() cache.SharedIndexInformer {
@@ -179,43 +179,43 @@ func (c *iPPoolController) Cache() IPPoolCache {
 
 func (c *iPPoolController) Create(obj *v1alpha1.IPPool) (*v1alpha1.IPPool, error) {
 	result := &v1alpha1.IPPool{}
-	return result, c.client.Create(context.TODO(), "", obj, result, metav1.CreateOptions{})
+	return result, c.client.Create(context.TODO(), obj.Namespace, obj, result, metav1.CreateOptions{})
 }
 
 func (c *iPPoolController) Update(obj *v1alpha1.IPPool) (*v1alpha1.IPPool, error) {
 	result := &v1alpha1.IPPool{}
-	return result, c.client.Update(context.TODO(), "", obj, result, metav1.UpdateOptions{})
+	return result, c.client.Update(context.TODO(), obj.Namespace, obj, result, metav1.UpdateOptions{})
 }
 
 func (c *iPPoolController) UpdateStatus(obj *v1alpha1.IPPool) (*v1alpha1.IPPool, error) {
 	result := &v1alpha1.IPPool{}
-	return result, c.client.UpdateStatus(context.TODO(), "", obj, result, metav1.UpdateOptions{})
+	return result, c.client.UpdateStatus(context.TODO(), obj.Namespace, obj, result, metav1.UpdateOptions{})
 }
 
-func (c *iPPoolController) Delete(name string, options *metav1.DeleteOptions) error {
+func (c *iPPoolController) Delete(namespace, name string, options *metav1.DeleteOptions) error {
 	if options == nil {
 		options = &metav1.DeleteOptions{}
 	}
-	return c.client.Delete(context.TODO(), "", name, *options)
+	return c.client.Delete(context.TODO(), namespace, name, *options)
 }
 
-func (c *iPPoolController) Get(name string, options metav1.GetOptions) (*v1alpha1.IPPool, error) {
+func (c *iPPoolController) Get(namespace, name string, options metav1.GetOptions) (*v1alpha1.IPPool, error) {
 	result := &v1alpha1.IPPool{}
-	return result, c.client.Get(context.TODO(), "", name, result, options)
+	return result, c.client.Get(context.TODO(), namespace, name, result, options)
 }
 
-func (c *iPPoolController) List(opts metav1.ListOptions) (*v1alpha1.IPPoolList, error) {
+func (c *iPPoolController) List(namespace string, opts metav1.ListOptions) (*v1alpha1.IPPoolList, error) {
 	result := &v1alpha1.IPPoolList{}
-	return result, c.client.List(context.TODO(), "", result, opts)
+	return result, c.client.List(context.TODO(), namespace, result, opts)
 }
 
-func (c *iPPoolController) Watch(opts metav1.ListOptions) (watch.Interface, error) {
-	return c.client.Watch(context.TODO(), "", opts)
+func (c *iPPoolController) Watch(namespace string, opts metav1.ListOptions) (watch.Interface, error) {
+	return c.client.Watch(context.TODO(), namespace, opts)
 }
 
-func (c *iPPoolController) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (*v1alpha1.IPPool, error) {
+func (c *iPPoolController) Patch(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (*v1alpha1.IPPool, error) {
 	result := &v1alpha1.IPPool{}
-	return result, c.client.Patch(context.TODO(), "", name, pt, data, result, metav1.PatchOptions{}, subresources...)
+	return result, c.client.Patch(context.TODO(), namespace, name, pt, data, result, metav1.PatchOptions{}, subresources...)
 }
 
 type iPPoolCache struct {
@@ -223,8 +223,8 @@ type iPPoolCache struct {
 	resource schema.GroupResource
 }
 
-func (c *iPPoolCache) Get(name string) (*v1alpha1.IPPool, error) {
-	obj, exists, err := c.indexer.GetByKey(name)
+func (c *iPPoolCache) Get(namespace, name string) (*v1alpha1.IPPool, error) {
+	obj, exists, err := c.indexer.GetByKey(namespace + "/" + name)
 	if err != nil {
 		return nil, err
 	}
@@ -234,9 +234,9 @@ func (c *iPPoolCache) Get(name string) (*v1alpha1.IPPool, error) {
 	return obj.(*v1alpha1.IPPool), nil
 }
 
-func (c *iPPoolCache) List(selector labels.Selector) (ret []*v1alpha1.IPPool, err error) {
+func (c *iPPoolCache) List(namespace string, selector labels.Selector) (ret []*v1alpha1.IPPool, err error) {
 
-	err = cache.ListAll(c.indexer, selector, func(m interface{}) {
+	err = cache.ListAllByNamespace(c.indexer, namespace, selector, func(m interface{}) {
 		ret = append(ret, m.(*v1alpha1.IPPool))
 	})
 

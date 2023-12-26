@@ -33,7 +33,7 @@ import (
 // IPPoolsGetter has a method to return a IPPoolInterface.
 // A group's client should implement this interface.
 type IPPoolsGetter interface {
-	IPPools() IPPoolInterface
+	IPPools(namespace string) IPPoolInterface
 }
 
 // IPPoolInterface has methods to work with IPPool resources.
@@ -53,12 +53,14 @@ type IPPoolInterface interface {
 // iPPools implements IPPoolInterface
 type iPPools struct {
 	client rest.Interface
+	ns     string
 }
 
 // newIPPools returns a IPPools
-func newIPPools(c *NetworkV1alpha1Client) *iPPools {
+func newIPPools(c *NetworkV1alpha1Client, namespace string) *iPPools {
 	return &iPPools{
 		client: c.RESTClient(),
+		ns:     namespace,
 	}
 }
 
@@ -66,6 +68,7 @@ func newIPPools(c *NetworkV1alpha1Client) *iPPools {
 func (c *iPPools) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IPPool, err error) {
 	result = &v1alpha1.IPPool{}
 	err = c.client.Get().
+		Namespace(c.ns).
 		Resource("ippools").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -82,6 +85,7 @@ func (c *iPPools) List(ctx context.Context, opts v1.ListOptions) (result *v1alph
 	}
 	result = &v1alpha1.IPPoolList{}
 	err = c.client.Get().
+		Namespace(c.ns).
 		Resource("ippools").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -98,6 +102,7 @@ func (c *iPPools) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interfa
 	}
 	opts.Watch = true
 	return c.client.Get().
+		Namespace(c.ns).
 		Resource("ippools").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -108,6 +113,7 @@ func (c *iPPools) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interfa
 func (c *iPPools) Create(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.CreateOptions) (result *v1alpha1.IPPool, err error) {
 	result = &v1alpha1.IPPool{}
 	err = c.client.Post().
+		Namespace(c.ns).
 		Resource("ippools").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Body(iPPool).
@@ -120,6 +126,7 @@ func (c *iPPools) Create(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.C
 func (c *iPPools) Update(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.UpdateOptions) (result *v1alpha1.IPPool, err error) {
 	result = &v1alpha1.IPPool{}
 	err = c.client.Put().
+		Namespace(c.ns).
 		Resource("ippools").
 		Name(iPPool.Name).
 		VersionedParams(&opts, scheme.ParameterCodec).
@@ -134,6 +141,7 @@ func (c *iPPools) Update(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.U
 func (c *iPPools) UpdateStatus(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.UpdateOptions) (result *v1alpha1.IPPool, err error) {
 	result = &v1alpha1.IPPool{}
 	err = c.client.Put().
+		Namespace(c.ns).
 		Resource("ippools").
 		Name(iPPool.Name).
 		SubResource("status").
@@ -147,6 +155,7 @@ func (c *iPPools) UpdateStatus(ctx context.Context, iPPool *v1alpha1.IPPool, opt
 // Delete takes name of the iPPool and deletes it. Returns an error if one occurs.
 func (c *iPPools) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	return c.client.Delete().
+		Namespace(c.ns).
 		Resource("ippools").
 		Name(name).
 		Body(&opts).
@@ -161,6 +170,7 @@ func (c *iPPools) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, l
 		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
+		Namespace(c.ns).
 		Resource("ippools").
 		VersionedParams(&listOpts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -173,6 +183,7 @@ func (c *iPPools) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, l
 func (c *iPPools) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IPPool, err error) {
 	result = &v1alpha1.IPPool{}
 	err = c.client.Patch(pt).
+		Namespace(c.ns).
 		Resource("ippools").
 		Name(name).
 		SubResource(subresources...).

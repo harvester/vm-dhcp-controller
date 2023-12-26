@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"net/http"
 
+	k8scnicncfiov1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/k8s.cni.cncf.io/v1"
+	kubevirtv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/kubevirt.io/v1"
 	networkv1alpha1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/network.harvesterhci.io/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
@@ -30,13 +32,27 @@ import (
 
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
+	K8sCniCncfIoV1() k8scnicncfiov1.K8sCniCncfIoV1Interface
+	KubevirtV1() kubevirtv1.KubevirtV1Interface
 	NetworkV1alpha1() networkv1alpha1.NetworkV1alpha1Interface
 }
 
 // Clientset contains the clients for groups.
 type Clientset struct {
 	*discovery.DiscoveryClient
+	k8sCniCncfIoV1  *k8scnicncfiov1.K8sCniCncfIoV1Client
+	kubevirtV1      *kubevirtv1.KubevirtV1Client
 	networkV1alpha1 *networkv1alpha1.NetworkV1alpha1Client
+}
+
+// K8sCniCncfIoV1 retrieves the K8sCniCncfIoV1Client
+func (c *Clientset) K8sCniCncfIoV1() k8scnicncfiov1.K8sCniCncfIoV1Interface {
+	return c.k8sCniCncfIoV1
+}
+
+// KubevirtV1 retrieves the KubevirtV1Client
+func (c *Clientset) KubevirtV1() kubevirtv1.KubevirtV1Interface {
+	return c.kubevirtV1
 }
 
 // NetworkV1alpha1 retrieves the NetworkV1alpha1Client
@@ -88,6 +104,14 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 
 	var cs Clientset
 	var err error
+	cs.k8sCniCncfIoV1, err = k8scnicncfiov1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	if err != nil {
+		return nil, err
+	}
+	cs.kubevirtV1, err = kubevirtv1.NewForConfigAndClient(&configShallowCopy, httpClient)
+	if err != nil {
+		return nil, err
+	}
 	cs.networkV1alpha1, err = networkv1alpha1.NewForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
 		return nil, err
@@ -113,6 +137,8 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 // New creates a new Clientset for the given RESTClient.
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
+	cs.k8sCniCncfIoV1 = k8scnicncfiov1.New(c)
+	cs.kubevirtV1 = kubevirtv1.New(c)
 	cs.networkV1alpha1 = networkv1alpha1.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)

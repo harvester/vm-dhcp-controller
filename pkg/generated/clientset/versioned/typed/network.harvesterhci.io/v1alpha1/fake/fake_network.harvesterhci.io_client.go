@@ -28,8 +28,8 @@ type FakeNetworkV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeNetworkV1alpha1) IPPools() v1alpha1.IPPoolInterface {
-	return &FakeIPPools{c}
+func (c *FakeNetworkV1alpha1) IPPools(namespace string) v1alpha1.IPPoolInterface {
+	return &FakeIPPools{c, namespace}
 }
 
 func (c *FakeNetworkV1alpha1) VirtualMachineNetworkConfigs(namespace string) v1alpha1.VirtualMachineNetworkConfigInterface {

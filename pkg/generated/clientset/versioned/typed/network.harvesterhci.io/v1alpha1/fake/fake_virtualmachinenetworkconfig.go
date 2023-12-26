@@ -24,7 +24,6 @@ import (
 	v1alpha1 "github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeVirtualMachineNetworkConfigs struct {
 	ns   string
 }
 
-var virtualmachinenetworkconfigsResource = schema.GroupVersionResource{Group: "network.harvesterhci.io", Version: "v1alpha1", Resource: "virtualmachinenetworkconfigs"}
+var virtualmachinenetworkconfigsResource = v1alpha1.SchemeGroupVersion.WithResource("virtualmachinenetworkconfigs")
 
-var virtualmachinenetworkconfigsKind = schema.GroupVersionKind{Group: "network.harvesterhci.io", Version: "v1alpha1", Kind: "VirtualMachineNetworkConfig"}
+var virtualmachinenetworkconfigsKind = v1alpha1.SchemeGroupVersion.WithKind("VirtualMachineNetworkConfig")
 
 // Get takes name of the virtualMachineNetworkConfig, and returns the corresponding virtualMachineNetworkConfig object, and an error if there is any.
 func (c *FakeVirtualMachineNetworkConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.VirtualMachineNetworkConfig, err error) {

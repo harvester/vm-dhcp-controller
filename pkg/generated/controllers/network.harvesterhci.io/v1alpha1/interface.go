@@ -45,7 +45,7 @@ type version struct {
 }
 
 func (c *version) IPPool() IPPoolController {
-	return NewIPPoolController(schema.GroupVersionKind{Group: "network.harvesterhci.io", Version: "v1alpha1", Kind: "IPPool"}, "ippools", false, c.controllerFactory)
+	return NewIPPoolController(schema.GroupVersionKind{Group: "network.harvesterhci.io", Version: "v1alpha1", Kind: "IPPool"}, "ippools", true, c.controllerFactory)
 }
 func (c *version) VirtualMachineNetworkConfig() VirtualMachineNetworkConfigController {
 	return NewVirtualMachineNetworkConfigController(schema.GroupVersionKind{Group: "network.harvesterhci.io", Version: "v1alpha1", Kind: "VirtualMachineNetworkConfig"}, "virtualmachinenetworkconfigs", true, c.controllerFactory)

@@ -21,7 +21,6 @@ var ageColumn = apiextv1.CustomResourceColumnDefinition{
 func List() []crd.CRD {
 	return []crd.CRD{
 		newCRD("network.harvesterhci.io", &network.IPPool{}, func(c crd.CRD) crd.CRD {
-			c.NonNamespace = true
 			return c.
 				WithShortNames("ipl", "ipls").
 				WithColumn("NETWORK", ".spec.networkName").

@@ -264,9 +264,20 @@ func (a *DHCPAllocator) Run(nic string, serverip string) (err error) {
 		return
 	}
 
-	go server.Serve()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		if err := server.Serve(); err != nil {
+			log.Errorf("(dhcp.Run) fail to start DHCP service: %s", err.Error())
+		}
+	}()
+	// go server.Serve()
 
 	a.servers[nic] = server
+
+	wg.Wait()
 
 	return
 }
