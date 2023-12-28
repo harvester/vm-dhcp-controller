@@ -10,8 +10,10 @@ import (
 )
 
 var (
-	managerName string
-	agentImage  string
+	managerName             string
+	agentNamespace          string
+	agentImage              string
+	agentServiceAccountName string
 
 	// managerCmd represents the manager command
 	managerCmd = &cobra.Command{
@@ -39,8 +41,10 @@ And it also waits for reports from support bundle agents. The reports contain:
 			}
 
 			options := &config.Options{
-				Name:       managerName,
-				AgentImage: image,
+				Name:                    managerName,
+				AgentNamespace:          agentNamespace,
+				AgentImage:              image,
+				AgentServiceAccountName: agentServiceAccountName,
 			}
 
 			if err := managerRun(options); err != nil {
@@ -54,6 +58,8 @@ And it also waits for reports from support bundle agents. The reports contain:
 func init() {
 	rootCmd.AddCommand(managerCmd)
 
-	managerCmd.PersistentFlags().StringVar(&managerName, "name", os.Getenv("VM_DHCP_CONTROLLER_MANAGER_NAME"), "The name of the manager")
+	managerCmd.PersistentFlags().StringVar(&managerName, "name", os.Getenv("MANAGER_NAME"), "The name of the manager")
+	managerCmd.PersistentFlags().StringVar(&agentNamespace, "namespace", os.Getenv("AGENT_NAMESPACE"), "The namespace for the spawned agents")
 	managerCmd.PersistentFlags().StringVar(&agentImage, "image", "", "The container image for the spawned agents")
+	managerCmd.PersistentFlags().StringVar(&agentServiceAccountName, "service-account-name", "vdca", "The service account for the spawned agents")
 }

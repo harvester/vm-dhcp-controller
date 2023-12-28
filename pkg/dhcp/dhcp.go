@@ -1,12 +1,13 @@
 package dhcp
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/insomniacslk/dhcp/dhcpv4/server4"
@@ -87,7 +88,7 @@ func (a *DHCPAllocator) AddLease(
 		} else {
 			hostips, err := net.LookupIP(NTPServers[i])
 			if err != nil {
-				log.Errorf("(dhcp.AddLease) cannot get any ip addresses from ntp domainname entry %s: %s", NTPServers[i], err)
+				logrus.Errorf("(dhcp.AddLease) cannot get any ip addresses from ntp domainname entry %s: %s", NTPServers[i], err)
 			}
 			for _, ip := range hostips {
 				if ip.To4() != nil {
@@ -102,7 +103,7 @@ func (a *DHCPAllocator) AddLease(
 
 	a.leases[hwAddr] = lease
 
-	log.Debugf("(dhcp.AddLease) lease added for hardware address: %s", hwAddr)
+	logrus.Debugf("(dhcp.AddLease) lease added for hardware address: %s", hwAddr)
 
 	return
 }
@@ -126,14 +127,14 @@ func (a *DHCPAllocator) DeleteLease(hwAddr string) (err error) {
 
 	delete(a.leases, hwAddr)
 
-	log.Debugf("(dhcp.DeleteLease) lease deleted for hardware address: %s", hwAddr)
+	logrus.Debugf("(dhcp.DeleteLease) lease deleted for hardware address: %s", hwAddr)
 
 	return
 }
 
 func (a *DHCPAllocator) Usage() {
 	for hwaddr, lease := range a.leases {
-		log.Infof("(dhcp.Usage) lease: hwaddr=%s, clientip=%s, netmask=%s, router=%s, dns=%+v, domain=%s, domainsearch=%+v, ntp=%+v, leasetime=%d, ref=%s",
+		logrus.Infof("(dhcp.Usage) lease: hwaddr=%s, clientip=%s, netmask=%s, router=%s, dns=%+v, domain=%s, domainsearch=%+v, ntp=%+v, leasetime=%d, ref=%s",
 			hwaddr,
 			lease.ClientIP.String(),
 			lease.SubnetMask.String(),
@@ -154,32 +155,32 @@ func New() *DHCPAllocator {
 
 func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv4.DHCPv4) {
 	if m == nil {
-		log.Errorf("(dhcp.dhcpHandler) packet is nil!")
+		logrus.Errorf("(dhcp.dhcpHandler) packet is nil!")
 		return
 	}
 
-	log.Tracef("(dhcp.dhcpHandler) INCOMING PACKET=%s", m.Summary())
+	logrus.Tracef("(dhcp.dhcpHandler) INCOMING PACKET=%s", m.Summary())
 
 	if m.OpCode != dhcpv4.OpcodeBootRequest {
-		log.Errorf("(dhcp.dhcpHandler) not a BootRequest!")
+		logrus.Errorf("(dhcp.dhcpHandler) not a BootRequest!")
 		return
 	}
 
 	reply, err := dhcpv4.NewReplyFromRequest(m)
 	if err != nil {
-		log.Errorf("(dhcp.dhcpHandler) NewReplyFromRequest failed: %v", err)
+		logrus.Errorf("(dhcp.dhcpHandler) NewReplyFromRequest failed: %v", err)
 		return
 	}
 
 	lease := a.leases[m.ClientHWAddr.String()]
 
 	if lease.ClientIP == nil {
-		log.Warnf("(dhcp.dhcpHandler) NO LEASE FOUND: hwaddr=%s", m.ClientHWAddr.String())
+		logrus.Warnf("(dhcp.dhcpHandler) NO LEASE FOUND: hwaddr=%s", m.ClientHWAddr.String())
 
 		return
 	}
 
-	log.Debugf("(dhcp.dhcpHandler) LEASE FOUND: hwaddr=%s, serverip=%s, clientip=%s, mask=%s, router=%s, dns=%+v, domainname=%s, domainsearch=%+v, ntp=%+v, leasetime=%d, reference=%s",
+	logrus.Debugf("(dhcp.dhcpHandler) LEASE FOUND: hwaddr=%s, serverip=%s, clientip=%s, mask=%s, router=%s, dns=%+v, domainname=%s, domainsearch=%+v, ntp=%+v, leasetime=%d, reference=%s",
 		m.ClientHWAddr.String(),
 		lease.ServerIP.String(),
 		lease.ClientIP.String(),
@@ -233,25 +234,25 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 
 	switch mt := m.MessageType(); mt {
 	case dhcpv4.MessageTypeDiscover:
-		log.Debugf("(dhcp.dhcpHandler) DHCPDISCOVER: %+v", m)
+		logrus.Debugf("(dhcp.dhcpHandler) DHCPDISCOVER: %+v", m)
 		reply.UpdateOption(dhcpv4.OptMessageType(dhcpv4.MessageTypeOffer))
-		log.Debugf("(dhcp.dhcpHandler) DHCPOFFER: %+v", reply)
+		logrus.Debugf("(dhcp.dhcpHandler) DHCPOFFER: %+v", reply)
 	case dhcpv4.MessageTypeRequest:
-		log.Debugf("(dhcp.dhcpHandler) DHCPREQUEST: %+v", m)
+		logrus.Debugf("(dhcp.dhcpHandler) DHCPREQUEST: %+v", m)
 		reply.UpdateOption(dhcpv4.OptMessageType(dhcpv4.MessageTypeAck))
-		log.Debugf("(dhcp.dhcpHandler) DHCPACK: %+v", reply)
+		logrus.Debugf("(dhcp.dhcpHandler) DHCPACK: %+v", reply)
 	default:
-		log.Warnf("(dhcp.dhcpHandler) Unhandled message type for hwaddr [%s]: %v", m.ClientHWAddr.String(), mt)
+		logrus.Warnf("(dhcp.dhcpHandler) Unhandled message type for hwaddr [%s]: %v", m.ClientHWAddr.String(), mt)
 		return
 	}
 
 	if _, err := conn.WriteTo(reply.ToBytes(), peer); err != nil {
-		log.Errorf("(dhcp.dhcpHandler) Cannot reply to client: %v", err)
+		logrus.Errorf("(dhcp.dhcpHandler) Cannot reply to client: %v", err)
 	}
 }
 
-func (a *DHCPAllocator) Run(nic string, serverip string) (err error) {
-	log.Infof("(dhcp.Run) starting DHCP service on nic %s", nic)
+func (a *DHCPAllocator) Run(ctx context.Context, nic string) (err error) {
+	logrus.Infof("(dhcp.Run) starting DHCP service on nic %s", nic)
 
 	// we need to listen on 0.0.0.0 otherwise client discovers will not be answered
 	laddr := net.UDPAddr{
@@ -264,26 +265,19 @@ func (a *DHCPAllocator) Run(nic string, serverip string) (err error) {
 		return
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
-
 		if err := server.Serve(); err != nil {
-			log.Errorf("(dhcp.Run) fail to start DHCP service: %s", err.Error())
+			logrus.Errorf("(dhcp.Run) DHCP server on nic %s exited with error: %v", nic, err)
 		}
 	}()
-	// go server.Serve()
 
 	a.servers[nic] = server
 
-	wg.Wait()
-
-	return
+	return nil
 }
 
 func (a *DHCPAllocator) Stop(nic string) (err error) {
-	log.Infof("(dhcp.Stop) stopping DHCP service on nic %s", nic)
+	logrus.Infof("(dhcp.Stop) stopping DHCP service on nic %s", nic)
 
 	return a.servers[nic].Close()
 }

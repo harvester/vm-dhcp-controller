@@ -5,16 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"reflect"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
 	networkv1 "github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/starbops/vm-dhcp-controller/pkg/config"
+	"github.com/starbops/vm-dhcp-controller/pkg/controllers/agent/ippool"
 	ctlcorev1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/core/v1"
 	ctlnetworkv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
+	"github.com/starbops/vm-dhcp-controller/pkg/ipam"
 )
 
 const (
@@ -22,7 +27,10 @@ const (
 
 	multusNetworksAnnotationKey = "k8s.v1.cni.cncf.io/networks"
 
-	ipPoolLabelKey = "network.harvesterhci.io/ippool"
+	ipPoolNamespaceLabelKey = "network.harvesterhci.io/ippool-namespace"
+	ipPoolNameLabelKey      = "network.harvesterhci.io/ippool-name"
+
+	agentCheckInterval = 5 * time.Second
 
 	setIPAddrScript = `
 #!/usr/bin/env sh
@@ -45,12 +53,17 @@ type Network struct {
 }
 
 type Handler struct {
-	agentImage *config.Image
+	agentNamespace          string
+	agentImage              *config.Image
+	agentServiceAccountName string
 
-	ippoolClient ctlnetworkv1.IPPoolClient
-	ippoolCache  ctlnetworkv1.IPPoolCache
-	podClient    ctlcorev1.PodClient
-	podCache     ctlcorev1.PodCache
+	ipam *ipam.IPAllocator
+
+	ippoolController ctlnetworkv1.IPPoolController
+	ippoolClient     ctlnetworkv1.IPPoolClient
+	ippoolCache      ctlnetworkv1.IPPoolCache
+	podClient        ctlcorev1.PodClient
+	podCache         ctlcorev1.PodCache
 }
 
 func Register(ctx context.Context, management *config.Management) error {
@@ -58,12 +71,17 @@ func Register(ctx context.Context, management *config.Management) error {
 	pods := management.CoreFactory.Core().V1().Pod()
 
 	handler := &Handler{
-		agentImage: management.Options.AgentImage,
+		agentNamespace:          management.Options.AgentNamespace,
+		agentImage:              management.Options.AgentImage,
+		agentServiceAccountName: management.Options.AgentServiceAccountName,
 
-		ippoolClient: ippools,
-		ippoolCache:  ippools.Cache(),
-		podClient:    pods,
-		podCache:     pods.Cache(),
+		ipam: ipam.NewIPAllocator(),
+
+		ippoolController: ippools,
+		ippoolClient:     ippools,
+		ippoolCache:      ippools.Cache(),
+		podClient:        pods,
+		podCache:         pods.Cache(),
 	}
 
 	ippools.OnChange(ctx, controllerName, handler.OnChange)
@@ -74,51 +92,122 @@ func Register(ctx context.Context, management *config.Management) error {
 
 func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
 	if ipPool == nil || ipPool.DeletionTimestamp != nil {
-		return ipPool, nil
+		return nil, nil
 	}
 
 	klog.Infof("ippool configuration %s/%s has been changed: %+v", ipPool.Namespace, ipPool.Name, ipPool.Spec.IPv4Config)
 
-	sets := labels.Set{
-		ipPoolLabelKey: ipPool.Name,
-	}
-	pods, err := h.podCache.List(ipPool.Namespace, sets.AsSelector())
-	if err != nil {
-		return ipPool, err
-	}
+	ipPoolCpy := ipPool.DeepCopy()
 
-	// Each IPPool object should have an agent serves as its backend for the data plane
-	if len(pods) == 0 {
+	// Register newly created IPPool object:
+	// - Create a backing agent Pod
+	// - Construct a in-memory IPAM module
+	if networkv1.Registered.GetStatus(ipPool) == "" {
 		klog.Infof("ippool %s/%s has no agent found", ipPool.Namespace, ipPool.Name)
 
+		// Create the backing agent Pod
 		agent, err := h.prepareAgentPod(ipPool)
 		if err != nil {
 			return ipPool, err
 		}
-		pod, err := h.podClient.Create(agent)
-		if err != nil {
+		agentPod, err := h.podClient.Create(agent)
+		if err != nil && !apierrors.IsAlreadyExists(err) {
 			return ipPool, err
 		}
-		klog.Infof("agent pod %s backing %s ippool has been created", pod.Name, ipPool.Name)
-		ipPoolCpy := ipPool.DeepCopy()
+
+		klog.Infof("agent pod %s/%s for backing %s/%s ippool has been created", agentPod.Namespace, agentPod.Name, ipPool.Namespace, ipPool.Name)
+
+		// Construct the IPAM module
+		if err := h.ipam.NewIPSubnet(
+			ipPool.Spec.NetworkName,
+			ipPool.Spec.IPv4Config.CIDR,
+			ipPool.Spec.IPv4Config.Pool.Start,
+			ipPool.Spec.IPv4Config.Pool.End,
+		); err != nil {
+			return ipPool, err
+		}
+
+		klog.Infof("ipam %s for ippool %s/%s has been initialized", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
+
+		// TODO: mark excluded IP addresses in the IPAM module
+
+		// Update IPPool status
+		ipPoolCpy.Status.LastUpdate = metav1.Now()
+
+		// Agent Pod status
+		agentPodRef := networkv1.PodReference{
+			Namespace: agentPod.Namespace,
+			Name:      agentPod.Name,
+		}
+		ipPoolCpy.Status.AgentPodRef = agentPodRef
+
 		networkv1.Registered.SetStatus(ipPoolCpy, string(corev1.ConditionTrue))
 		networkv1.Registered.Reason(ipPoolCpy, "")
 		networkv1.Registered.Message(ipPoolCpy, "")
-		return h.ippoolClient.UpdateStatus(ipPoolCpy)
-	} else if len(pods) == 1 && networkv1.Registered.IsTrue(ipPool) && networkv1.Ready.GetStatus(ipPool) == "" {
-		klog.Infof("ippool %s/%s has exactly one agent running", ipPool.Namespace, ipPool.Name)
-		ipPoolCpy := ipPool.DeepCopy()
+
+		// Pool usage status
+		used, err := h.ipam.GetUsed(ipPool.Spec.NetworkName)
+		if err != nil {
+			return ipPool, err
+		}
+		available, err := h.ipam.GetAvailable(ipPool.Spec.NetworkName)
+		if err != nil {
+			return ipPool, err
+		}
+		ipPoolCpy.Status.IPv4 = networkv1.IPv4Status{
+			Allocated: make(map[string]string),
+			Used:      used,
+			Available: available,
+		}
+
+		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
+			klog.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+			return h.ippoolClient.UpdateStatus(ipPoolCpy)
+		}
+
+		return ipPool, nil
+	}
+
+	// Monitor the backing agent Pod for the registered IPPool object:
+	// - Each IPPool object should have one and only one agent serves as its backend for the data plane
+	// - When the agent Pod is ready, mark the IPPool object as ready
+	if networkv1.Ready.GetStatus(ipPool) == "" {
+		sets := labels.Set{
+			ipPoolNamespaceLabelKey: ipPool.Namespace,
+			ipPoolNameLabelKey:      ipPool.Name,
+		}
+		pods, err := h.podCache.List(h.agentNamespace, sets.AsSelector())
+		if err != nil {
+			return ipPool, err
+		}
+
+		// Wait for the agent Pod being created...
+		if len(pods) == 0 {
+			h.ippoolController.EnqueueAfter(ipPool.Namespace, ipPool.Name, agentCheckInterval)
+			return ipPool, nil
+		}
+
+		// There should not be more than one agent Pod running...
+		if len(pods) > 1 {
+			networkv1.Ready.SetStatus(ipPoolCpy, string(corev1.ConditionFalse))
+			networkv1.Ready.Reason(ipPoolCpy, "MultiAgentPresented")
+			networkv1.Ready.Message(ipPoolCpy, fmt.Sprintf("There are %d agent pods running", len(pods)))
+			return h.ippoolClient.UpdateStatus(ipPoolCpy)
+		}
+
+		agentPod := pods[0]
+		if !isPodReady(agentPod) {
+			h.ippoolController.EnqueueAfter(ipPool.Namespace, ipPool.Name, agentCheckInterval)
+			return ipPool, nil
+		}
+
 		networkv1.Ready.SetStatus(ipPoolCpy, string(corev1.ConditionTrue))
-		networkv1.Ready.Reason(ipPoolCpy, "")
-		networkv1.Ready.Message(ipPoolCpy, "")
-		return h.ippoolClient.UpdateStatus(ipPoolCpy)
-	} else {
-		ipPoolCpy := ipPool.DeepCopy()
-		networkv1.Ready.SetStatus(ipPoolCpy, string(corev1.ConditionFalse))
-		networkv1.Ready.Reason(ipPoolCpy, "AgentMisconfigured")
-		networkv1.Ready.Message(ipPoolCpy, fmt.Sprintf("ippool %s/%s has multiple agents", ipPool.Namespace, ipPool.Name))
+		networkv1.Ready.Reason(ipPoolCpy, "AgentRunning")
+		networkv1.Ready.Message(ipPoolCpy, fmt.Sprintf("Agent Pod %s/%s is serving", agentPod.Namespace, agentPod.Name))
 		return h.ippoolClient.UpdateStatus(ipPoolCpy)
 	}
+
+	return ipPool, nil
 }
 
 func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
@@ -128,17 +217,28 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 
 	klog.Infof("ippool configuration %s/%s has been removed", ipPool.Namespace, ipPool.Name)
 
+	if networkv1.Ready.IsTrue(ipPool) {
+		klog.Infof("remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, ipPool.Namespace, ipPool.Name)
+		if err := h.podClient.Delete(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, &metav1.DeleteOptions{}); err != nil {
+			return ipPool, err
+		}
+
+		return ipPool, nil
+	}
+
 	return ipPool, nil
 }
 
 func (h *Handler) prepareAgentPod(ipPool *networkv1.IPPool) (*corev1.Pod, error) {
-	var networks []Network
-	network := Network{
-		Namespace:     ipPool.Namespace,
-		Name:          ipPool.Spec.NetworkName,
-		InterfaceName: "eth1",
+	name := fmt.Sprintf("%s-%s-agent", ipPool.Namespace, ipPool.Name)
+
+	networks := []Network{
+		{
+			Namespace:     ipPool.Namespace,
+			Name:          ipPool.Spec.NetworkName,
+			InterfaceName: "eth1",
+		},
 	}
-	networks = append(networks, network)
 	networksStr, err := json.Marshal(networks)
 	if err != nil {
 		return nil, err
@@ -156,15 +256,14 @@ func (h *Handler) prepareAgentPod(ipPool *networkv1.IPPool) (*corev1.Pod, error)
 				multusNetworksAnnotationKey: string(networksStr),
 			},
 			Labels: map[string]string{
-				ipPoolLabelKey: ipPool.Name,
+				ipPoolNamespaceLabelKey: ipPool.Namespace,
+				ipPoolNameLabelKey:      ipPool.Name,
 			},
-			GenerateName: "vm-dhcp-controller-agent-",
-			Namespace:    ipPool.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				ipPoolReference(ipPool),
-			},
+			Name:      name,
+			Namespace: h.agentNamespace,
 		},
 		Spec: corev1.PodSpec{
+			ServiceAccountName: h.agentServiceAccountName,
 			InitContainers: []corev1.Container{
 				{
 					Name:  "ip-setter",
@@ -192,7 +291,7 @@ func (h *Handler) prepareAgentPod(ipPool *networkv1.IPPool) (*corev1.Pod, error)
 					Args: []string{
 						"agent",
 						"--name",
-						fmt.Sprintf("%s-%s-vdca", ipPool.Namespace, ipPool.Name),
+						fmt.Sprintf("%s-%s-agent", ipPool.Namespace, ipPool.Name),
 						"--pool-namespace",
 						ipPool.Namespace,
 						"--pool-name",
@@ -207,17 +306,28 @@ func (h *Handler) prepareAgentPod(ipPool *networkv1.IPPool) (*corev1.Pod, error)
 							},
 						},
 					},
+					ReadinessProbe: &corev1.Probe{
+						ProbeHandler: corev1.ProbeHandler{
+							Exec: &corev1.ExecAction{
+								Command: []string{
+									"cat",
+									ippool.PIDFilePath,
+								},
+							},
+						},
+						InitialDelaySeconds: 5,
+					},
 				},
 			},
 		},
 	}, nil
 }
 
-func ipPoolReference(ipPool *networkv1.IPPool) metav1.OwnerReference {
-	return metav1.OwnerReference{
-		APIVersion: ipPool.APIVersion,
-		Kind:       ipPool.Kind,
-		Name:       ipPool.Name,
-		UID:        ipPool.UID,
+func isPodReady(pod *corev1.Pod) bool {
+	for _, c := range pod.Status.Conditions {
+		if c.Type == corev1.PodReady {
+			return c.Status == corev1.ConditionTrue
+		}
 	}
+	return false
 }

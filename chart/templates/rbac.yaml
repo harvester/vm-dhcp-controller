@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "harvester-vm-dhcp-controller.name" . }}
+  name: {{ include "harvester-vm-dhcp-controller.name" . }}-manager
 rules:
   - apiGroups: [ "apiextensions.k8s.io" ]
     resources: [ "customresourcedefinitions" ]
@@ -10,7 +10,7 @@ rules:
     resources: [ "leases" ]
     verbs: [ "*" ]
   - apiGroups: [ "network.harvesterhci.io" ]
-    resources: [ "ippools", "virtualmachinenetworkconfigs" ]
+    resources: [ "ippools", "ippools/status", "virtualmachinenetworkconfigs" ]
     verbs: [ "*" ]
   - apiGroups: [ "k8s.cni.cncf.io" ]
     resources: [ "network-attachment-definitions" ]
@@ -29,19 +29,46 @@ rules:
     verbs: [ "*" ]
   - apiGroups: [ "kubevirt.io" ]
     resources: [ "virtualmachines" ]
-    verbs: [ "get", "list", "watch" ]
+    verbs: [ "*" ]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "harvester-vm-dhcp-controller.name" . }}-agent
+rules:
+  - apiGroups: [ "network.harvesterhci.io" ]
+    resources: [ "ippools", "ippools/status", "virtualmachinenetworkconfigs" ]
+    verbs: [ "*" ]
+  - apiGroups: [ "" ]
+    resources: [ "pods" ]
+    verbs: [ "get", "watch", "list" ]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "harvester-vm-dhcp-controller.name" . }}
+  name: {{ include "harvester-vm-dhcp-controller.name" . }}-manager
   labels:
   {{- include "harvester-vm-dhcp-controller.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "harvester-vm-dhcp-controller.name" . }}
+  name: {{ include "harvester-vm-dhcp-controller.name" . }}-manager
 subjects:
   - kind: ServiceAccount
-    name: {{ include "harvester-vm-dhcp-controller.serviceAccountName" . }}
+    name: {{ include "harvester-vm-dhcp-controller.serviceAccountName" . }}-manager
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "harvester-vm-dhcp-controller.name" . }}-agent
+  labels:
+  {{- include "harvester-vm-dhcp-controller.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "harvester-vm-dhcp-controller.name" . }}-agent
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "harvester-vm-dhcp-controller.serviceAccountName" . }}-agent
     namespace: {{ .Release.Namespace }}

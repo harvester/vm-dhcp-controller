@@ -58,6 +58,8 @@ type IPPoolStatus struct {
 	LastUpdateBeforeStart metav1.Time `json:"lastUpdateBeforeStart,omitempty"`
 	IPv4                  IPv4Status  `json:"ipv4,omitempty"`
 	// +optional
+	AgentPodRef PodReference `json:"agentPodRef,omitempty"`
+	// +optional
 	Conditions []Condition `json:"conditions,omitempty"`
 }
 
@@ -65,6 +67,11 @@ type IPv4Status struct {
 	Allocated map[string]string `json:"allocated,omitempty"`
 	Used      int               `json:"used,omitempty"`
 	Available int               `json:"available,omitempty"`
+}
+
+type PodReference struct {
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name,omitempty"`
 }
 
 type Condition struct {

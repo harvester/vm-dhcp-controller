@@ -62,10 +62,12 @@ func (i *Image) String() string {
 }
 
 type Options struct {
-	Name       string
-	AgentImage *Image
-	DryRun     bool
-	PoolRef    types.NamespacedName
+	Name                    string
+	AgentNamespace          string
+	AgentImage              *Image
+	AgentServiceAccountName string
+	DryRun                  bool
+	PoolRef                 types.NamespacedName
 }
 
 type Management struct {

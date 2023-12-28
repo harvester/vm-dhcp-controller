@@ -49,7 +49,7 @@ func init() {
 	rootCmd.AddCommand(agentCmd)
 
 	agentCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Run the agent without replying to any actual requests")
-	agentCmd.PersistentFlags().StringVar(&agentName, "name", os.Getenv("VM_DHCP_CONTROLLER_AGENT_NAME"), "The name of the agent")
+	agentCmd.PersistentFlags().StringVar(&agentName, "name", os.Getenv("AGENT_NAME"), "The name of the agent")
 	agentCmd.PersistentFlags().StringVar(&poolNamespace, "pool-namespace", "", "The namespace of the pool that the agent should act upon")
 	agentCmd.PersistentFlags().StringVar(&poolName, "pool-name", "", "The name of the pool that the agent should act upon")
 }
