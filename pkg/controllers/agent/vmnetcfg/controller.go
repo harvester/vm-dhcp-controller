@@ -7,12 +7,17 @@ import (
 
 	networkv1 "github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/starbops/vm-dhcp-controller/pkg/config"
+	"github.com/starbops/vm-dhcp-controller/pkg/dhcp"
 	ctlnetworkv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
+	"github.com/starbops/vm-dhcp-controller/pkg/ipam"
 )
 
 const controllerName = "vm-dhcp-vmnetcfg-controller"
 
 type Handler struct {
+	dhcpAllocator *dhcp.DHCPAllocator
+	IPAllocator   *ipam.IPAllocator
+
 	vmnetcfgClient ctlnetworkv1.VirtualMachineNetworkConfigClient
 	vmnetcfgCache  ctlnetworkv1.VirtualMachineNetworkConfigCache
 	ippoolClient   ctlnetworkv1.IPPoolClient
@@ -24,6 +29,9 @@ func Register(ctx context.Context, management *config.Management) error {
 	ippools := management.HarvesterNetworkFactory.Network().V1alpha1().IPPool()
 
 	handler := &Handler{
+		dhcpAllocator: management.DHCPAllocator,
+		IPAllocator:   management.IPAllocator,
+
 		vmnetcfgClient: vmnetcfgs,
 		vmnetcfgCache:  vmnetcfgs.Cache(),
 		ippoolClient:   ippools,

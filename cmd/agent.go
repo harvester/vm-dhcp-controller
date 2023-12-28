@@ -35,6 +35,7 @@ And it also waits for reports from support bundle agents. The reports contain:
 
 			options := &config.Options{
 				Name:    agentName,
+				DryRun:  dryRun,
 				PoolRef: poolRef,
 			}
 			if err := agentRun(options); err != nil {

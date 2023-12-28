@@ -7,7 +7,7 @@ import (
 )
 
 func TestDHCP(t *testing.T) {
-	td := New()
+	td := NewDHCPAllocator()
 
 	testLeases := []struct {
 		hwAddr       string

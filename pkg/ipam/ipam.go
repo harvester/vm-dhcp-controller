@@ -73,7 +73,7 @@ func (a *IPAllocator) NewIPSubnet(name string, cidr string, start, end net.IP) e
 	return nil
 }
 
-func (a *IPAllocator) AllocateIP(name string, designatedIP net.IP) (net.IP, error) {
+func (a *IPAllocator) AllocateIP(name string, designatedIPStr string) (net.IP, error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
@@ -81,6 +81,8 @@ func (a *IPAllocator) AllocateIP(name string, designatedIP net.IP) (net.IP, erro
 	if _, ok := a.ipam[name]; !ok {
 		return UnspecifiedIPAddress, fmt.Errorf("network %s does not exist", name)
 	}
+
+	designatedIP := net.ParseIP(designatedIPStr)
 
 	if designatedIP.String() != UnspecifiedIPAddress.String() {
 		ok := a.ipam[name].ipNet.Contains(designatedIP)
@@ -154,7 +156,7 @@ func (a *IPAllocator) GetUsage(name string) error {
 		return fmt.Errorf("network %s does not exist", name)
 	}
 
-	logrus.Infof("ipam[%s] info: ipNet=%s/%s, start=%s, end=%s, broadcast=%s",
+	logrus.Infof("ipam[%s] ipNet=%s/%s, start=%s, end=%s, broadcast=%s",
 		name,
 		a.ipam[name].ipNet.IP.String(),
 		a.ipam[name].ipNet.Mask.String(),
@@ -164,15 +166,15 @@ func (a *IPAllocator) GetUsage(name string) error {
 	)
 
 	var used int
-	logrus.Infof("ipam[%s] details: allocatedIPs=", name)
+	logrus.Infof("ipam[%s] allocatedIPs=", name)
 	for ip, isAllocated := range a.ipam[name].ips {
 		if isAllocated {
-			logrus.Infof("- %s", ip)
+			logrus.Infof("ipam[%s] - %s", name, ip)
 			used++
 		}
 	}
 
-	logrus.Infof("ipam[%s] statistics: total=%d, in-use=%d, available=%d",
+	logrus.Infof("ipam[%s] total=%d, in-use=%d, available=%d",
 		name,
 		len(a.ipam[name].ips),
 		used,

@@ -149,10 +149,6 @@ func (a *DHCPAllocator) Usage() {
 	}
 }
 
-func New() *DHCPAllocator {
-	return NewDHCPAllocator()
-}
-
 func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv4.DHCPv4) {
 	if m == nil {
 		logrus.Errorf("(dhcp.dhcpHandler) packet is nil!")

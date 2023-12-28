@@ -19,7 +19,6 @@ import (
 	"github.com/starbops/vm-dhcp-controller/pkg/controllers/agent/ippool"
 	ctlcorev1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/core/v1"
 	ctlnetworkv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
-	"github.com/starbops/vm-dhcp-controller/pkg/ipam"
 )
 
 const (
@@ -57,8 +56,6 @@ type Handler struct {
 	agentImage              *config.Image
 	agentServiceAccountName string
 
-	ipam *ipam.IPAllocator
-
 	ippoolController ctlnetworkv1.IPPoolController
 	ippoolClient     ctlnetworkv1.IPPoolClient
 	ippoolCache      ctlnetworkv1.IPPoolCache
@@ -74,8 +71,6 @@ func Register(ctx context.Context, management *config.Management) error {
 		agentNamespace:          management.Options.AgentNamespace,
 		agentImage:              management.Options.AgentImage,
 		agentServiceAccountName: management.Options.AgentServiceAccountName,
-
-		ipam: ipam.NewIPAllocator(),
 
 		ippoolController: ippools,
 		ippoolClient:     ippools,
@@ -117,20 +112,6 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 
 		klog.Infof("agent pod %s/%s for backing %s/%s ippool has been created", agentPod.Namespace, agentPod.Name, ipPool.Namespace, ipPool.Name)
 
-		// Construct the IPAM module
-		if err := h.ipam.NewIPSubnet(
-			ipPool.Spec.NetworkName,
-			ipPool.Spec.IPv4Config.CIDR,
-			ipPool.Spec.IPv4Config.Pool.Start,
-			ipPool.Spec.IPv4Config.Pool.End,
-		); err != nil {
-			return ipPool, err
-		}
-
-		klog.Infof("ipam %s for ippool %s/%s has been initialized", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
-
-		// TODO: mark excluded IP addresses in the IPAM module
-
 		// Update IPPool status
 		ipPoolCpy.Status.LastUpdate = metav1.Now()
 
@@ -144,21 +125,6 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		networkv1.Registered.SetStatus(ipPoolCpy, string(corev1.ConditionTrue))
 		networkv1.Registered.Reason(ipPoolCpy, "")
 		networkv1.Registered.Message(ipPoolCpy, "")
-
-		// Pool usage status
-		used, err := h.ipam.GetUsed(ipPool.Spec.NetworkName)
-		if err != nil {
-			return ipPool, err
-		}
-		available, err := h.ipam.GetAvailable(ipPool.Spec.NetworkName)
-		if err != nil {
-			return ipPool, err
-		}
-		ipPoolCpy.Status.IPv4 = networkv1.IPv4Status{
-			Allocated: make(map[string]string),
-			Used:      used,
-			Available: available,
-		}
 
 		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
 			klog.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)

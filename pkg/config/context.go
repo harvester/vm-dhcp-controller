@@ -22,10 +22,12 @@ import (
 
 	"github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/starbops/vm-dhcp-controller/pkg/crd"
+	"github.com/starbops/vm-dhcp-controller/pkg/dhcp"
 	ctlcore "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/core"
 	ctlcni "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io"
 	ctlkubevirt "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/kubevirt.io"
 	ctlnetwork "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io"
+	"github.com/starbops/vm-dhcp-controller/pkg/ipam"
 )
 
 var (
@@ -83,6 +85,9 @@ type Management struct {
 
 	ClientSet *kubernetes.Clientset
 
+	DHCPAllocator *dhcp.DHCPAllocator
+	IPAllocator   *ipam.IPAllocator
+
 	Options *Options
 
 	starters []start.Starter
@@ -129,6 +134,9 @@ func SetupManagement(ctx context.Context, restConfig *rest.Config, options *Opti
 		ctx:     ctx,
 		Options: options,
 	}
+
+	management.IPAllocator = ipam.NewIPAllocator()
+	management.DHCPAllocator = dhcp.NewDHCPAllocator()
 
 	harvesterNetwork, err := ctlnetwork.NewFactoryFromConfigWithOptions(restConfig, opts)
 	if err != nil {
