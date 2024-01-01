@@ -55,6 +55,8 @@ type Handler struct {
 	agentNamespace          string
 	agentImage              *config.Image
 	agentServiceAccountName string
+	noAgent                 bool
+	noDHCP                  bool
 
 	ippoolController ctlnetworkv1.IPPoolController
 	ippoolClient     ctlnetworkv1.IPPoolClient
@@ -71,6 +73,8 @@ func Register(ctx context.Context, management *config.Management) error {
 		agentNamespace:          management.Options.AgentNamespace,
 		agentImage:              management.Options.AgentImage,
 		agentServiceAccountName: management.Options.AgentServiceAccountName,
+		noAgent:                 management.Options.NoAgent,
+		noDHCP:                  management.Options.NoDHCP,
 
 		ippoolController: ippools,
 		ippoolClient:     ippools,
@@ -94,6 +98,24 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 
 	ipPoolCpy := ipPool.DeepCopy()
 
+	if h.noAgent {
+		klog.Info("no agent mode")
+		networkv1.Registered.SetStatus(ipPoolCpy, string(corev1.ConditionTrue))
+		networkv1.Registered.Reason(ipPoolCpy, "")
+		networkv1.Registered.Message(ipPoolCpy, "")
+
+		networkv1.Ready.SetStatus(ipPoolCpy, string(corev1.ConditionTrue))
+		networkv1.Ready.Reason(ipPoolCpy, "")
+		networkv1.Ready.Message(ipPoolCpy, "")
+
+		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
+			klog.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+			ipPoolCpy.Status.LastUpdate = metav1.Now()
+			return h.ippoolClient.UpdateStatus(ipPoolCpy)
+		}
+
+		return ipPool, nil
+	}
 	// Register newly created IPPool object:
 	// - Create a backing agent Pod
 	// - Construct a in-memory IPAM module
@@ -113,10 +135,9 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		klog.Infof("agent pod %s/%s for backing %s/%s ippool has been created", agentPod.Namespace, agentPod.Name, ipPool.Namespace, ipPool.Name)
 
 		// Update IPPool status
-		ipPoolCpy.Status.LastUpdate = metav1.Now()
 
 		// Agent Pod status
-		agentPodRef := networkv1.PodReference{
+		agentPodRef := &networkv1.PodReference{
 			Namespace: agentPod.Namespace,
 			Name:      agentPod.Name,
 		}
@@ -128,6 +149,7 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 
 		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
 			klog.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+			ipPoolCpy.Status.LastUpdate = metav1.Now()
 			return h.ippoolClient.UpdateStatus(ipPoolCpy)
 		}
 
@@ -183,6 +205,10 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 
 	klog.Infof("ippool configuration %s/%s has been removed", ipPool.Namespace, ipPool.Name)
 
+	if h.noAgent {
+		return ipPool, nil
+	}
+
 	if networkv1.Ready.IsTrue(ipPool) {
 		klog.Infof("remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, ipPool.Namespace, ipPool.Name)
 		if err := h.podClient.Delete(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, &metav1.DeleteOptions{}); err != nil {
@@ -210,11 +236,24 @@ func (h *Handler) prepareAgentPod(ipPool *networkv1.IPPool) (*corev1.Pod, error)
 		return nil, err
 	}
 
-	_, mask, err := net.ParseCIDR(ipPool.Spec.IPv4Config.CIDR)
+	_, ipNet, err := net.ParseCIDR(ipPool.Spec.IPv4Config.CIDR)
 	if err != nil {
 		return nil, err
 	}
-	prefixLength, _ := mask.Mask.Size()
+	prefixLength, _ := ipNet.Mask.Size()
+
+	args := []string{
+		"agent",
+		"--name",
+		fmt.Sprintf("%s-%s-agent", ipPool.Namespace, ipPool.Name),
+		"--pool-namespace",
+		ipPool.Namespace,
+		"--pool-name",
+		ipPool.Name,
+	}
+	if h.noDHCP {
+		args = append(args, "--dry-run")
+	}
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -254,15 +293,7 @@ func (h *Handler) prepareAgentPod(ipPool *networkv1.IPPool) (*corev1.Pod, error)
 				{
 					Name:  "vdca",
 					Image: h.agentImage.String(),
-					Args: []string{
-						"agent",
-						"--name",
-						fmt.Sprintf("%s-%s-agent", ipPool.Namespace, ipPool.Name),
-						"--pool-namespace",
-						ipPool.Namespace,
-						"--pool-name",
-						ipPool.Name,
-					},
+					Args:  args,
 					SecurityContext: &corev1.SecurityContext{
 						RunAsUser:  &runAsUserID,
 						RunAsGroup: &runAsGroupID,

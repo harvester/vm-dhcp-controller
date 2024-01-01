@@ -37,7 +37,7 @@ metadata:
   name: {{ include "harvester-vm-dhcp-controller.name" . }}-agent
 rules:
   - apiGroups: [ "network.harvesterhci.io" ]
-    resources: [ "ippools", "ippools/status", "virtualmachinenetworkconfigs" ]
+    resources: [ "ippools", "ippools/status", "virtualmachinenetworkconfigs", "virtualmachinenetworkconfigs/status" ]
     verbs: [ "*" ]
   - apiGroups: [ "" ]
     resources: [ "pods" ]

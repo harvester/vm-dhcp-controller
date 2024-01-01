@@ -64,12 +64,19 @@ func (i *Image) String() string {
 }
 
 type Options struct {
-	Name                    string
+	// Common options
+	Name string
+
+	// Manager options
+	NoAgent                 bool
 	AgentNamespace          string
 	AgentImage              *Image
 	AgentServiceAccountName string
-	DryRun                  bool
-	PoolRef                 types.NamespacedName
+	NoDHCP                  bool // NoDHCP implies agent dry-run
+
+	// Agent options
+	DryRun  bool
+	PoolRef types.NamespacedName
 }
 
 type Management struct {

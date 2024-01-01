@@ -45,11 +45,11 @@ func NewDHCPAllocator() *DHCPAllocator {
 
 func (a *DHCPAllocator) AddLease(
 	hwAddr string,
-	serverIP string,
-	clientIP string,
-	subnetMask string,
-	routerIP string,
-	DNSServers []string,
+	serverIP net.IP,
+	clientIP net.IP,
+	cidr string,
+	routerIP net.IP,
+	DNSServers []net.IP,
 	domainName string,
 	domainSearch []string,
 	NTPServers []string,
@@ -72,13 +72,17 @@ func (a *DHCPAllocator) AddLease(
 	}
 
 	lease := DHCPLease{}
-	lease.ServerIP = net.ParseIP(serverIP)
-	lease.ClientIP = net.ParseIP(clientIP)
-	lease.SubnetMask = net.IPMask(net.ParseIP(subnetMask).To4())
-	lease.Router = net.ParseIP(routerIP)
-	for i := 0; i < len(DNSServers); i++ {
-		lease.DNS = append(lease.DNS, net.ParseIP(DNSServers[i]))
+	lease.ServerIP = serverIP
+	lease.ClientIP = clientIP
+
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return err
 	}
+	lease.SubnetMask = ipNet.Mask
+
+	lease.Router = routerIP
+	lease.DNS = append(lease.DNS, DNSServers...)
 	lease.DomainName = domainName
 	lease.DomainSearch = domainSearch
 	for i := 0; i < len(NTPServers); i++ {
@@ -103,14 +107,14 @@ func (a *DHCPAllocator) AddLease(
 
 	a.leases[hwAddr] = lease
 
-	logrus.Debugf("(dhcp.AddLease) lease added for hardware address: %s", hwAddr)
+	logrus.Infof("(dhcp.AddLease) lease added for hardware address: %s", hwAddr)
 
 	return
 }
 
 func (a *DHCPAllocator) CheckLease(hwAddr string) bool {
-	_, exists := a.leases[hwAddr]
-	return exists
+	_, ok := a.leases[hwAddr]
+	return ok
 }
 
 func (a *DHCPAllocator) GetLease(hwAddr string) (lease DHCPLease) {
@@ -228,7 +232,7 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 		reply.UpdateOption(dhcpv4.OptIPAddressLeaseTime(31536000 * time.Second))
 	}
 
-	switch mt := m.MessageType(); mt {
+	switch messageType := m.MessageType(); messageType {
 	case dhcpv4.MessageTypeDiscover:
 		logrus.Debugf("(dhcp.dhcpHandler) DHCPDISCOVER: %+v", m)
 		reply.UpdateOption(dhcpv4.OptMessageType(dhcpv4.MessageTypeOffer))
@@ -238,7 +242,7 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 		reply.UpdateOption(dhcpv4.OptMessageType(dhcpv4.MessageTypeAck))
 		logrus.Debugf("(dhcp.dhcpHandler) DHCPACK: %+v", reply)
 	default:
-		logrus.Warnf("(dhcp.dhcpHandler) Unhandled message type for hwaddr [%s]: %v", m.ClientHWAddr.String(), mt)
+		logrus.Warnf("(dhcp.dhcpHandler) Unhandled message type for hwaddr [%s]: %v", m.ClientHWAddr.String(), messageType)
 		return
 	}
 
@@ -268,6 +272,14 @@ func (a *DHCPAllocator) Run(ctx context.Context, nic string) (err error) {
 	}()
 
 	a.servers[nic] = server
+
+	return nil
+}
+
+func (a *DHCPAllocator) DryRun(ctx context.Context, nic string) (err error) {
+	logrus.Infof("(dhcp.DryRun) starting DHCP service on nic %s", nic)
+
+	a.servers[nic] = &server4.Server{}
 
 	return nil
 }

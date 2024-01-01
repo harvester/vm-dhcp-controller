@@ -27,9 +27,10 @@ type VirtualMachineNetworkConfigSpec struct {
 }
 
 type NetworkConfig struct {
-	IPAddress   net.IP           `json:"ipAddress,omitempty"`
-	MACAddress  net.HardwareAddr `json:"macAddress,omitempty"`
-	NetworkName string           `json:"networkName,omitempty"`
+	NetworkName string `json:"networkName,omitempty"`
+	MACAddress  string `json:"macAddress,omitempty"`
+	// +optional
+	IPAddress net.IP `json:"ipAddress,omitempty"`
 }
 
 type VirtualMachineNetworkConfigStatus struct {
@@ -37,8 +38,11 @@ type VirtualMachineNetworkConfigStatus struct {
 }
 
 type NetworkConfigStatus struct {
-	MACAddress  net.HardwareAddr `json:"macAddress,omitempty"`
-	NetworkName string           `json:"networkName,omitempty"`
-	Status      string           `json:"status,omitempty"`
-	Message     string           `json:"message,omitempty"`
+	AllocatedIPAddress net.IP `json:"allocatedIPAddress,omitempty"`
+	MACAddress         string `json:"macAddress,omitempty"`
+	NetworkName        string `json:"networkName,omitempty"`
+	// +optional
+	Status string `json:"status,omitempty"`
+	// +optional
+	Message string `json:"message,omitempty"`
 }

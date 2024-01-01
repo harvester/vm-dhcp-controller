@@ -20,9 +20,8 @@ import (
 const (
 	controllerName = "vm-dhcp-ippool-controller"
 
-	nic          = "eth1"
-	PIDFilePath  = "/tmp/dhcpd.pid"
-	excludedMark = "EXCLUDED"
+	nic         = "eth1"
+	PIDFilePath = "/tmp/dhcpd.pid"
 )
 
 type Handler struct {
@@ -55,6 +54,7 @@ func Register(ctx context.Context, management *config.Management) error {
 	}
 
 	ippools.OnChange(ctx, controllerName, handler.OnChange)
+	ippools.OnRemove(ctx, controllerName, handler.OnRemove)
 
 	return nil
 }
@@ -64,24 +64,27 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return nil, nil
 	}
 
+	// The agent only focuses on one target IPPool object
 	ipPoolNamespacedName := types.NamespacedName{
 		Namespace: ipPool.Namespace,
 		Name:      ipPool.Name,
 	}
-
-	// The agent only focuses on the designated IPPool object
 	if ipPoolNamespacedName != h.poolRef {
 		return ipPool, nil
 	}
 
 	klog.Infof("ippool configuration %s has been changed: %+v", ipPoolNamespacedName, ipPool.Spec.IPv4Config)
 
-	// Run the embedded DHCP server
+	// Run embedded DHCP server
+
 	if h.dryRun {
 		klog.Info("dry-run mode")
+		if err := h.dhcpAllocator.DryRun(h.ctx, nic); err != nil {
+			return ipPool, err
+		}
 	} else {
 		if _, err := os.Stat(PIDFilePath); err != nil {
-			klog.Infof("start the embedded dhcp server for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+			klog.Infof("start embedded dhcp server for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 			if err := h.dhcpAllocator.Run(h.ctx, nic); err != nil {
 				return ipPool, err
 			}
@@ -92,68 +95,100 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 				return ipPool, err
 			}
 		}
+		klog.Infof("embedded dhcp server for ippool %s/%s is ready", ipPool.Namespace, ipPool.Name)
 	}
 
-	klog.Infof("embedded dhcp server for ippool %s/%s is ready", ipPool.Namespace, ipPool.Name)
+	// Construct IPAM from IPPool spec
 
-	// Construct the IPAM module
-	if err := h.ipAllocator.GetUsage(ipPool.Spec.NetworkName); err != nil {
-		klog.Infof("initialize the ipam module for ippool %s/%s", ipPool.Namespace, ipPool.Name)
-		if err := h.ipAllocator.NewIPSubnet(
-			ipPool.Spec.NetworkName,
-			ipPool.Spec.IPv4Config.CIDR,
-			ipPool.Spec.IPv4Config.Pool.Start,
-			ipPool.Spec.IPv4Config.Pool.End,
-		); err != nil {
+	// if err := h.ipAllocator.GetUsage(ipPool.Spec.NetworkName); err != nil {
+	klog.Infof("initialize ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	if err := h.ipAllocator.NewIPSubnet(
+		ipPool.Spec.NetworkName,
+		ipPool.Spec.IPv4Config.CIDR,
+		ipPool.Spec.IPv4Config.Pool.Start,
+		ipPool.Spec.IPv4Config.Pool.End,
+	); err != nil {
+		return ipPool, err
+	}
+	// }
+
+	// Revoke the excluded IP addresses in IPAM
+	for _, ip := range ipPool.Spec.IPv4Config.Pool.Exclude {
+		if err := h.ipAllocator.RevokeIP(ipPool.Spec.NetworkName, ip.String()); err != nil {
 			return ipPool, err
 		}
+		klog.Infof("excluded ip %s was revoked in ipam %s", ip, ipPool.Spec.NetworkName)
+	}
 
-		for _, ip := range ipPool.Spec.IPv4Config.Pool.Exclude {
-			if _, err := h.ipAllocator.AllocateIP(ipPool.Spec.NetworkName, ip.String()); err != nil {
-				return ipPool, err
+	// Construct IPAM from IPPool status
+
+	if ipPool.Status.IPv4 != nil {
+		for ip, mac := range ipPool.Status.IPv4.Allocated {
+			if mac == ipam.ExcludedMark {
+				continue
 			}
-			klog.Infof("excluded ip %s was marked as allocated in ipam module %s", ip, ipPool.Spec.NetworkName)
-		}
-
-		for ip := range ipPool.Status.IPv4.Allocated {
 			if _, err := h.ipAllocator.AllocateIP(ipPool.Spec.NetworkName, ip); err != nil {
 				return ipPool, err
 			}
-			klog.Infof("previously allocated ip %s was re-added into ipam module %s", ip, ipPool.Spec.NetworkName)
+			klog.Infof("previously allocated ip %s was re-allocated in ipam %s", ip, ipPool.Spec.NetworkName)
 		}
 	}
 
-	klog.Infof("ipam %s for ippool %s/%s has been initialized", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
+	klog.Infof("ipam %s for ippool %s/%s has been updated", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
 
-	// TODO: mark excluded IP addresses in the IPAM module
+	// Update IPPool status based on up-to-date IPAM
 
 	ipPoolCpy := ipPool.DeepCopy()
-	ipPoolCpy.Status.LastUpdate = metav1.Now()
 
-	// Pool usage status
+	// ipv4Status := util.ExistedOrNew(ipPoolCpy.Status.IPv4, new(networkv1.IPv4Status)).(*networkv1.IPv4Status)
+	ipv4Status := ipPoolCpy.Status.IPv4
+	if ipv4Status == nil {
+		ipv4Status = new(networkv1.IPv4Status)
+	}
+
 	used, err := h.ipAllocator.GetUsed(ipPool.Spec.NetworkName)
 	if err != nil {
 		return ipPool, err
 	}
-	ipPoolCpy.Status.IPv4.Used = used
+	ipv4Status.Used = used
+
 	available, err := h.ipAllocator.GetAvailable(ipPool.Spec.NetworkName)
 	if err != nil {
 		return ipPool, err
 	}
-	ipPoolCpy.Status.IPv4.Available = available
+	ipv4Status.Available = available
 
-	if ipPool.Status.IPv4.Allocated == nil {
-		allocated := make(map[string]string)
-		for _, v := range ipPool.Spec.IPv4Config.Pool.Exclude {
-			allocated[v.String()] = excludedMark
-		}
-		ipPoolCpy.Status.IPv4.Allocated = allocated
+	// TODO: consider previously allocated IP addresses recorded in the IPPool status
+
+	// allocated := util.ExistedOrNew(ipv4Status.Allocated, map[string]string{}).(map[string]string)
+	allocated := ipv4Status.Allocated
+	if allocated == nil {
+		allocated = make(map[string]string)
 	}
+	for _, v := range ipPool.Spec.IPv4Config.Pool.Exclude {
+		allocated[v.String()] = ipam.ExcludedMark
+	}
+	ipv4Status.Allocated = allocated
+
+	ipPoolCpy.Status.IPv4 = ipv4Status
 
 	if !reflect.DeepEqual(ipPoolCpy, ipPool) {
 		klog.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+		ipPoolCpy.Status.LastUpdate = metav1.Now()
 		return h.ippoolClient.UpdateStatus(ipPoolCpy)
 	}
+
+	return ipPool, nil
+}
+
+func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
+	if ipPool == nil {
+		return nil, nil
+	}
+
+	klog.Infof("ippool configuration %s/%s has been removed", ipPool.Namespace, ipPool.Name)
+
+	h.ipAllocator.DeleteIPSubnet(ipPool.Spec.NetworkName)
 
 	return ipPool, nil
 }

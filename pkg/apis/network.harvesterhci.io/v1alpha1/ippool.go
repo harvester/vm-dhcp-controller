@@ -36,29 +36,47 @@ type IPPoolSpec struct {
 }
 
 type IPv4Config struct {
-	ServerIP     net.IP   `json:"serverIP,omitempty"`
-	CIDR         string   `json:"cidr,omitempty"`
-	Pool         Pool     `json:"pool,omitempty"`
-	Router       net.IP   `json:"router,omitempty"`
-	DNS          []net.IP `json:"dns,omitempty"`
-	DomainName   string   `json:"domainName,omitempty"`
+	ServerIP net.IP `json:"serverIP,omitempty"`
+	CIDR     string `json:"cidr,omitempty"`
+	Pool     Pool   `json:"pool,omitempty"`
+
+	// +optional
+	Router net.IP `json:"router,omitempty"`
+
+	// +optional
+	DNS []net.IP `json:"dns,omitempty"`
+
+	// +optional
+	DomainName *string `json:"domainName,omitempty"`
+
+	// +optional
 	DomainSearch []string `json:"domainSearch,omitempty"`
-	NTP          []string `json:"ntp,omitempty"`
-	LeaseTime    int      `json:"leaseTime,omitempty"`
+
+	// +optional
+	NTP []string `json:"ntp,omitempty"`
+
+	// +optional
+	LeaseTime *int `json:"leaseTime,omitempty"`
 }
 
 type Pool struct {
-	Start   net.IP   `json:"start,omitempty"`
-	End     net.IP   `json:"end,omitempty"`
+	Start net.IP `json:"start,omitempty"`
+	End   net.IP `json:"end,omitempty"`
+
+	// +optional
 	Exclude []net.IP `json:"exclude,omitempty"`
 }
 
 type IPPoolStatus struct {
 	LastUpdate            metav1.Time `json:"lastUpdate,omitempty"`
 	LastUpdateBeforeStart metav1.Time `json:"lastUpdateBeforeStart,omitempty"`
-	IPv4                  IPv4Status  `json:"ipv4,omitempty"`
+
 	// +optional
-	AgentPodRef PodReference `json:"agentPodRef,omitempty"`
+	IPv4 *IPv4Status `json:"ipv4,omitempty"`
+
+	// +optional
+	AgentPodRef *PodReference `json:"agentPodRef,omitempty"`
+
 	// +optional
 	Conditions []Condition `json:"conditions,omitempty"`
 }

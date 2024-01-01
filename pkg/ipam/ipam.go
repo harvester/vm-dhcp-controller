@@ -11,6 +11,7 @@ import (
 
 var (
 	UnspecifiedIPAddress = net.IP{0, 0, 0, 0}
+	ExcludedMark         = "EXCLUDED"
 )
 
 type IPSubnet struct {
@@ -23,13 +24,13 @@ type IPSubnet struct {
 
 type IPAllocator struct {
 	ipam  map[string]IPSubnet
-	mutex *sync.Mutex
+	mutex *sync.RWMutex
 }
 
 func NewIPAllocator() *IPAllocator {
 	return &IPAllocator{
 		ipam:  make(map[string]IPSubnet),
-		mutex: new(sync.Mutex),
+		mutex: new(sync.RWMutex),
 	}
 }
 
@@ -71,6 +72,10 @@ func (a *IPAllocator) NewIPSubnet(name string, cidr string, start, end net.IP) e
 	a.ipam[name] = ipSubnet
 
 	return nil
+}
+
+func (a *IPAllocator) DeleteIPSubnet(name string) {
+	delete(a.ipam, name)
 }
 
 func (a *IPAllocator) AllocateIP(name string, designatedIPStr string) (net.IP, error) {
@@ -116,7 +121,63 @@ func (a *IPAllocator) AllocateIP(name string, designatedIPStr string) (net.IP, e
 	return UnspecifiedIPAddress, fmt.Errorf("no more ip addresses left in network %s", name)
 }
 
+func (a *IPAllocator) DeallocateIP(name string, designatedIPStr string) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	// Sanity check
+	if _, ok := a.ipam[name]; !ok {
+		return fmt.Errorf("network %s does not exist", name)
+	}
+
+	isAllocated, ok := a.ipam[name].ips[designatedIPStr]
+	if !ok {
+		return fmt.Errorf("to-be-deallocated ip %s was not found in network %s ipam", designatedIPStr, name)
+	}
+	if isAllocated {
+		a.ipam[name].ips[designatedIPStr] = false
+	}
+
+	return nil
+}
+
+func (a *IPAllocator) RevokeIP(name string, designatedIPStr string) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	// Sanity check
+	if _, ok := a.ipam[name]; !ok {
+		return fmt.Errorf("network %s does not exist", name)
+	}
+
+	delete(a.ipam[name].ips, designatedIPStr)
+
+	return nil
+}
+
+func (a *IPAllocator) IsAllocated(name string, designatedIPStr string) (bool, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
+	var isAllocated bool
+
+	// Sanity check
+	if _, ok := a.ipam[name]; !ok {
+		return isAllocated, fmt.Errorf("network %s does not exist", name)
+	}
+
+	isAllocated, ok := a.ipam[name].ips[designatedIPStr]
+	if !ok {
+		return isAllocated, fmt.Errorf("desigated ip %s was not found in network %s ipam", designatedIPStr, name)
+	}
+
+	return isAllocated, nil
+}
+
 func (a *IPAllocator) GetUsed(name string) (int, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
 	var used int
 
 	// Sanity check
@@ -134,6 +195,9 @@ func (a *IPAllocator) GetUsed(name string) (int, error) {
 }
 
 func (a *IPAllocator) GetAvailable(name string) (int, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
 	var available int
 
 	// Sanity check
@@ -151,6 +215,9 @@ func (a *IPAllocator) GetAvailable(name string) (int, error) {
 }
 
 func (a *IPAllocator) GetUsage(name string) error {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
 	// Sanity check
 	if _, ok := a.ipam[name]; !ok {
 		return fmt.Errorf("network %s does not exist", name)

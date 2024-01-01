@@ -4,7 +4,6 @@ import (
 	"github.com/starbops/vm-dhcp-controller/pkg/config"
 	"github.com/starbops/vm-dhcp-controller/pkg/controllers/manager/ippool"
 	"github.com/starbops/vm-dhcp-controller/pkg/controllers/manager/nad"
-	"github.com/starbops/vm-dhcp-controller/pkg/controllers/manager/vm"
 )
 
 type Config struct {
@@ -14,5 +13,5 @@ type Config struct {
 var RegisterFuncList = []config.RegisterFunc{
 	ippool.Register,
 	nad.Register,
-	vm.Register,
+	// vm.Register,
 }
