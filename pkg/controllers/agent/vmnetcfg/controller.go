@@ -113,9 +113,6 @@ func (h *Handler) OnChange(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 
 		if h.dhcpAllocator.CheckLease(nc.MACAddress) {
 			klog.Infof("dhcp lease for mac address %s existed", nc.MACAddress)
-			// lease := h.dhcpAllocator.GetLease(nc.MACAddress)
-			// ncs.AllocatedIPAddress = lease.ClientIP
-			// networkConfigStatuses = append(networkConfigStatuses, ncs)
 			continue
 		}
 
@@ -183,6 +180,47 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 	}
 
 	klog.Infof("vmnetcfg configuration %s/%s has been removed", vmNetCfg.Namespace, vmNetCfg.Name)
+
+	ipPool, err := h.ippoolCache.Get(h.poolRef.Namespace, h.poolRef.Name)
+	if err != nil {
+		return vmNetCfg, err
+	}
+
+	ipPoolCpy := ipPool.DeepCopy()
+
+	for _, nc := range vmNetCfg.Spec.NetworkConfig {
+		var lease dhcp.DHCPLease
+
+		// Delete DHCP lease
+		if h.dhcpAllocator.CheckLease(nc.MACAddress) {
+			lease = h.dhcpAllocator.GetLease(nc.MACAddress)
+			if err := h.dhcpAllocator.DeleteLease(nc.MACAddress); err != nil {
+				return vmNetCfg, err
+			}
+		}
+
+		// Deallocate IP address from IPAM
+		isAllocated, err := h.IPAllocator.IsAllocated(nc.NetworkName, lease.ClientIP.String())
+		if err != nil {
+			return vmNetCfg, err
+		}
+		if isAllocated {
+			if err := h.IPAllocator.DeallocateIP(nc.NetworkName, lease.ClientIP.String()); err != nil {
+				return vmNetCfg, err
+			}
+		}
+
+		// Remove record in IPPool status
+		delete(ipPoolCpy.Status.IPv4.Allocated, lease.ClientIP.String())
+	}
+
+	if !reflect.DeepEqual(ipPoolCpy, ipPool) {
+		klog.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+		ipPoolCpy.Status.LastUpdate = metav1.Now()
+		if _, err := h.ippoolClient.UpdateStatus(ipPoolCpy); err != nil {
+			return vmNetCfg, err
+		}
+	}
 
 	return vmNetCfg, nil
 }
