@@ -31,6 +31,10 @@ Components:
   - Maintain DHCP lease store for the IP pool it is responsible for
   - Handle actual DHCP requests
 
+How the controller and agents collaborate to provide DHCP services for virtual machines on Harvester:
+
+![How the controller and agents colaborates](images/managed-dhcp-v2.png)
+
 ## Develop
 
 To generate the controllers/clientsets:
@@ -84,6 +88,8 @@ The agents will be scaffolded dynamically according to the requests.
 ## Usage
 
 Create **VM Network** `default/net-48` before proceeding.
+
+![Create VM Network](images/vm-network.png)
 
 Create IPPool object:
 
