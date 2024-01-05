@@ -9,17 +9,17 @@ echo "Packaging..."
 
 # Copy out artifacts
 mkdir -p dist/artifacts
-cp bin/vm-dhcp-controller dist/artifacts/vm-dhcp-controller${SUFFIX}
+cp bin/vm-dhcp-agent dist/artifacts/vm-dhcp-agent${SUFFIX}
 
 # Build container images
-IMAGE=${REPO}/vm-dhcp-controller:${TAG}
-DOCKERFILE=package/Dockerfile
+IMAGE=${REPO}/vm-dhcp-agent:${TAG}
+DOCKERFILE=package/Dockerfile.agent
 
 docker build -f ${DOCKERFILE} -t ${IMAGE} .
 echo Built ${IMAGE}
 
 # Image push (if specified)
-IMAGE_PUSH=${REPO}/harvester-vm-dhcp-controller:${IMAGE_PUSH_TAG}
+IMAGE_PUSH=${REPO}/harvester-vm-dhcp-agent:${IMAGE_PUSH_TAG}
 docker tag "${IMAGE}" "${IMAGE_PUSH}"
 echo Tagged "${IMAGE_PUSH}"
 

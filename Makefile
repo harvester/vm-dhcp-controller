@@ -16,6 +16,9 @@ $(TARGETS): .dapper
 
 ##@ Local Run
 
-.PHONY: run
-run: ## Run a controller from your host.
-	go run ./main.go $(ARGS)
+.PHONY: run-controller run-agent
+run-controller: ## Run the controller from your host.
+	go run ./cmd/controller $(ARGS)
+
+run-agent: ## Run the agent from your host.
+	go run ./cmd/agent $(ARGS)

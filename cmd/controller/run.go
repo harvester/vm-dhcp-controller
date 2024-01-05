@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"context"
@@ -6,20 +6,19 @@ import (
 
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/rancher/wrangler/pkg/signals"
-	"github.com/starbops/vm-dhcp-controller/pkg/config"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	"github.com/starbops/vm-dhcp-controller/pkg/controllers/agent"
-	"github.com/starbops/vm-dhcp-controller/pkg/controllers/manager"
+	"github.com/starbops/vm-dhcp-controller/pkg/config"
+	"github.com/starbops/vm-dhcp-controller/pkg/controllers"
 )
 
 var (
 	threadiness = 1
 )
 
-func run(registerFuncList []config.RegisterFunc, leaderelection, createCRD bool, options *config.Options) error {
+func run(registerFuncList []config.RegisterFunc, leaderelection, createCRD bool, options *config.ControllerOptions) error {
 	ctx := signals.SetupSignalContext()
 
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -62,14 +61,8 @@ func run(registerFuncList []config.RegisterFunc, leaderelection, createCRD bool,
 	return nil
 }
 
-func managerRun(options *config.Options) error {
-	klog.Infof("Starting VM DHCP Controller Manager: %s", managerName)
+func Run(options *config.ControllerOptions) error {
+	klog.Infof("Starting VM DHCP Controller: %s", name)
 
-	return run(manager.RegisterFuncList, true, true, options)
-}
-
-func agentRun(options *config.Options) error {
-	klog.Infof("Starting VM DHCP Controller Agent: %s", agentName)
-
-	return run(agent.RegisterFuncList, false, false, options)
+	return run(controllers.RegisterFuncList, !noLeaderElection, true, options)
 }

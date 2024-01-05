@@ -3,7 +3,14 @@ package v1alpha1
 import (
 	"net"
 
+	"github.com/rancher/wrangler/pkg/condition"
+	"github.com/rancher/wrangler/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+var (
+	Allocated condition.Cond = "Allocated"
+	Disabled  condition.Cond = "Disabled"
 )
 
 // +genclient
@@ -35,6 +42,9 @@ type NetworkConfig struct {
 
 type VirtualMachineNetworkConfigStatus struct {
 	NetworkConfig []NetworkConfigStatus `json:"networkConfig,omitempty"`
+	// Conditions is a list of Wrangler conditions that describe the state
+	// of the VirtualMachineNetworkConfigStatus.
+	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
 }
 
 type NetworkConfigStatus struct {

@@ -1,13 +1,16 @@
 #!/bin/bash
 set -e
 
+source $(dirname $0)/version
+
 cd $(dirname $0)/..
 
 echo "Building binaries..."
 
 mkdir -p bin
 
-LINKFLAGS="-X github.com/starbops/vm-dhcp-controller/main.AppVersion=$VERSION
-           -X github.com/starbops/vm-dhcp-controller/main.GitCommit=$COMMIT"
+LINKFLAGS="-X main.AppVersion=$VERSION
+           -X main.GitCommit=$COMMIT"
 
-CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-controller
+CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-controller ./cmd/controller
+CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-agent ./cmd/agent

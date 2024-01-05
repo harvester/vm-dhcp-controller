@@ -4,7 +4,7 @@ import (
 	"net"
 
 	"github.com/rancher/wrangler/pkg/condition"
-	v1 "k8s.io/api/core/v1"
+	"github.com/rancher/wrangler/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -77,8 +77,11 @@ type IPPoolStatus struct {
 	// +optional
 	AgentPodRef *PodReference `json:"agentPodRef,omitempty"`
 
-	// +optional
-	Conditions []Condition `json:"conditions,omitempty"`
+	// // +optional
+	// Conditions []Condition `json:"conditions,omitempty"`
+	// Conditions is a list of Wrangler conditions that describe the state
+	// of the IPPool.
+	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
 }
 
 type IPv4Status struct {
@@ -90,19 +93,4 @@ type IPv4Status struct {
 type PodReference struct {
 	Namespace string `json:"namespace,omitempty"`
 	Name      string `json:"name,omitempty"`
-}
-
-type Condition struct {
-	// Type of the condition.
-	Type condition.Cond `json:"type"`
-	// Status of the condition, one of True, False, Unknown.
-	Status v1.ConditionStatus `json:"status"`
-	// The last time this condition was updated.
-	LastUpdateTime string `json:"lastUpdateTime,omitempty"`
-	// Last time the condition transitioned from one status to another.
-	LastTransitionTime string `json:"lastTransitionTime,omitempty"`
-	// The reason for the condition's last transition.
-	Reason string `json:"reason,omitempty"`
-	// Human-readable message indicating details about last transition
-	Message string `json:"message,omitempty"`
 }

@@ -22,7 +22,6 @@ import (
 
 	"github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/starbops/vm-dhcp-controller/pkg/crd"
-	"github.com/starbops/vm-dhcp-controller/pkg/dhcp"
 	ctlcore "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/core"
 	ctlcni "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io"
 	ctlkubevirt "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/kubevirt.io"
@@ -63,20 +62,18 @@ func (i *Image) String() string {
 	return fmt.Sprintf("%s:%s", i.Repository, i.Tag)
 }
 
-type Options struct {
-	// Common options
-	Name string
-
-	// Manager options
+type ControllerOptions struct {
 	NoAgent                 bool
 	AgentNamespace          string
 	AgentImage              *Image
 	AgentServiceAccountName string
-	NoDHCP                  bool // NoDHCP implies agent dry-run
+	NoDHCP                  bool
+}
 
-	// Agent options
-	DryRun  bool
-	PoolRef types.NamespacedName
+type AgentOptions struct {
+	DryRun         bool
+	KubeconfigPath string
+	IPPoolRef      types.NamespacedName
 }
 
 type Management struct {
@@ -92,10 +89,9 @@ type Management struct {
 
 	ClientSet *kubernetes.Clientset
 
-	DHCPAllocator *dhcp.DHCPAllocator
-	IPAllocator   *ipam.IPAllocator
+	IPAllocator *ipam.IPAllocator
 
-	Options *Options
+	Options *ControllerOptions
 
 	starters []start.Starter
 }
@@ -127,7 +123,7 @@ func (s *Management) NewRecorder(componentName, namespace, nodeName string) reco
 	return eventBroadcaster.NewRecorder(Scheme, corev1.EventSource{Component: componentName, Host: nodeName})
 }
 
-func SetupManagement(ctx context.Context, restConfig *rest.Config, options *Options) (*Management, error) {
+func SetupManagement(ctx context.Context, restConfig *rest.Config, options *ControllerOptions) (*Management, error) {
 	factory, err := controller.NewSharedControllerFactoryFromConfig(restConfig, Scheme)
 	if err != nil {
 		return nil, err
@@ -143,7 +139,6 @@ func SetupManagement(ctx context.Context, restConfig *rest.Config, options *Opti
 	}
 
 	management.IPAllocator = ipam.NewIPAllocator()
-	management.DHCPAllocator = dhcp.NewDHCPAllocator()
 
 	harvesterNetwork, err := ctlnetwork.NewFactoryFromConfigWithOptions(restConfig, opts)
 	if err != nil {

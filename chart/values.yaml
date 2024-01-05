@@ -8,7 +8,13 @@ image:
   repository: starbops/harvester-vm-dhcp-controller
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "dev"
+  tag: "master-head"
+
+agent:
+  image:
+    repository: starbops/harvester-vm-dhcp-agent
+    pullPolicy: IfNotPresent
+    tag: "master-head"
 
 imagePullSecrets: []
 nameOverride: ""

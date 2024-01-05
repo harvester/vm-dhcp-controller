@@ -24,7 +24,6 @@ type DHCPLease struct {
 	DomainSearch []string
 	NTP          []net.IP
 	LeaseTime    int
-	Reference    string
 }
 
 type DHCPAllocator struct {
@@ -50,11 +49,10 @@ func (a *DHCPAllocator) AddLease(
 	cidr string,
 	routerIP net.IP,
 	DNSServers []net.IP,
-	domainName string,
+	domainName *string,
 	domainSearch []string,
 	NTPServers []string,
-	leaseTime int,
-	ref string,
+	leaseTime *int,
 ) (err error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
@@ -83,7 +81,11 @@ func (a *DHCPAllocator) AddLease(
 
 	lease.Router = routerIP
 	lease.DNS = append(lease.DNS, DNSServers...)
-	lease.DomainName = domainName
+	if domainName == nil {
+		lease.DomainName = ""
+	} else {
+		lease.DomainName = *domainName
+	}
 	lease.DomainSearch = domainSearch
 	for i := 0; i < len(NTPServers); i++ {
 		hostip := net.ParseIP(NTPServers[i])
@@ -102,8 +104,11 @@ func (a *DHCPAllocator) AddLease(
 			}
 		}
 	}
-	lease.LeaseTime = leaseTime
-	lease.Reference = ref
+	if leaseTime == nil {
+		lease.LeaseTime = 0
+	} else {
+		lease.LeaseTime = *leaseTime
+	}
 
 	a.leases[hwAddr] = lease
 
@@ -138,7 +143,7 @@ func (a *DHCPAllocator) DeleteLease(hwAddr string) (err error) {
 
 func (a *DHCPAllocator) Usage() {
 	for hwaddr, lease := range a.leases {
-		logrus.Infof("(dhcp.Usage) lease: hwaddr=%s, clientip=%s, netmask=%s, router=%s, dns=%+v, domain=%s, domainsearch=%+v, ntp=%+v, leasetime=%d, ref=%s",
+		logrus.Infof("(dhcp.Usage) lease: hwaddr=%s, clientip=%s, netmask=%s, router=%s, dns=%+v, domain=%s, domainsearch=%+v, ntp=%+v, leasetime=%d",
 			hwaddr,
 			lease.ClientIP.String(),
 			lease.SubnetMask.String(),
@@ -148,7 +153,6 @@ func (a *DHCPAllocator) Usage() {
 			lease.DomainSearch,
 			lease.NTP,
 			lease.LeaseTime,
-			lease.Reference,
 		)
 	}
 }
@@ -180,7 +184,7 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 		return
 	}
 
-	logrus.Debugf("(dhcp.dhcpHandler) LEASE FOUND: hwaddr=%s, serverip=%s, clientip=%s, mask=%s, router=%s, dns=%+v, domainname=%s, domainsearch=%+v, ntp=%+v, leasetime=%d, reference=%s",
+	logrus.Debugf("(dhcp.dhcpHandler) LEASE FOUND: hwaddr=%s, serverip=%s, clientip=%s, mask=%s, router=%s, dns=%+v, domainname=%s, domainsearch=%+v, ntp=%+v, leasetime=%d",
 		m.ClientHWAddr.String(),
 		lease.ServerIP.String(),
 		lease.ClientIP.String(),
@@ -191,7 +195,6 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 		lease.DomainSearch,
 		lease.NTP,
 		lease.LeaseTime,
-		lease.Reference,
 	)
 
 	reply.ClientIPAddr = lease.ClientIP
@@ -251,25 +254,28 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 	}
 }
 
-func (a *DHCPAllocator) Run(ctx context.Context, nic string) (err error) {
+func (a *DHCPAllocator) Run(nic string, dryRun bool) (err error) {
 	logrus.Infof("(dhcp.Run) starting DHCP service on nic %s", nic)
 
-	// we need to listen on 0.0.0.0 otherwise client discovers will not be answered
-	laddr := net.UDPAddr{
-		IP:   net.ParseIP("0.0.0.0"),
-		Port: 67,
-	}
-
-	server, err := server4.NewServer(nic, &laddr, a.dhcpHandler)
-	if err != nil {
-		return
-	}
-
-	go func() {
-		if err := server.Serve(); err != nil {
-			logrus.Errorf("(dhcp.Run) DHCP server on nic %s exited with error: %v", nic, err)
+	var server *server4.Server
+	if !dryRun {
+		// we need to listen on 0.0.0.0 otherwise client discovers will not be answered
+		laddr := net.UDPAddr{
+			IP:   net.ParseIP("0.0.0.0"),
+			Port: 67,
 		}
-	}()
+
+		server, err = server4.NewServer(nic, &laddr, a.dhcpHandler)
+		if err != nil {
+			return
+		}
+
+		go func() {
+			if err := server.Serve(); err != nil {
+				logrus.Errorf("(dhcp.Run) DHCP server on nic %s exited with error: %v", nic, err)
+			}
+		}()
+	}
 
 	a.servers[nic] = server
 

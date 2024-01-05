@@ -5,11 +5,14 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 fi
 
 COMMIT="$(git rev-parse --short HEAD)"
+COMMIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 GIT_TAG="${DRONE_TAG:-$(git tag -l --contains HEAD | head -n 1)}"
 
 if [[ -z "$DIRTY" && -n "$GIT_TAG" ]]; then
+    IMAGE_PUSH_TAG="${GIT_TAG}"
     VERSION="$GIT_TAG"
 else
+    IMAGE_PUSH_TAG="${COMMIT_BRANCH}-head"
     VERSION="${COMMIT}${DIRTY}"
 fi
 

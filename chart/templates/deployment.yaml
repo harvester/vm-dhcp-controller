@@ -27,19 +27,18 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "harvester-vm-dhcp-controller.serviceAccountName" . }}-manager
+      serviceAccountName: {{ include "harvester-vm-dhcp-controller.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}
           args:
-          - manager
           - --name
-          - {{ include "harvester-vm-dhcp-controller.fullname" . }}-manager
+          - {{ include "harvester-vm-dhcp-controller.fullname" . }}
           - --namespace
           - {{ .Release.Namespace }}
           - --image
-          - starbops/harvester-vm-dhcp-controller:dev
+          - "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag | default .Chart.AppVersion }}"
           - --service-account-name
           - {{ include "harvester-vm-dhcp-controller.serviceAccountName" . }}-agent
           securityContext:
