@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"net/http"
 
-	k8scnicncfiov1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/k8s.cni.cncf.io/v1"
-	kubevirtv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/kubevirt.io/v1"
-	networkv1alpha1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/network.harvesterhci.io/v1alpha1"
+	k8scnicncfiov1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/k8s.cni.cncf.io/v1"
+	kubevirtv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/kubevirt.io/v1"
+	networkv1alpha1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/network.harvesterhci.io/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

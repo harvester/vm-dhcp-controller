@@ -19,9 +19,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1alpha1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/rancher/lasso/pkg/controller"
 	"github.com/rancher/wrangler/pkg/schemes"
-	v1alpha1 "github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 

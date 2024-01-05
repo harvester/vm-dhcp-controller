@@ -68,7 +68,7 @@ To run the controller locally attaching to a remote cluster:
 # Make sure you have the correct config and context set
 export KUBECONFIG="$HOME/cluster.yaml"
 
-make run-controller ARGS="--name=test-controller --namespace=default --image=starbops/harvester-vm-dhcp-controller:master-head"
+make run-controller ARGS="--name=test-controller --namespace=default --image=rancher/harvester-vm-dhcp-controller:master-head"
 ```
 
 Same for the agent (for testing purposes):

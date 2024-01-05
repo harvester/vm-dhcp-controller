@@ -19,8 +19,8 @@ limitations under the License.
 package core
 
 import (
+	v1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core/v1"
 	"github.com/rancher/lasso/pkg/controller"
-	v1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/core/v1"
 )
 
 type Interface interface {

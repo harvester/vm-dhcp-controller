@@ -6,9 +6,9 @@ import (
 	"k8s.io/klog/v2"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/starbops/vm-dhcp-controller/pkg/config"
-	ctlkubevirtv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/kubevirt.io/v1"
-	ctlnetworkv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	ctlkubevirtv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/kubevirt.io/v1"
+	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 )
 
 const controllerName = "vm-dhcp-vm-controller"

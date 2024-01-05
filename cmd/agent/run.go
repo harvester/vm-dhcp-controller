@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 
+	"github.com/harvester/vm-dhcp-controller/pkg/agent"
+	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/sirupsen/logrus"
-	"github.com/starbops/vm-dhcp-controller/pkg/agent"
-	"github.com/starbops/vm-dhcp-controller/pkg/config"
 )
 
 func Run(ctx context.Context, options *config.AgentOptions) error {

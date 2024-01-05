@@ -12,11 +12,11 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/starbops/vm-dhcp-controller/pkg/agent/ippool"
-	"github.com/starbops/vm-dhcp-controller/pkg/config"
-	"github.com/starbops/vm-dhcp-controller/pkg/dhcp"
-	clientset "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned"
-	"github.com/starbops/vm-dhcp-controller/pkg/server"
+	"github.com/harvester/vm-dhcp-controller/pkg/agent/ippool"
+	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	"github.com/harvester/vm-dhcp-controller/pkg/dhcp"
+	clientset "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned"
+	"github.com/harvester/vm-dhcp-controller/pkg/server"
 )
 
 const (

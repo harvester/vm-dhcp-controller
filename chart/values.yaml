@@ -5,14 +5,14 @@
 replicaCount: 1
 
 image:
-  repository: starbops/harvester-vm-dhcp-controller
+  repository: rancher/harvester-vm-dhcp-controller
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: "master-head"
 
 agent:
   image:
-    repository: starbops/harvester-vm-dhcp-agent
+    repository: rancher/harvester-vm-dhcp-agent
     pullPolicy: IfNotPresent
     tag: "master-head"
 

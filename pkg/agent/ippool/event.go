@@ -12,10 +12,10 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/util/workqueue"
 
-	networkv1 "github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
-	"github.com/starbops/vm-dhcp-controller/pkg/dhcp"
-	clientset "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned"
-	"github.com/starbops/vm-dhcp-controller/pkg/utils"
+	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/dhcp"
+	clientset "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned"
+	"github.com/harvester/vm-dhcp-controller/pkg/utils"
 )
 
 const (

@@ -21,7 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	network "github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
+	network "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"

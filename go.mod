@@ -1,4 +1,4 @@
-module github.com/starbops/vm-dhcp-controller
+module github.com/harvester/vm-dhcp-controller
 
 go 1.21.4
 

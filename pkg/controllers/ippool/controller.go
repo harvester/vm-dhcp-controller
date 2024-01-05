@@ -17,14 +17,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 
-	"github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
-	networkv1 "github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
-	"github.com/starbops/vm-dhcp-controller/pkg/config"
-	ctlcorev1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/core/v1"
-	ctlcniv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
-	ctlnetworkv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
-	"github.com/starbops/vm-dhcp-controller/pkg/ipam"
-	"github.com/starbops/vm-dhcp-controller/pkg/utils"
+	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
+	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	ctlcorev1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core/v1"
+	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
+	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
+	"github.com/harvester/vm-dhcp-controller/pkg/utils"
 )
 
 const (

@@ -4,14 +4,14 @@ import (
 	"context"
 	"reflect"
 
+	"github.com/rancher/wrangler/pkg/kv"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
-	"github.com/rancher/wrangler/pkg/kv"
-	networkv1 "github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
-	"github.com/starbops/vm-dhcp-controller/pkg/config"
-	ctlnetworkv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
-	"github.com/starbops/vm-dhcp-controller/pkg/ipam"
+	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 )
 
 const controllerName = "vm-dhcp-vmnetcfg-controller"

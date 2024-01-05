@@ -1,11 +1,11 @@
 package controllers
 
 import (
-	"github.com/starbops/vm-dhcp-controller/pkg/config"
-	"github.com/starbops/vm-dhcp-controller/pkg/controllers/ippool"
-	"github.com/starbops/vm-dhcp-controller/pkg/controllers/nad"
-	"github.com/starbops/vm-dhcp-controller/pkg/controllers/vm"
-	"github.com/starbops/vm-dhcp-controller/pkg/controllers/vmnetcfg"
+	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	"github.com/harvester/vm-dhcp-controller/pkg/controllers/ippool"
+	"github.com/harvester/vm-dhcp-controller/pkg/controllers/nad"
+	"github.com/harvester/vm-dhcp-controller/pkg/controllers/vm"
+	"github.com/harvester/vm-dhcp-controller/pkg/controllers/vmnetcfg"
 )
 
 type Config struct {

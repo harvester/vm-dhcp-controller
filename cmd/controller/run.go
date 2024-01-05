@@ -10,8 +10,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
-	"github.com/starbops/vm-dhcp-controller/pkg/config"
-	"github.com/starbops/vm-dhcp-controller/pkg/controllers"
+	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	"github.com/harvester/vm-dhcp-controller/pkg/controllers"
 )
 
 var (

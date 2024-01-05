@@ -19,8 +19,8 @@ limitations under the License.
 package network
 
 import (
+	v1alpha1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/rancher/lasso/pkg/controller"
-	v1alpha1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 )
 
 type Interface interface {

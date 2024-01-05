@@ -6,9 +6,9 @@ import (
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"k8s.io/klog/v2"
 
-	"github.com/starbops/vm-dhcp-controller/pkg/config"
-	ctlcniv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
-	ctlnetworkv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
+	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 )
 
 const controllerName = "vm-dhcp-nad-controller"

@@ -19,8 +19,8 @@ limitations under the License.
 package k8s
 
 import (
+	v1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	"github.com/rancher/lasso/pkg/controller"
-	v1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 )
 
 type Interface interface {

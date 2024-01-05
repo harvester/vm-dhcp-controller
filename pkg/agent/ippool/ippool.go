@@ -5,8 +5,9 @@ import (
 	"net"
 
 	"github.com/sirupsen/logrus"
-	networkv1 "github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
-	"github.com/starbops/vm-dhcp-controller/pkg/utils"
+
+	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/utils"
 )
 
 func (c *Controller) Update(ipPool *networkv1.IPPool) error {

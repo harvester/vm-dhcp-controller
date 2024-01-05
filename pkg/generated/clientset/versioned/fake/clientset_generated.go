@@ -19,13 +19,13 @@ limitations under the License.
 package fake
 
 import (
-	clientset "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned"
-	k8scnicncfiov1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/k8s.cni.cncf.io/v1"
-	fakek8scnicncfiov1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/k8s.cni.cncf.io/v1/fake"
-	kubevirtv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/kubevirt.io/v1"
-	fakekubevirtv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/kubevirt.io/v1/fake"
-	networkv1alpha1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/network.harvesterhci.io/v1alpha1"
-	fakenetworkv1alpha1 "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/network.harvesterhci.io/v1alpha1/fake"
+	clientset "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned"
+	k8scnicncfiov1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/k8s.cni.cncf.io/v1"
+	fakek8scnicncfiov1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/k8s.cni.cncf.io/v1/fake"
+	kubevirtv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/kubevirt.io/v1"
+	fakekubevirtv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/kubevirt.io/v1/fake"
+	networkv1alpha1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/network.harvesterhci.io/v1alpha1"
+	fakenetworkv1alpha1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/network.harvesterhci.io/v1alpha1/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

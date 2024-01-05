@@ -22,7 +22,7 @@ import (
 	"context"
 	"time"
 
-	scheme "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/scheme"
+	scheme "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

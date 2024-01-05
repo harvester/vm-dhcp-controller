@@ -29,7 +29,7 @@ SUFFIX="-${ARCH}"
 HELM_TAG="${TAG:-${VERSION}}"
 HELM_VERSION="${HELM_TAG/v/}"
 TAG="${TAG:-${VERSION}${SUFFIX}}"
-REPO="${REPO:-starbops}"
+REPO="${REPO:-rancher}"
 
 if echo "$TAG" | grep -q dirty; then
     TAG="dev"

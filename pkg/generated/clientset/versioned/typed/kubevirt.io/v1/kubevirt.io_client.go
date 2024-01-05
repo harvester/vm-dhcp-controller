@@ -21,7 +21,7 @@ package v1
 import (
 	"net/http"
 
-	"github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned/scheme"
+	"github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 	v1 "kubevirt.io/api/core/v1"
 )

@@ -33,7 +33,7 @@ func nadControllerInterfaceRefactor() {
 func main() {
 	os.Unsetenv("GOPATH")
 	controllergen.Run(args.Options{
-		OutputPackage: "github.com/starbops/vm-dhcp-controller/pkg/generated",
+		OutputPackage: "github.com/harvester/vm-dhcp-controller/pkg/generated",
 		Boilerplate:   "scripts/boilerplate.go.txt",
 		Groups: map[string]args.Group{
 			"network.harvesterhci.io": {

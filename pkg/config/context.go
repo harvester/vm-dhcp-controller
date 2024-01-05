@@ -20,13 +20,13 @@ import (
 	"k8s.io/client-go/tools/record"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
-	"github.com/starbops/vm-dhcp-controller/pkg/crd"
-	ctlcore "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/core"
-	ctlcni "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io"
-	ctlkubevirt "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/kubevirt.io"
-	ctlnetwork "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io"
-	"github.com/starbops/vm-dhcp-controller/pkg/ipam"
+	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/crd"
+	ctlcore "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core"
+	ctlcni "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io"
+	ctlkubevirt "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/kubevirt.io"
+	ctlnetwork "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io"
+	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 )
 
 var (
