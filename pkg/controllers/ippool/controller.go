@@ -7,6 +7,8 @@ import (
 	"net"
 	"reflect"
 
+	"github.com/rancher/wrangler/pkg/kv"
+	"github.com/rancher/wrangler/pkg/relatedresource"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,11 +17,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 
-	"github.com/rancher/wrangler/pkg/kv"
-	"github.com/rancher/wrangler/pkg/relatedresource"
+	"github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/starbops/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/starbops/vm-dhcp-controller/pkg/config"
 	ctlcorev1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/core/v1"
+	ctlcniv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	ctlnetworkv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/starbops/vm-dhcp-controller/pkg/ipam"
 	"github.com/starbops/vm-dhcp-controller/pkg/utils"
@@ -30,8 +32,10 @@ const (
 
 	multusNetworksAnnotationKey = "k8s.v1.cni.cncf.io/networks"
 
-	ipPoolNamespaceLabelKey = "network.harvesterhci.io/ippool-namespace"
-	ipPoolNameLabelKey      = "network.harvesterhci.io/ippool-name"
+	ipPoolNamespaceLabelKey  = network.GroupName + "/ippool-namespace"
+	ipPoolNameLabelKey       = network.GroupName + "/ippool-name"
+	vmDHCPControllerLabelKey = network.GroupName + "/vm-dhcp-controller"
+	clusterNetworkLabelKey   = network.GroupName + "/clusternetwork"
 
 	setIPAddrScript = `
 #!/usr/bin/env sh
@@ -67,11 +71,13 @@ type Handler struct {
 	ippoolCache      ctlnetworkv1.IPPoolCache
 	podClient        ctlcorev1.PodClient
 	podCache         ctlcorev1.PodCache
+	nadCache         ctlcniv1.NetworkAttachmentDefinitionCache
 }
 
 func Register(ctx context.Context, management *config.Management) error {
 	ippools := management.HarvesterNetworkFactory.Network().V1alpha1().IPPool()
 	pods := management.CoreFactory.Core().V1().Pod()
+	nads := management.CniFactory.K8s().V1().NetworkAttachmentDefinition()
 
 	handler := &Handler{
 		agentNamespace:          management.Options.AgentNamespace,
@@ -87,6 +93,7 @@ func Register(ctx context.Context, management *config.Management) error {
 		ippoolCache:      ippools.Cache(),
 		podClient:        pods,
 		podCache:         pods.Cache(),
+		nadCache:         nads.Cache(),
 	}
 
 	ctlnetworkv1.RegisterIPPoolStatusHandler(
@@ -243,7 +250,22 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 		return status, nil
 	}
 
-	agent, err := h.prepareAgentPod(ipPool)
+	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
+	nad, err := h.nadCache.Get(nadNamespace, nadName)
+	if err != nil {
+		return status, err
+	}
+
+	if nad.Labels == nil {
+		return status, fmt.Errorf("could not find clusternetwork for nad %s", ipPool.Spec.NetworkName)
+	}
+
+	clusterNetwork, ok := nad.Labels[clusterNetworkLabelKey]
+	if !ok {
+		return status, fmt.Errorf("could not find clusternetwork for nad %s", ipPool.Spec.NetworkName)
+	}
+
+	agent, err := h.prepareAgentPod(ipPool, clusterNetwork)
 	if err != nil {
 		return status, err
 	}
@@ -285,7 +307,7 @@ func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPool
 	return status, nil
 }
 
-func (h *Handler) prepareAgentPod(ipPool *networkv1.IPPool) (*corev1.Pod, error) {
+func (h *Handler) prepareAgentPod(ipPool *networkv1.IPPool, clusterNetwork string) (*corev1.Pod, error) {
 	name := fmt.Sprintf("%s-%s-agent", ipPool.Namespace, ipPool.Name)
 
 	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
@@ -321,14 +343,33 @@ func (h *Handler) prepareAgentPod(ipPool *networkv1.IPPool) (*corev1.Pod, error)
 				multusNetworksAnnotationKey: string(networksStr),
 			},
 			Labels: map[string]string{
-				"network.harvesterhci.io/vm-dhcp-controller": "agent",
-				ipPoolNamespaceLabelKey:                      ipPool.Namespace,
-				ipPoolNameLabelKey:                           ipPool.Name,
+				vmDHCPControllerLabelKey: "agent",
+				ipPoolNamespaceLabelKey:  ipPool.Namespace,
+				ipPoolNameLabelKey:       ipPool.Name,
 			},
 			Name:      name,
 			Namespace: h.agentNamespace,
 		},
 		Spec: corev1.PodSpec{
+			Affinity: &corev1.Affinity{
+				NodeAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      network.GroupName + "/" + clusterNetwork,
+										Operator: corev1.NodeSelectorOpIn,
+										Values: []string{
+											"true",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 			ServiceAccountName: h.agentServiceAccountName,
 			InitContainers: []corev1.Container{
 				{
