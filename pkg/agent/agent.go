@@ -2,20 +2,20 @@ package agent
 
 import (
 	"context"
-	"net"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/starbops/vm-dhcp-controller/pkg/agent/ippool"
 	"github.com/starbops/vm-dhcp-controller/pkg/config"
 	"github.com/starbops/vm-dhcp-controller/pkg/dhcp"
 	clientset "github.com/starbops/vm-dhcp-controller/pkg/generated/clientset/versioned"
-	"github.com/starbops/vm-dhcp-controller/pkg/ipam"
 	"github.com/starbops/vm-dhcp-controller/pkg/server"
 )
 
@@ -32,7 +32,9 @@ type Agent struct {
 
 	k8sClient *clientset.Clientset
 
-	dhcpAllocator *dhcp.DHCPAllocator
+	ippoolEventHandler *ippool.EventHandler
+	dhcpAllocator      *dhcp.DHCPAllocator
+	poolCache          map[string]string
 }
 
 func NewK8sClient(kubeconfigPath string) *clientset.Clientset {
@@ -64,61 +66,18 @@ func NewK8sClient(kubeconfigPath string) *clientset.Clientset {
 	return clientset
 }
 
-func (a *Agent) sync() error {
-	eg := errgroup.Group{}
-
-	eg.Go(func() error {
-		return a.syncLeases()
-	})
-
-	if err := eg.Wait(); err != nil {
-		logrus.Fatal(err)
-	}
-
-	return nil
-}
-
-func (a *Agent) syncLeases() error {
-	ticker := time.NewTicker(defaultInterval)
-
-	for range ticker.C {
-		ipPool, err := a.k8sClient.NetworkV1alpha1().IPPools(a.poolRef.Namespace).Get(a.ctx, a.poolRef.Name, v1.GetOptions{})
-		if err != nil {
-			return err
-		}
-		logrus.Infof("get ippool %s/%s", ipPool.Namespace, ipPool.Name)
-
-		for ip, mac := range ipPool.Status.IPv4.Allocated {
-			if mac == ipam.ExcludedMark {
-				logrus.Infof("ip %s excluded", ip)
-				continue
-			}
-			if a.dhcpAllocator.CheckLease(mac) {
-				logrus.Infof("mac %s exists", mac)
-				continue
-			}
-			if err := a.dhcpAllocator.AddLease(
-				mac,
-				ipPool.Spec.IPv4Config.ServerIP,
-				net.ParseIP(ip),
-				ipPool.Spec.IPv4Config.CIDR,
-				ipPool.Spec.IPv4Config.Router,
-				ipPool.Spec.IPv4Config.DNS,
-				ipPool.Spec.IPv4Config.DomainName,
-				ipPool.Spec.IPv4Config.DomainSearch,
-				ipPool.Spec.IPv4Config.NTP,
-				ipPool.Spec.IPv4Config.LeaseTime,
-			); err != nil {
-				return err
-			}
-			logrus.Infof("mac %s added", mac)
-		}
-	}
-
-	return nil
-}
-
 func NewAgent(ctx context.Context, options *config.AgentOptions) *Agent {
+	kubeconfigPath := os.Getenv("KUBECONFIG")
+	if kubeconfigPath == "" {
+		homeDir := os.Getenv("HOME")
+		kubeconfigPath = filepath.Join(homeDir, ".kube", "config")
+	}
+
+	kubeconfigContext := os.Getenv("KUBECONTEXT")
+
+	dhcpAllocator := dhcp.NewDHCPAllocator()
+	poolCache := make(map[string]string, 10)
+
 	return &Agent{
 		ctx: ctx,
 
@@ -126,21 +85,24 @@ func NewAgent(ctx context.Context, options *config.AgentOptions) *Agent {
 		k8sClient: NewK8sClient(options.KubeconfigPath),
 		poolRef:   options.IPPoolRef,
 
-		dhcpAllocator: dhcp.NewDHCPAllocator(),
+		dhcpAllocator: dhcpAllocator,
+		ippoolEventHandler: ippool.NewEventHandler(
+			ctx,
+			kubeconfigPath,
+			kubeconfigContext,
+			nil,
+			options.IPPoolRef,
+			dhcpAllocator,
+			poolCache,
+		),
+		poolCache: poolCache,
 	}
 }
 
 func (a *Agent) Run() error {
-	eg, egctx := errgroup.WithContext(a.ctx)
+	logrus.Infof("monitor ippool %s", a.poolRef.String())
 
-	eg.Go(func() error {
-		select {
-		case <-egctx.Done():
-			return nil
-		default:
-			return server.NewServer(egctx)
-		}
-	})
+	eg, egctx := errgroup.WithContext(a.ctx)
 
 	eg.Go(func() error {
 		select {
@@ -156,7 +118,20 @@ func (a *Agent) Run() error {
 		case <-egctx.Done():
 			return nil
 		default:
-			return a.sync()
+			// initialize the ippoolEventListener handler
+			if err := a.ippoolEventHandler.Init(); err != nil {
+				logrus.Fatal(err)
+			}
+			return a.ippoolEventHandler.EventListener()
+		}
+	})
+
+	eg.Go(func() error {
+		select {
+		case <-egctx.Done():
+			return nil
+		default:
+			return server.NewServer(egctx)
 		}
 	})
 

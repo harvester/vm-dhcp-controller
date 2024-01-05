@@ -11,7 +11,6 @@ import (
 
 var (
 	UnspecifiedIPAddress = net.IP{0, 0, 0, 0}
-	ExcludedMark         = "EXCLUDED"
 )
 
 type IPSubnet struct {
@@ -83,7 +82,7 @@ func (a *IPAllocator) AllocateIP(name string, designatedIPStr string) (net.IP, e
 	defer a.mutex.Unlock()
 
 	// Sanity check
-	if _, ok := a.ipam[name]; !ok {
+	if _, exists := a.ipam[name]; !exists {
 		return UnspecifiedIPAddress, fmt.Errorf("network %s does not exist", name)
 	}
 
@@ -126,12 +125,12 @@ func (a *IPAllocator) DeallocateIP(name string, designatedIPStr string) error {
 	defer a.mutex.Unlock()
 
 	// Sanity check
-	if _, ok := a.ipam[name]; !ok {
+	if _, exists := a.ipam[name]; !exists {
 		return fmt.Errorf("network %s does not exist", name)
 	}
 
-	isAllocated, ok := a.ipam[name].ips[designatedIPStr]
-	if !ok {
+	isAllocated, exists := a.ipam[name].ips[designatedIPStr]
+	if !exists {
 		return fmt.Errorf("to-be-deallocated ip %s was not found in network %s ipam", designatedIPStr, name)
 	}
 	if isAllocated {
@@ -146,7 +145,7 @@ func (a *IPAllocator) RevokeIP(name string, designatedIPStr string) error {
 	defer a.mutex.Unlock()
 
 	// Sanity check
-	if _, ok := a.ipam[name]; !ok {
+	if _, exists := a.ipam[name]; !exists {
 		return fmt.Errorf("network %s does not exist", name)
 	}
 
@@ -162,12 +161,12 @@ func (a *IPAllocator) IsAllocated(name string, designatedIPStr string) (bool, er
 	var isAllocated bool
 
 	// Sanity check
-	if _, ok := a.ipam[name]; !ok {
+	if _, exists := a.ipam[name]; !exists {
 		return isAllocated, fmt.Errorf("network %s does not exist", name)
 	}
 
-	isAllocated, ok := a.ipam[name].ips[designatedIPStr]
-	if !ok {
+	isAllocated, exists := a.ipam[name].ips[designatedIPStr]
+	if !exists {
 		return isAllocated, fmt.Errorf("desigated ip %s was not found in network %s ipam", designatedIPStr, name)
 	}
 
@@ -181,7 +180,7 @@ func (a *IPAllocator) GetUsed(name string) (int, error) {
 	var used int
 
 	// Sanity check
-	if _, ok := a.ipam[name]; !ok {
+	if _, exists := a.ipam[name]; !exists {
 		return used, fmt.Errorf("network %s does not exist", name)
 	}
 
@@ -201,7 +200,7 @@ func (a *IPAllocator) GetAvailable(name string) (int, error) {
 	var available int
 
 	// Sanity check
-	if _, ok := a.ipam[name]; !ok {
+	if _, exists := a.ipam[name]; !exists {
 		return available, fmt.Errorf("network %s does not exist", name)
 	}
 
@@ -219,7 +218,7 @@ func (a *IPAllocator) GetUsage(name string) error {
 	defer a.mutex.RUnlock()
 
 	// Sanity check
-	if _, ok := a.ipam[name]; !ok {
+	if _, exists := a.ipam[name]; !exists {
 		return fmt.Errorf("network %s does not exist", name)
 	}
 

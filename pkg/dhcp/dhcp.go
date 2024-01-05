@@ -118,8 +118,8 @@ func (a *DHCPAllocator) AddLease(
 }
 
 func (a *DHCPAllocator) CheckLease(hwAddr string) bool {
-	_, ok := a.leases[hwAddr]
-	return ok
+	_, exists := a.leases[hwAddr]
+	return exists
 }
 
 func (a *DHCPAllocator) GetLease(hwAddr string) (lease DHCPLease) {

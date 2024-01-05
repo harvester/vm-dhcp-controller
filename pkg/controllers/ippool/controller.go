@@ -22,6 +22,7 @@ import (
 	ctlcorev1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/core/v1"
 	ctlnetworkv1 "github.com/starbops/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/starbops/vm-dhcp-controller/pkg/ipam"
+	"github.com/starbops/vm-dhcp-controller/pkg/utils"
 )
 
 const (
@@ -159,7 +160,7 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 
 	if ipPool.Status.IPv4 != nil {
 		for ip, mac := range ipPool.Status.IPv4.Allocated {
-			if mac == ipam.ExcludedMark {
+			if mac == utils.ExcludedMark {
 				continue
 			}
 			if _, err := h.ipAllocator.AllocateIP(ipPool.Spec.NetworkName, ip); err != nil {
@@ -197,7 +198,7 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		allocated = make(map[string]string)
 	}
 	for _, v := range ipPool.Spec.IPv4Config.Pool.Exclude {
-		allocated[v.String()] = ipam.ExcludedMark
+		allocated[v.String()] = utils.ExcludedMark
 	}
 	ipv4Status.Allocated = allocated
 
