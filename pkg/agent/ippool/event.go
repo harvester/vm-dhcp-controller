@@ -39,7 +39,6 @@ type EventHandler struct {
 type Event struct {
 	key             string
 	action          string
-	poolNamespace   string
 	poolName        string
 	poolNetworkName string
 }
@@ -98,17 +97,6 @@ func (e *EventHandler) EventListener() (err error) {
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
 	indexer, informer := cache.NewIndexerInformer(watcher, &networkv1.IPPool{}, 0, cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(obj)
-			if err == nil {
-				queue.Add(Event{
-					key:             key,
-					action:          ADD,
-					poolName:        obj.(*networkv1.IPPool).ObjectMeta.Name,
-					poolNetworkName: obj.(*networkv1.IPPool).Spec.NetworkName,
-				})
-			}
-		},
 		UpdateFunc: func(old interface{}, new interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(new)
 			if err == nil {
@@ -117,17 +105,6 @@ func (e *EventHandler) EventListener() (err error) {
 					action:          UPDATE,
 					poolName:        new.(*networkv1.IPPool).ObjectMeta.Name,
 					poolNetworkName: new.(*networkv1.IPPool).Spec.NetworkName,
-				})
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			if err == nil {
-				queue.Add(Event{
-					key:             key,
-					action:          DELETE,
-					poolName:        obj.(*networkv1.IPPool).ObjectMeta.Name,
-					poolNetworkName: obj.(*networkv1.IPPool).Spec.NetworkName,
 				})
 			}
 		},
