@@ -3,10 +3,10 @@
 ## Features
 
 - DHCP service for virtual machines
-  - IP pool declaration
-  - Per-VM network configuration
+  - IP pool declaration (via IPPool custom resources)
+  - Per-VM network configuration (via VirtualMachineNetworkConfig custom resources)
   - Static lease support (pre-defined MAC/IP addresses mapping)
-- Semi-stateless design and resiliency built in the heart
+- Built-in resiliency in a semi-stateless design
   - States are always kept in etcd
   - Able to reconstruct DHCP leases even when the agent is destroyed and restarted
 - Harvester integration
@@ -23,17 +23,17 @@ Introduced CRDs:
 
 Components:
 
-- Manager (control plane)
+- `vm-dhcp-controller` (control plane)
   - Manage the lifecycle of the agent for each IPPool
-  - [WIP] Create/remove IPPool when **VM Network** is created/deleted
-  - [WIP] Create/remove VirtualMachineNetworkConfig when VM is created/deleted
-- Agent (data plane)
-  - Maintain the IPAM and DHCP leases for the IP pool it manages
-  - Handle DHCP requests
+  - [WIP] Create/remove IPPool when NetworkAttachmentDefinition is created/deleted
+  - [WIP] Create/remove VirtualMachineNetworkConfig when VirtualMachine is created/deleted
+- `vm-dhcp-agent` (data plane)
+  - Maintain DHCP lease store for the IP pool it is responsible for
+  - Handle actual DHCP requests
 
 ## Develop
 
-To generate the CRDs/controllers/clientsets:
+To generate the controllers/clientsets:
 
 ```
 go generate
@@ -41,7 +41,7 @@ go generate
 
 ## Build
 
-To build the VM DHCP controller and package it into a container image:
+To build the VM DHCP controller/agent and package them into container images:
 
 ```
 make
@@ -56,19 +56,19 @@ make
 
 ## Run
 
-To run the manager locally attaching to a remote cluster:
+To run the controller locally attaching to a remote cluster:
 
 ```
 # Make sure you have the correct config and context set
 export KUBECONFIG="$HOME/cluster.yaml"
 
-make run ARGS="manager"
+make run-controller ARGS="--name=test-controller --namespace=default --image=starbops/harvester-vm-dhcp-controller:master-head"
 ```
 
 Same for the agent (for testing purposes):
 
 ```
-make run ARGS="agent"
+make run-agent ARGS="--name=test-agent --dry-run"
 ```
 
 ## Install
@@ -83,7 +83,7 @@ The agents will be scaffolded dynamically according to the requests.
 
 ## Usage
 
-Create **VM Network** `net-48` before proceeding
+Create **VM Network** `default/net-48` before proceeding.
 
 Create IPPool object:
 
@@ -115,7 +115,7 @@ spec:
     ntp:
     - pool.ntp.org
     leaseTime: 300
-  networkName: net-48
+  networkName: default/net-48
 EOF
 ```
 
@@ -134,6 +134,6 @@ spec:
   vmName: test-vm
   networkConfig:
   - macAddress: fa:cf:8e:50:82:fc
-    networkName: net-48
+    networkName: default/net-48
 EOF
 ```
