@@ -26,6 +26,10 @@ type IPAllocator struct {
 	mutex *sync.RWMutex
 }
 
+func New() *IPAllocator {
+	return NewIPAllocator()
+}
+
 func NewIPAllocator() *IPAllocator {
 	return &IPAllocator{
 		ipam:  make(map[string]IPSubnet),

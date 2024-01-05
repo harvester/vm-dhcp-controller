@@ -1,4 +1,6 @@
-# VM DHCP Controller
+# vm-dhcp-controller
+
+A managed DHCP service for virtual machines running on Harvester, ported from [joeyloman/kubevirt-ip-helper](https://github.com/joeyloman/kubevirt-ip-helper) and its subsidiary projects.
 
 ## Features
 
