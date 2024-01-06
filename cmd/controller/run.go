@@ -18,7 +18,9 @@ var (
 	threadiness = 1
 )
 
-func run(registerFuncList []config.RegisterFunc, leaderelection, createCRD bool, options *config.ControllerOptions) error {
+func run(options *config.ControllerOptions) error {
+	logrus.Infof("Starting VM DHCP Controller: %s", name)
+
 	ctx := signals.SetupSignalContext()
 
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -41,7 +43,7 @@ func run(registerFuncList []config.RegisterFunc, leaderelection, createCRD bool,
 	}
 
 	callback := func(ctx context.Context) {
-		if err := management.Register(ctx, cfg, createCRD, registerFuncList); err != nil {
+		if err := management.Register(ctx, cfg, controllers.RegisterFuncList); err != nil {
 			panic(err)
 		}
 
@@ -52,17 +54,11 @@ func run(registerFuncList []config.RegisterFunc, leaderelection, createCRD bool,
 		<-ctx.Done()
 	}
 
-	if leaderelection {
-		leader.RunOrDie(ctx, "kube-system", "vm-dhcp-controllers", client, callback)
-	} else {
+	if noLeaderElection {
 		callback(ctx)
+	} else {
+		leader.RunOrDie(ctx, "kube-system", "vm-dhcp-controllers", client, callback)
 	}
 
 	return nil
-}
-
-func Run(options *config.ControllerOptions) error {
-	logrus.Infof("Starting VM DHCP Controller: %s", name)
-
-	return run(controllers.RegisterFuncList, !noLeaderElection, true, options)
 }

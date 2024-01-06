@@ -66,7 +66,7 @@ var rootCmd = &cobra.Command{
 			NoDHCP:                  noDHCP,
 		}
 
-		if err := Run(options); err != nil {
+		if err := run(options); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			os.Exit(1)
 		}
@@ -89,8 +89,8 @@ func init() {
 	rootCmd.Flags().StringVar(&agentServiceAccountName, "service-account-name", os.Getenv("AGENT_SERVICE_ACCOUNT_NAME"), "The service account for the spawned agents")
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
+// execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
+func execute() {
 	cobra.CheckErr(rootCmd.Execute())
 }

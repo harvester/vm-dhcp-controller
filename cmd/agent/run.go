@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Run(ctx context.Context, options *config.AgentOptions) error {
+func run(ctx context.Context, options *config.AgentOptions) error {
 	logrus.Infof("Starting VM DHCP Agent: %s", name)
 
 	agent := agent.NewAgent(ctx, options)

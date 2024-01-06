@@ -50,7 +50,7 @@ var rootCmd = &cobra.Command{
 			},
 		}
 
-		if err := Run(ctx, options); err != nil {
+		if err := run(ctx, options); err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 			os.Exit(1)
 		}
@@ -59,7 +59,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	debug := util.EnvGetBool("VM_DHCP_AGENT_DEBUG", false)
-	trace := util.EnvGetBool("VM_DHCP_TRACE", false)
+	trace := util.EnvGetBool("VM_DHCP_AGENT_TRACE", false)
 
 	rootCmd.PersistentFlags().BoolVar(&logDebug, "debug", debug, "set logging level to debug")
 	rootCmd.PersistentFlags().BoolVar(&logTrace, "trace", trace, "set logging level to trace")
@@ -70,8 +70,8 @@ func init() {
 	rootCmd.Flags().StringVar(&ippoolRef, "ippool-ref", os.Getenv("IPPOOL_REF"), "The IPPool object the agent should sync with")
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
+// execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
+func execute() {
 	cobra.CheckErr(rootCmd.Execute())
 }

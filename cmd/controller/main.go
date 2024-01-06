@@ -6,5 +6,5 @@ var (
 )
 
 func main() {
-	Execute()
+	execute()
 }

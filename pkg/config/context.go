@@ -102,11 +102,9 @@ func (s *Management) Start(threadiness int) error {
 	return start.All(s.ctx, threadiness, s.starters...)
 }
 
-func (s *Management) Register(ctx context.Context, config *rest.Config, createCRD bool, registerFuncList []RegisterFunc) error {
-	if createCRD {
-		if err := crd.Create(ctx, config); err != nil {
-			return err
-		}
+func (s *Management) Register(ctx context.Context, config *rest.Config, registerFuncList []RegisterFunc) error {
+	if err := crd.Create(ctx, config); err != nil {
+		return err
 	}
 
 	for _, f := range registerFuncList {
