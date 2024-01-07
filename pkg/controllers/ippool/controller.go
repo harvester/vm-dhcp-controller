@@ -24,7 +24,7 @@ import (
 	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
-	"github.com/harvester/vm-dhcp-controller/pkg/utils"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
 const (
@@ -167,7 +167,7 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 
 	if ipPool.Status.IPv4 != nil {
 		for ip, mac := range ipPool.Status.IPv4.Allocated {
-			if mac == utils.ExcludedMark {
+			if mac == util.ExcludedMark {
 				continue
 			}
 			if _, err := h.ipAllocator.AllocateIP(ipPool.Spec.NetworkName, ip); err != nil {
@@ -205,7 +205,7 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		allocated = make(map[string]string)
 	}
 	for _, v := range ipPool.Spec.IPv4Config.Pool.Exclude {
-		allocated[v.String()] = utils.ExcludedMark
+		allocated[v.String()] = util.ExcludedMark
 	}
 	ipv4Status.Allocated = allocated
 

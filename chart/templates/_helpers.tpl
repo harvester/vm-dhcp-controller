@@ -40,6 +40,17 @@ helm.sh/chart: {{ include "harvester-vm-dhcp-controller.chart" . }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/component: controller
+{{- end }}
+
+{{- define "harvester-vm-dhcp-webhook.labels" -}}
+helm.sh/chart: {{ include "harvester-vm-dhcp-controller.chart" . }}
+{{ include "harvester-vm-dhcp-webhook.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/component: webhook
 {{- end }}
 
 {{/*
@@ -47,6 +58,11 @@ Selector labels
 */}}
 {{- define "harvester-vm-dhcp-controller.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "harvester-vm-dhcp-controller.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- define "harvester-vm-dhcp-webhook.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "harvester-vm-dhcp-controller.name" . }}-webhook
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 

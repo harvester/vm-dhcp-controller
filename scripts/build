@@ -14,3 +14,4 @@ LINKFLAGS="-X main.AppVersion=$VERSION
 
 CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-controller ./cmd/controller
 CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-agent ./cmd/agent
+CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-webhook ./cmd/webhook

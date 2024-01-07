@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
-	"github.com/harvester/vm-dhcp-controller/pkg/utils"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -58,8 +58,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	debug := utils.EnvGetBool("VM_DHCP_AGENT_DEBUG", false)
-	trace := utils.EnvGetBool("VM_DHCP_TRACE", false)
+	debug := util.EnvGetBool("VM_DHCP_AGENT_DEBUG", false)
+	trace := util.EnvGetBool("VM_DHCP_TRACE", false)
 
 	rootCmd.PersistentFlags().BoolVar(&logDebug, "debug", debug, "set logging level to debug")
 	rootCmd.PersistentFlags().BoolVar(&logTrace, "trace", trace, "set logging level to trace")

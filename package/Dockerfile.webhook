@@ -1,0 +1,8 @@
+FROM registry.suse.com/bci/bci-base:15.5
+
+RUN zypper -n rm container-suseconnect && \
+    zypper -n in curl
+
+COPY bin/vm-dhcp-webhook /usr/bin/vm-dhcp-webhook
+
+ENTRYPOINT [ "vm-dhcp-webhook" ]

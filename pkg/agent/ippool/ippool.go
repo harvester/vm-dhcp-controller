@@ -7,7 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
-	"github.com/harvester/vm-dhcp-controller/pkg/utils"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
 func (c *Controller) Update(ipPool *networkv1.IPPool) error {
@@ -62,7 +62,7 @@ func (c *Controller) updatePoolCacheAndLeaseStore(latest map[string]string, ipv4
 
 func filterExcluded(allocated map[string]string) {
 	for ip, mac := range allocated {
-		if mac == utils.ExcludedMark {
+		if mac == util.ExcludedMark {
 			delete(allocated, ip)
 		}
 	}

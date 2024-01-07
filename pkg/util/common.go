@@ -1,4 +1,4 @@
-package utils
+package util
 
 const (
 	ExcludedMark = "EXCLUDED"

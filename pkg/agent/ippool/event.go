@@ -15,7 +15,7 @@ import (
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/dhcp"
 	clientset "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned"
-	"github.com/harvester/vm-dhcp-controller/pkg/utils"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
 const (
@@ -78,7 +78,7 @@ func (e *EventHandler) Init() (err error) {
 }
 
 func (e *EventHandler) getKubeConfig() (config *rest.Config, err error) {
-	if !utils.FileExists(e.kubeConfig) {
+	if !util.FileExists(e.kubeConfig) {
 		return rest.InClusterConfig()
 	}
 

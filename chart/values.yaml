@@ -16,6 +16,18 @@ agent:
     pullPolicy: IfNotPresent
     tag: "master-head"
 
+webhook:
+  replicaCount: 1
+  image:
+    repository: rancher/harvester-vm-dhcp-webhook
+    pullPolicy: IfNotPresent
+    tag: "master-head"
+  httpsPort: 8443
+  service:
+    type: ClusterIP
+    port: 443
+  resources: {}
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""

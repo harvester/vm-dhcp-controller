@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/harvester/vm-dhcp-controller/pkg/utils"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 	"github.com/harvester/webhook/pkg/config"
 )
 
@@ -51,8 +51,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	debug := utils.EnvGetBool("VM_DHCP_WEBHOOK_DEBUG", false)
-	trace := utils.EnvGetBool("VM_DHCP_WEBHOOK_TRACE", false)
+	debug := util.EnvGetBool("VM_DHCP_WEBHOOK_DEBUG", false)
+	trace := util.EnvGetBool("VM_DHCP_WEBHOOK_TRACE", false)
 
 	rootCmd.PersistentFlags().BoolVar(&logDebug, "debug", debug, "set logging level to debug")
 	rootCmd.PersistentFlags().BoolVar(&logTrace, "trace", trace, "set logging level to trace")
@@ -60,7 +60,7 @@ func init() {
 	rootCmd.Flags().StringVar(&name, "name", os.Getenv("VM_DHCP_AGENT_NAME"), "The name of the vm-dhcp-webhook instance")
 	rootCmd.Flags().StringVar(&options.ControllerUsername, "controller-user", "harvester-vm-dhcp-controller", "The harvester controller username")
 	rootCmd.Flags().StringVar(&options.GarbageCollectionUsername, "gc-user", "system:serviceaccount:kube-system:generic-garbage-collector", "The system username that performs garbage collection")
-	rootCmd.Flags().StringVar(&options.Namespace, "namespace", "harvester-system", "The harvester namespace")
+	rootCmd.Flags().StringVar(&options.Namespace, "namespace", os.Getenv("NAMESPACE"), "The harvester namespace")
 	rootCmd.Flags().IntVar(&options.HTTPSListenPort, "https-port", 8443, "HTTPS listen port")
 	rootCmd.Flags().IntVar(&options.Threadiness, "threadiness", 5, "Specify controller threads")
 }
