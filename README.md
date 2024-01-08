@@ -50,6 +50,12 @@ go generate
 To build the VM DHCP controller/agent and package them into container images:
 
 ```
+# If you want to have the built images pushed to the designated registry,
+# please specify the following two environment variables.
+# Also, copy $HOME/.docker under the project directory for `docker push` to work.
+export REPO=starbops
+export PUSH=true
+
 make
 ```
 
@@ -68,7 +74,7 @@ To run the controller locally attaching to a remote cluster:
 # Make sure you have the correct config and context set
 export KUBECONFIG="$HOME/cluster.yaml"
 
-make run-controller ARGS="--name=test-controller --namespace=default --image=rancher/harvester-vm-dhcp-controller:master-head"
+make run-controller ARGS="--name=test-controller --namespace=default --image=rancher/harvester-vm-dhcp-controller:main-head"
 ```
 
 Same for the agent (for testing purposes):

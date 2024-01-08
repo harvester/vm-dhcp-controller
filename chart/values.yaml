@@ -8,20 +8,20 @@ image:
   repository: rancher/harvester-vm-dhcp-controller
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "master-head"
+  tag: "main-head"
 
 agent:
   image:
     repository: rancher/harvester-vm-dhcp-agent
     pullPolicy: IfNotPresent
-    tag: "master-head"
+    tag: "main-head"
 
 webhook:
   replicaCount: 1
   image:
     repository: rancher/harvester-vm-dhcp-webhook
     pullPolicy: IfNotPresent
-    tag: "master-head"
+    tag: "main-head"
   httpsPort: 8443
   service:
     type: ClusterIP
