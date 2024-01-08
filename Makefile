@@ -22,3 +22,6 @@ run-controller: ## Run the controller from your host.
 
 run-agent: ## Run the agent from your host.
 	go run ./cmd/agent $(ARGS)
+
+run-webhook: ## Run the webhook from your host.
+	go run ./cmd/webhook $(ARGS)

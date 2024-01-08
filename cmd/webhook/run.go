@@ -39,8 +39,8 @@ func newCaches(ctx context.Context, cfg *rest.Config, threadiness int) (*caches,
 
 	// must declare cache before starting informers
 	c := &caches{
-		vmCache:       kubevirtFactory.Kubevirt().V1().VirtualMachine().Cache(),
 		nadCache:      cniFactory.K8s().V1().NetworkAttachmentDefinition().Cache(),
+		vmCache:       kubevirtFactory.Kubevirt().V1().VirtualMachine().Cache(),
 		vmnetcfgCache: networkFactory.Network().V1alpha1().VirtualMachineNetworkConfig().Cache(),
 	}
 
@@ -64,7 +64,9 @@ func run(ctx context.Context, cfg *rest.Config, options *config.Options) error {
 
 	webhookServer := server.NewWebhookServer(ctx, cfg, name, options)
 
-	if err := webhookServer.RegisterValidators(ippool.NewValidator(c.vmnetcfgCache)); err != nil {
+	if err := webhookServer.RegisterValidators(
+		ippool.NewValidator(c.nadCache, c.vmnetcfgCache),
+	); err != nil {
 		return err
 	}
 

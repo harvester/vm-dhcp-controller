@@ -5,11 +5,13 @@ import (
 	"strings"
 
 	"github.com/harvester/webhook/pkg/server/admission"
+	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/sirupsen/logrus"
 	admissionregv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
 	"github.com/harvester/vm-dhcp-controller/pkg/webhook"
@@ -18,11 +20,13 @@ import (
 type Validator struct {
 	admission.DefaultValidator
 
+	nadCache      ctlcniv1.NetworkAttachmentDefinitionCache
 	vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache
 }
 
-func NewValidator(vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache) *Validator {
+func NewValidator(nadCache ctlcniv1.NetworkAttachmentDefinitionCache, vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache) *Validator {
 	return &Validator{
+		nadCache:      nadCache,
 		vmnetcfgCache: vmnetcfgCache,
 	}
 }
@@ -30,6 +34,16 @@ func NewValidator(vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache) *
 func (v *Validator) Create(request *admission.Request, newObj runtime.Object) error {
 	ipPool := newObj.(*networkv1.IPPool)
 	logrus.Infof("create ippool %s/%s", ipPool.Namespace, ipPool.Name)
+
+	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
+	if nadNamespace == "" {
+		nadNamespace = "default"
+	}
+
+	if _, err := v.nadCache.Get(nadNamespace, nadName); err != nil {
+		return fmt.Errorf(webhook.CreateErr, ipPool.Kind, ipPool.Namespace, ipPool.Name, err)
+	}
+
 	return nil
 }
 
