@@ -17,12 +17,15 @@ import (
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/indexer"
 	"github.com/harvester/vm-dhcp-controller/pkg/webhook/ippool"
+	"github.com/harvester/vm-dhcp-controller/pkg/webhook/vmnetcfg"
 )
 
 type caches struct {
-	nadCache      ctlcniv1.NetworkAttachmentDefinitionCache
-	vmCache       ctlkubevirtv1.VirtualMachineCache
+	ippoolCache   ctlnetworkv1.IPPoolCache
 	vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache
+
+	nadCache ctlcniv1.NetworkAttachmentDefinitionCache
+	vmCache  ctlkubevirtv1.VirtualMachineCache
 }
 
 func newCaches(ctx context.Context, cfg *rest.Config, threadiness int) (*caches, error) {
@@ -39,9 +42,10 @@ func newCaches(ctx context.Context, cfg *rest.Config, threadiness int) (*caches,
 
 	// must declare cache before starting informers
 	c := &caches{
+		ippoolCache:   networkFactory.Network().V1alpha1().IPPool().Cache(),
+		vmnetcfgCache: networkFactory.Network().V1alpha1().VirtualMachineNetworkConfig().Cache(),
 		nadCache:      cniFactory.K8s().V1().NetworkAttachmentDefinition().Cache(),
 		vmCache:       kubevirtFactory.Kubevirt().V1().VirtualMachine().Cache(),
-		vmnetcfgCache: networkFactory.Network().V1alpha1().VirtualMachineNetworkConfig().Cache(),
 	}
 
 	// Indexer must be added before starting the informer, otherwise panic `cannot add indexers to running index` happens
@@ -66,6 +70,7 @@ func run(ctx context.Context, cfg *rest.Config, options *config.Options) error {
 
 	if err := webhookServer.RegisterValidators(
 		ippool.NewValidator(c.nadCache, c.vmnetcfgCache),
+		vmnetcfg.NewValidator(c.ippoolCache),
 	); err != nil {
 		return err
 	}
