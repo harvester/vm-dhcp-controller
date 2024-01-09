@@ -81,6 +81,11 @@ func (a *IPAllocator) DeleteIPSubnet(name string) {
 	delete(a.ipam, name)
 }
 
+func (a *IPAllocator) IsNetworkInitialized(name string) bool {
+	_, ok := a.ipam[name]
+	return ok
+}
+
 func (a *IPAllocator) AllocateIP(name string, designatedIPStr string) (net.IP, error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()

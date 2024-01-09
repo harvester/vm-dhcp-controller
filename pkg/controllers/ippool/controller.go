@@ -9,13 +9,13 @@ import (
 
 	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/rancher/wrangler/pkg/relatedresource"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/klog/v2"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
@@ -106,7 +106,14 @@ func Register(ctx context.Context, management *config.Management) error {
 	ctlnetworkv1.RegisterIPPoolStatusHandler(
 		ctx,
 		ippools,
-		networkv1.Ready,
+		networkv1.CacheReady,
+		"ippool-cache-builder",
+		handler.BuildCache,
+	)
+	ctlnetworkv1.RegisterIPPoolStatusHandler(
+		ctx,
+		ippools,
+		networkv1.AgentReady,
 		"ippool-agent-monitor",
 		handler.MonitorAgent,
 	)
@@ -141,47 +148,22 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return nil, nil
 	}
 
-	klog.Infof("ippool configuration %s/%s has been changed: %+v", ipPool.Namespace, ipPool.Name, ipPool.Spec.IPv4Config)
-
-	// Construct IPAM from IPPool spec
-
-	klog.Infof("initialize ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
-	if err := h.ipAllocator.NewIPSubnet(
-		ipPool.Spec.NetworkName,
-		ipPool.Spec.IPv4Config.CIDR,
-		ipPool.Spec.IPv4Config.Pool.Start,
-		ipPool.Spec.IPv4Config.Pool.End,
-	); err != nil {
-		return nil, err
-	}
-
-	// Revoke excluded IP addresses in IPAM
-	for _, ip := range ipPool.Spec.IPv4Config.Pool.Exclude {
-		if err := h.ipAllocator.RevokeIP(ipPool.Spec.NetworkName, ip.String()); err != nil {
-			return nil, err
-		}
-		klog.Infof("excluded ip %s was revoked in ipam %s", ip, ipPool.Spec.NetworkName)
-	}
-
-	// Construct IPAM from IPPool status
-
-	if ipPool.Status.IPv4 != nil {
-		for ip, mac := range ipPool.Status.IPv4.Allocated {
-			if mac == util.ExcludedMark {
-				continue
-			}
-			if _, err := h.ipAllocator.AllocateIP(ipPool.Spec.NetworkName, ip); err != nil {
-				return nil, err
-			}
-			klog.Infof("previously allocated ip %s was re-allocated in ipam %s", ip, ipPool.Spec.NetworkName)
-		}
-	}
-
-	klog.Infof("ipam %s for ippool %s/%s has been updated", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
-
-	// Update IPPool status based on up-to-date IPAM
+	logrus.Infof("ippool configuration %s/%s has been changed: %+v", ipPool.Namespace, ipPool.Name, ipPool.Spec.IPv4Config)
 
 	ipPoolCpy := ipPool.DeepCopy()
+
+	if !h.ipAllocator.IsNetworkInitialized(ipPool.Spec.NetworkName) {
+		networkv1.CacheReady.False(ipPoolCpy)
+		networkv1.CacheReady.SetStatus(ipPoolCpy, string(corev1.ConditionFalse))
+		networkv1.CacheReady.Reason(ipPoolCpy, "NotInitialized")
+		networkv1.CacheReady.Message(ipPoolCpy, "")
+		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
+			logrus.Warningf("ipam for ippool %s/%s is not initialized", ipPool.Namespace, ipPool.Name)
+			return h.ippoolClient.UpdateStatus(ipPoolCpy)
+		}
+	}
+
+	// Update IPPool status based on up-to-date IPAM
 
 	ipv4Status := ipPoolCpy.Status.IPv4
 	if ipv4Status == nil {
@@ -207,12 +189,16 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 	for _, v := range ipPool.Spec.IPv4Config.Pool.Exclude {
 		allocated[v.String()] = util.ExcludedMark
 	}
+	// For DeepEqual
+	if len(allocated) == 0 {
+		allocated = nil
+	}
 	ipv4Status.Allocated = allocated
 
 	ipPoolCpy.Status.IPv4 = ipv4Status
 
 	if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-		klog.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+		logrus.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
 		ipPoolCpy.Status.LastUpdate = metav1.Now()
 		return h.ippoolClient.UpdateStatus(ipPoolCpy)
 	}
@@ -225,7 +211,7 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return nil, nil
 	}
 
-	klog.Infof("ippool configuration %s/%s has been removed", ipPool.Namespace, ipPool.Name)
+	logrus.Infof("ippool configuration %s/%s has been removed", ipPool.Namespace, ipPool.Name)
 
 	if h.noAgent {
 		return ipPool, nil
@@ -235,7 +221,7 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return ipPool, nil
 	}
 
-	klog.Infof("remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, ipPool.Namespace, ipPool.Name)
+	logrus.Infof("remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, ipPool.Namespace, ipPool.Name)
 	if err := h.podClient.Delete(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, &metav1.DeleteOptions{}); err != nil {
 		return nil, err
 	}
@@ -244,7 +230,7 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 }
 
 func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
-	klog.Infof("deploy agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	logrus.Infof("deploy agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if h.noAgent {
 		return status, nil
@@ -278,7 +264,7 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 		return status, err
 	}
 
-	klog.Infof("agent for ippool %s/%s has been deployed", ipPool.Namespace, ipPool.Name)
+	logrus.Infof("agent for ippool %s/%s has been deployed", ipPool.Namespace, ipPool.Name)
 
 	status.AgentPodRef = &networkv1.PodReference{
 		Namespace: agentPod.Namespace,
@@ -288,8 +274,54 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 	return status, nil
 }
 
+func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
+	logrus.Infof("build ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+
+	if networkv1.CacheReady.IsTrue(ipPool) {
+		return status, nil
+	}
+
+	// Construct IPAM from IPPool spec
+
+	logrus.Infof("initialize ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	if err := h.ipAllocator.NewIPSubnet(
+		ipPool.Spec.NetworkName,
+		ipPool.Spec.IPv4Config.CIDR,
+		ipPool.Spec.IPv4Config.Pool.Start,
+		ipPool.Spec.IPv4Config.Pool.End,
+	); err != nil {
+		return status, err
+	}
+
+	// Revoke excluded IP addresses in IPAM
+	for _, ip := range ipPool.Spec.IPv4Config.Pool.Exclude {
+		if err := h.ipAllocator.RevokeIP(ipPool.Spec.NetworkName, ip.String()); err != nil {
+			return status, err
+		}
+		logrus.Infof("excluded ip %s was revoked in ipam %s", ip, ipPool.Spec.NetworkName)
+	}
+
+	// Construct IPAM from IPPool status
+
+	if ipPool.Status.IPv4 != nil {
+		for ip, mac := range ipPool.Status.IPv4.Allocated {
+			if mac == util.ExcludedMark {
+				continue
+			}
+			if _, err := h.ipAllocator.AllocateIP(ipPool.Spec.NetworkName, ip); err != nil {
+				return status, err
+			}
+			logrus.Infof("previously allocated ip %s was re-allocated in ipam %s", ip, ipPool.Spec.NetworkName)
+		}
+	}
+
+	logrus.Infof("ipam %s for ippool %s/%s has been updated", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
+
+	return status, nil
+}
+
 func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
-	klog.Infof("monitor agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	logrus.Infof("monitor agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if ipPool.Status.AgentPodRef == nil {
 		return status, fmt.Errorf("agent for ippool %s/%s is not deployed", ipPool.Namespace, ipPool.Name)

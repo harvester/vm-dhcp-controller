@@ -10,7 +10,8 @@ import (
 
 var (
 	Registered condition.Cond = "Registered"
-	Ready      condition.Cond = "Ready"
+	CacheReady condition.Cond = "CacheReady"
+	AgentReady condition.Cond = "AgentReady"
 	Stopped    condition.Cond = "Stopped"
 )
 
