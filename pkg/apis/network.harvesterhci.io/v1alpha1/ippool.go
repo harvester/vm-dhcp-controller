@@ -17,10 +17,13 @@ var (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:shortName=ipl;ipls,scope=Namespaced
+// +kubebuilder:resource:shortName=ippl;ippls,scope=Namespaced
 // +kubebuilder:printcolumn:name="NETWORK",type=string,JSONPath=`.spec.networkName`
-// +kubebuilder:printcolumn:name="AVAILABLE",type=string,JSONPath=`.status.ipv4.available`
-// +kubebuilder:printcolumn:name="USED",type=string,JSONPath=`.status.ipv4.used`
+// +kubebuilder:printcolumn:name="AVAILABLE",type=integer,JSONPath=`.status.ipv4.available`
+// +kubebuilder:printcolumn:name="USED",type=integer,JSONPath=`.status.ipv4.used`
+// +kubebuilder:printcolumn:name="REGISTERED",type=string,JSONPath=`.status.conditions[?(@.type=='Registered')].status`
+// +kubebuilder:printcolumn:name="CACHEREADY",type=string,JSONPath=`.status.conditions[?(@.type=='CacheReady')].status`
+// +kubebuilder:printcolumn:name="AGENTREADY",type=string,JSONPath=`.status.conditions[?(@.type=='AgentReady')].status`
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=`.metadata.creationTimestamp`
 
 type IPPool struct {
@@ -87,8 +90,8 @@ type IPPoolStatus struct {
 
 type IPv4Status struct {
 	Allocated map[string]string `json:"allocated,omitempty"`
-	Used      int               `json:"used,omitempty"`
-	Available int               `json:"available,omitempty"`
+	Used      int               `json:"used"`
+	Available int               `json:"available"`
 }
 
 type PodReference struct {

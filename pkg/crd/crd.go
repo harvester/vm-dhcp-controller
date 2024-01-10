@@ -22,17 +22,20 @@ func List() []crd.CRD {
 	return []crd.CRD{
 		newCRD("network.harvesterhci.io", &network.IPPool{}, func(c crd.CRD) crd.CRD {
 			return c.
-				WithShortNames("ipl", "ipls").
+				WithShortNames("ippl", "ippls").
 				WithColumn("NETWORK", ".spec.networkName").
 				WithColumn("AVAILABLE", ".status.ipv4.available").
 				WithColumn("USED", ".status.ipv4.used").
+				WithColumn("REGISTERED", ".status.conditions[?(@.type=='Registered')].status").
+				WithColumn("CACHEREADY", ".status.conditions[?(@.type=='CacheReady')].status").
+				WithColumn("AGENTREADY", ".status.conditions[?(@.type=='AgentReady')].status").
 				WithCustomColumn(ageColumn)
 		}),
 		newCRD("network.harvesterhci.io", &network.VirtualMachineNetworkConfig{}, func(c crd.CRD) crd.CRD {
 			return c.
 				WithShortNames("vmnetcfg", "vmnetcfgs").
 				WithColumn("VMNAME", ".spec.vmName").
-				WithColumn("NETWORK", ".spec.networkConfig.networkName").
+				WithColumn("ALLOCATED", ".status.conditions[?(@.type=='Allocated')].status").
 				WithCustomColumn(ageColumn)
 		}),
 	}

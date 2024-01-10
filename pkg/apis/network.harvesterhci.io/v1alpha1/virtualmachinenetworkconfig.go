@@ -17,7 +17,7 @@ var (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:shortName=vmnetcfg;vmnetcfgs,scope=Namespaced
 // +kubebuilder:printcolumn:name="VMNAME",type=string,JSONPath=`.spec.vmName`
-// +kubebuilder:printcolumn:name="NETWORK",type=string,JSONPath=`.spec.networkConfig.networkName`
+// +kubebuilder:printcolumn:name="ALLOCATED",type=string,JSONPath=`.status.conditions[?(@.type=='Allocated')].status`
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=`.metadata.creationTimestamp`
 
 type VirtualMachineNetworkConfig struct {
@@ -51,8 +51,5 @@ type NetworkConfigStatus struct {
 	AllocatedIPAddress net.IP `json:"allocatedIPAddress,omitempty"`
 	MACAddress         string `json:"macAddress,omitempty"`
 	NetworkName        string `json:"networkName,omitempty"`
-	// +optional
-	Status string `json:"status,omitempty"`
-	// +optional
-	Message string `json:"message,omitempty"`
+	Status             string `json:"status,omitempty"`
 }
