@@ -323,6 +323,10 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
 	logrus.Debugf("monitor agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
+	if h.noAgent {
+		return status, nil
+	}
+
 	if ipPool.Status.AgentPodRef == nil {
 		return status, fmt.Errorf("agent for ippool %s/%s is not deployed", ipPool.Namespace, ipPool.Name)
 	}
