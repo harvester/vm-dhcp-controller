@@ -148,7 +148,7 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return nil, nil
 	}
 
-	logrus.Infof("ippool configuration %s/%s has been changed: %+v", ipPool.Namespace, ipPool.Name, ipPool.Spec.IPv4Config)
+	logrus.Debugf("ippool configuration %s has been changed: %+v", key, ipPool.Spec.IPv4Config)
 
 	ipPoolCpy := ipPool.DeepCopy()
 
@@ -211,7 +211,7 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return nil, nil
 	}
 
-	logrus.Infof("ippool configuration %s/%s has been removed", ipPool.Namespace, ipPool.Name)
+	logrus.Debugf("ippool configuration %s/%s has been removed", ipPool.Namespace, ipPool.Name)
 
 	if h.noAgent {
 		return ipPool, nil
@@ -230,7 +230,7 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 }
 
 func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
-	logrus.Infof("deploy agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	logrus.Debugf("deploy agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if h.noAgent {
 		return status, nil
@@ -275,7 +275,7 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 }
 
 func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
-	logrus.Infof("build ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	logrus.Debugf("build ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if networkv1.CacheReady.IsTrue(ipPool) {
 		return status, nil
@@ -321,7 +321,7 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 }
 
 func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
-	logrus.Infof("monitor agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	logrus.Debugf("monitor agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if ipPool.Status.AgentPodRef == nil {
 		return status, fmt.Errorf("agent for ippool %s/%s is not deployed", ipPool.Namespace, ipPool.Name)

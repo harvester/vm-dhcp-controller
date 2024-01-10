@@ -4,7 +4,7 @@ import (
 	"context"
 
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	"k8s.io/klog/v2"
+	"github.com/sirupsen/logrus"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
@@ -42,7 +42,7 @@ func (h *Handler) OnChange(key string, nad *cniv1.NetworkAttachmentDefinition) (
 		return nil, nil
 	}
 
-	klog.Infof("nad configuration %s/%s has been changed: %s", nad.Namespace, nad.Name, nad.Spec.Config)
+	logrus.Debugf("nad configuration %s/%s has been changed: %s", nad.Namespace, nad.Name, nad.Spec.Config)
 
 	return nad, nil
 }
@@ -52,7 +52,7 @@ func (h *Handler) OnRemove(key string, nad *cniv1.NetworkAttachmentDefinition) (
 		return nil, nil
 	}
 
-	klog.Infof("nad configuration %s/%s has been removed", nad.Namespace, nad.Name)
+	logrus.Debugf("nad configuration %s/%s has been removed", nad.Namespace, nad.Name)
 
 	return nad, nil
 }

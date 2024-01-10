@@ -50,7 +50,7 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 		return nil, nil
 	}
 
-	logrus.Infof("vm configuration %s/%s has been changed", vm.Namespace, vm.Name)
+	logrus.Debugf("vm configuration %s/%s has been changed", vm.Namespace, vm.Name)
 
 	ncm := make(map[string]networkv1.NetworkConfig, 1)
 
@@ -98,7 +98,7 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 		return vm, err
 	}
 
-	logrus.Infof("vmnetcfg for vm %s already exists", key)
+	logrus.Debugf("vmnetcfg for vm %s already exists", key)
 
 	vmNetCfgCpy := oldVmNetCfg.DeepCopy()
 	vmNetCfgCpy.Spec.NetworkConfig = vmNetCfg.Spec.NetworkConfig

@@ -5,8 +5,8 @@ import (
 	"reflect"
 
 	"github.com/rancher/wrangler/pkg/kv"
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
@@ -56,7 +56,7 @@ func Register(ctx context.Context, management *config.Management) error {
 }
 
 func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status networkv1.VirtualMachineNetworkConfigStatus) (networkv1.VirtualMachineNetworkConfigStatus, error) {
-	klog.Infof("allocate ip for vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
+	logrus.Infof("allocate ip for vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
 
 	ncStatuses := vmNetCfg.Status.NetworkConfig
 	for _, nc := range vmNetCfg.Spec.NetworkConfig {
@@ -107,7 +107,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 		ipPoolCpy.Status.IPv4 = ipv4Status
 
 		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-			klog.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+			logrus.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
 			ipPoolCpy.Status.LastUpdate = metav1.Now()
 			if _, err := h.ippoolClient.UpdateStatus(ipPoolCpy); err != nil {
 				return status, err
@@ -125,7 +125,7 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 		return nil, nil
 	}
 
-	klog.Infof("vmnetcfg configuration %s/%s has been removed", vmNetCfg.Namespace, vmNetCfg.Name)
+	logrus.Infof("vmnetcfg configuration %s/%s has been removed", vmNetCfg.Namespace, vmNetCfg.Name)
 
 	for _, nc := range vmNetCfg.Status.NetworkConfig {
 		// Deallocate IP address from IPAM
@@ -151,7 +151,7 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 		delete(ipPoolCpy.Status.IPv4.Allocated, nc.AllocatedIPAddress.String())
 
 		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-			klog.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+			logrus.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
 			ipPoolCpy.Status.LastUpdate = metav1.Now()
 			if _, err := h.ippoolClient.UpdateStatus(ipPoolCpy); err != nil {
 				return vmNetCfg, err

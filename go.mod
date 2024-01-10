@@ -23,7 +23,6 @@ require (
 	k8s.io/apiextensions-apiserver v0.27.9
 	k8s.io/apimachinery v0.27.9
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/klog/v2 v2.100.1
 	kubevirt.io/api v1.1.0
 )
 
@@ -32,6 +31,7 @@ require (
 	github.com/rancher/dynamiclistener v0.3.5 // indirect
 	golang.org/x/crypto v0.14.0 // indirect
 	k8s.io/klog v1.0.0 // indirect
+	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/kube-aggregator v0.25.4 // indirect
 )
 
