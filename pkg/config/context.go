@@ -21,6 +21,7 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/cache"
 	"github.com/harvester/vm-dhcp-controller/pkg/crd"
 	ctlcore "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core"
 	ctlcni "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io"
@@ -89,7 +90,8 @@ type Management struct {
 
 	ClientSet *kubernetes.Clientset
 
-	IPAllocator *ipam.IPAllocator
+	CacheAllocator *cache.CacheAllocator
+	IPAllocator    *ipam.IPAllocator
 
 	Options *ControllerOptions
 
@@ -138,6 +140,7 @@ func SetupManagement(ctx context.Context, restConfig *rest.Config, options *Cont
 		Options: options,
 	}
 
+	management.CacheAllocator = cache.NewCacheAllocator()
 	management.IPAllocator = ipam.NewIPAllocator()
 
 	harvesterNetwork, err := ctlnetwork.NewFactoryFromConfigWithOptions(restConfig, opts)

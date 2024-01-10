@@ -19,6 +19,7 @@ import (
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/cache"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	ctlcorev1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core/v1"
 	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
@@ -64,7 +65,8 @@ type Handler struct {
 	noAgent                 bool
 	noDHCP                  bool
 
-	ipAllocator *ipam.IPAllocator
+	cacheAllocator *cache.CacheAllocator
+	ipAllocator    *ipam.IPAllocator
 
 	ippoolController ctlnetworkv1.IPPoolController
 	ippoolClient     ctlnetworkv1.IPPoolClient
@@ -86,7 +88,8 @@ func Register(ctx context.Context, management *config.Management) error {
 		noAgent:                 management.Options.NoAgent,
 		noDHCP:                  management.Options.NoDHCP,
 
-		ipAllocator: management.IPAllocator,
+		cacheAllocator: management.CacheAllocator,
+		ipAllocator:    management.IPAllocator,
 
 		ippoolController: ippools,
 		ippoolClient:     ippools,
@@ -226,6 +229,8 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return nil, err
 	}
 
+	h.ipAllocator.DeleteIPSubnet(ipPool.Spec.NetworkName)
+
 	return ipPool, nil
 }
 
@@ -316,6 +321,14 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 	}
 
 	logrus.Infof("ipam %s for ippool %s/%s has been updated", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
+
+	// Construct cache
+
+	if err := h.cacheAllocator.NewMACIPMap(ipPool.Spec.NetworkName); err != nil {
+		return status, err
+	}
+
+	logrus.Infof("cache %s for ippool %s/%s has been initialized", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
 
 	return status, nil
 }
