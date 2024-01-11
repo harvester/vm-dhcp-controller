@@ -50,7 +50,7 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 		return nil, nil
 	}
 
-	logrus.Debugf("vm configuration %s/%s has been changed", vm.Namespace, vm.Name)
+	logrus.Debugf("(vm.OnChange) vm configuration %s/%s has been changed", vm.Namespace, vm.Name)
 
 	ncm := make(map[string]networkv1.NetworkConfig, 1)
 
@@ -89,7 +89,7 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 	oldVmNetCfg, err := h.vmnetcfgCache.Get(vm.Namespace, vm.Name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logrus.Infof("create vmnetcfg for vm %s", key)
+			logrus.Infof("(vm.OnChange) create vmnetcfg for vm %s", key)
 			if _, err := h.vmnetcfgClient.Create(vmNetCfg); err != nil {
 				return vm, err
 			}
@@ -98,13 +98,13 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 		return vm, err
 	}
 
-	logrus.Debugf("vmnetcfg for vm %s already exists", key)
+	logrus.Debugf("(vm.OnChange) vmnetcfg for vm %s already exists", key)
 
 	vmNetCfgCpy := oldVmNetCfg.DeepCopy()
 	vmNetCfgCpy.Spec.NetworkConfig = vmNetCfg.Spec.NetworkConfig
 
 	if !reflect.DeepEqual(vmNetCfgCpy, oldVmNetCfg) {
-		logrus.Infof("update vmnetcfg %s/%s", vmNetCfgCpy.Namespace, vmNetCfgCpy.Name)
+		logrus.Infof("(vm.OnChange) update vmnetcfg %s/%s", vmNetCfgCpy.Namespace, vmNetCfgCpy.Name)
 		if _, err := h.vmnetcfgClient.Update(vmNetCfgCpy); err != nil {
 			return vm, err
 		}

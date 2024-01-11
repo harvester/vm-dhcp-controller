@@ -61,7 +61,7 @@ func Register(ctx context.Context, management *config.Management) error {
 }
 
 func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status networkv1.VirtualMachineNetworkConfigStatus) (networkv1.VirtualMachineNetworkConfigStatus, error) {
-	logrus.Debugf("allocate ip for vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
+	logrus.Debugf("(vmnetcfg.Allocate) allocate ip for vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
 
 	var ncStatuses []networkv1.NetworkConfigStatus
 	for _, nc := range vmNetCfg.Spec.NetworkConfig {
@@ -111,7 +111,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 				ipPoolCpy.Status.IPv4 = ipv4Status
 
 				if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-					logrus.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+					logrus.Infof("(vmnetcfg.Allocate) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
 					ipPoolCpy.Status.LastUpdate = metav1.Now()
 					_, err = h.ippoolClient.UpdateStatus(ipPoolCpy)
 					return err
@@ -175,7 +175,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 			ipPoolCpy.Status.IPv4 = ipv4Status
 
 			if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-				logrus.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+				logrus.Infof("(vmnetcfg.Allocate) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
 				ipPoolCpy.Status.LastUpdate = metav1.Now()
 				_, err = h.ippoolClient.UpdateStatus(ipPoolCpy)
 				return err
@@ -197,7 +197,7 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 		return nil, nil
 	}
 
-	logrus.Debugf("vmnetcfg configuration %s/%s has been removed", vmNetCfg.Namespace, vmNetCfg.Name)
+	logrus.Debugf("(vmnetcfg.OnRemove) vmnetcfg configuration %s/%s has been removed", vmNetCfg.Namespace, vmNetCfg.Name)
 
 	for _, nc := range vmNetCfg.Status.NetworkConfig {
 		// Deallocate IP address from IPAM
@@ -223,22 +223,27 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 		}
 
 		ipPoolNamespace, ipPoolName := kv.RSplit(nc.NetworkName, "/")
-		ipPool, err := h.ippoolCache.Get(ipPoolNamespace, ipPoolName)
-		if err != nil {
-			return vmNetCfg, err
-		}
-
-		ipPoolCpy := ipPool.DeepCopy()
-
-		// Remove record in IPPool status
-		delete(ipPoolCpy.Status.IPv4.Allocated, nc.AllocatedIPAddress)
-
-		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-			logrus.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
-			ipPoolCpy.Status.LastUpdate = metav1.Now()
-			if _, err := h.ippoolClient.UpdateStatus(ipPoolCpy); err != nil {
-				return vmNetCfg, err
+		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+			ipPool, err := h.ippoolCache.Get(ipPoolNamespace, ipPoolName)
+			if err != nil {
+				return err
 			}
+
+			ipPoolCpy := ipPool.DeepCopy()
+
+			// Remove record in IPPool status
+			delete(ipPoolCpy.Status.IPv4.Allocated, nc.AllocatedIPAddress)
+
+			if !reflect.DeepEqual(ipPoolCpy, ipPool) {
+				logrus.Infof("(vmnetcfg.OnRemove) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+				ipPoolCpy.Status.LastUpdate = metav1.Now()
+				_, err := h.ippoolClient.UpdateStatus(ipPoolCpy)
+				return err
+			}
+
+			return nil
+		}); err != nil {
+			return vmNetCfg, err
 		}
 	}
 

@@ -151,7 +151,7 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return nil, nil
 	}
 
-	logrus.Debugf("ippool configuration %s has been changed: %+v", key, ipPool.Spec.IPv4Config)
+	logrus.Debugf("(ippool.OnChange) ippool configuration %s has been changed: %+v", key, ipPool.Spec.IPv4Config)
 
 	ipPoolCpy := ipPool.DeepCopy()
 
@@ -161,7 +161,7 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		networkv1.CacheReady.Reason(ipPoolCpy, "NotInitialized")
 		networkv1.CacheReady.Message(ipPoolCpy, "")
 		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-			logrus.Warningf("ipam for ippool %s/%s is not initialized", ipPool.Namespace, ipPool.Name)
+			logrus.Warningf("(ippool.OnChange) ipam for ippool %s/%s is not initialized", ipPool.Namespace, ipPool.Name)
 			return h.ippoolClient.UpdateStatus(ipPoolCpy)
 		}
 	}
@@ -201,7 +201,7 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 	ipPoolCpy.Status.IPv4 = ipv4Status
 
 	if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-		logrus.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+		logrus.Infof("(ippool.OnChange) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
 		ipPoolCpy.Status.LastUpdate = metav1.Now()
 		return h.ippoolClient.UpdateStatus(ipPoolCpy)
 	}
@@ -214,7 +214,7 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return nil, nil
 	}
 
-	logrus.Debugf("ippool configuration %s/%s has been removed", ipPool.Namespace, ipPool.Name)
+	logrus.Debugf("(ippool.OnRemove) ippool configuration %s/%s has been removed", ipPool.Namespace, ipPool.Name)
 
 	if h.noAgent {
 		return ipPool, nil
@@ -224,7 +224,7 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return ipPool, nil
 	}
 
-	logrus.Infof("remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, ipPool.Namespace, ipPool.Name)
+	logrus.Infof("(ippool.OnRemove) remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, ipPool.Namespace, ipPool.Name)
 	if err := h.podClient.Delete(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, &metav1.DeleteOptions{}); err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 }
 
 func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
-	logrus.Debugf("deploy agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	logrus.Debugf("(ippool.DeployAgent) deploy agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if h.noAgent {
 		return status, nil
@@ -270,7 +270,7 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 		return status, err
 	}
 
-	logrus.Infof("agent for ippool %s/%s has been deployed", ipPool.Namespace, ipPool.Name)
+	logrus.Infof("(ippool.DeployAgent) agent for ippool %s/%s has been deployed", ipPool.Namespace, ipPool.Name)
 
 	status.AgentPodRef = &networkv1.PodReference{
 		Namespace: agentPod.Namespace,
@@ -281,13 +281,13 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 }
 
 func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
-	logrus.Debugf("build ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	logrus.Debugf("(ippool.BuildCache) build ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if networkv1.CacheReady.IsTrue(ipPool) {
 		return status, nil
 	}
 
-	logrus.Infof("initialize ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	logrus.Infof("(ippool.BuildCache) initialize ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 	if err := h.ipAllocator.NewIPSubnet(
 		ipPool.Spec.NetworkName,
 		ipPool.Spec.IPv4Config.CIDR,
@@ -297,7 +297,7 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 		return status, err
 	}
 
-	logrus.Infof("initialize mac cache for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	logrus.Infof("(ippool.BuildCache) initialize mac cache for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 	if err := h.cacheAllocator.NewMACSet(ipPool.Spec.NetworkName); err != nil {
 		return status, err
 	}
@@ -307,7 +307,7 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 		if err := h.ipAllocator.RevokeIP(ipPool.Spec.NetworkName, eIP); err != nil {
 			return status, err
 		}
-		logrus.Infof("excluded ip %s was revoked in ipam %s", eIP, ipPool.Spec.NetworkName)
+		logrus.Infof("(ippool.BuildCache) excluded ip %s was revoked in ipam %s", eIP, ipPool.Spec.NetworkName)
 	}
 
 	// (Re)build caches from IPPool status
@@ -322,17 +322,17 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 			if err := h.cacheAllocator.AddMAC(ipPool.Spec.NetworkName, mac, ip); err != nil {
 				return status, err
 			}
-			logrus.Infof("previously allocated ip %s was re-allocated in ipam %s", ip, ipPool.Spec.NetworkName)
+			logrus.Infof("(ippool.BuildCache) previously allocated ip %s was re-allocated in ipam %s", ip, ipPool.Spec.NetworkName)
 		}
 	}
 
-	logrus.Infof("ipam and mac cache %s for ippool %s/%s has been updated", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
+	logrus.Infof("(ippool.BuildCache) ipam and mac cache %s for ippool %s/%s has been updated", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
 
 	return status, nil
 }
 
 func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
-	logrus.Debugf("monitor agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	logrus.Debugf("(ippool.MonitorAgent) monitor agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if h.noAgent {
 		return status, nil
