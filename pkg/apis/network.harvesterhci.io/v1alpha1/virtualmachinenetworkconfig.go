@@ -1,8 +1,6 @@
 package v1alpha1
 
 import (
-	"net"
-
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +35,7 @@ type NetworkConfig struct {
 	NetworkName string `json:"networkName,omitempty"`
 	MACAddress  string `json:"macAddress,omitempty"`
 	// +optional
-	IPAddress net.IP `json:"ipAddress,omitempty"`
+	IPAddress *string `json:"ipAddress,omitempty"`
 }
 
 type VirtualMachineNetworkConfigStatus struct {
@@ -48,7 +46,7 @@ type VirtualMachineNetworkConfigStatus struct {
 }
 
 type NetworkConfigStatus struct {
-	AllocatedIPAddress net.IP `json:"allocatedIPAddress,omitempty"`
+	AllocatedIPAddress string `json:"allocatedIPAddress,omitempty"`
 	MACAddress         string `json:"macAddress,omitempty"`
 	NetworkName        string `json:"networkName,omitempty"`
 	Status             string `json:"status,omitempty"`

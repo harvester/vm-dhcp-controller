@@ -2,7 +2,6 @@ package ippool
 
 import (
 	"fmt"
-	"net"
 
 	"github.com/sirupsen/logrus"
 
@@ -42,7 +41,7 @@ func (c *Controller) updatePoolCacheAndLeaseStore(latest map[string]string, ipv4
 			if err := c.dhcpAllocator.AddLease(
 				newMAC,
 				ipv4Config.ServerIP,
-				net.ParseIP(newIP),
+				newIP,
 				ipv4Config.CIDR,
 				ipv4Config.Router,
 				ipv4Config.DNS,

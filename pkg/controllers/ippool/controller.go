@@ -189,8 +189,8 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 	if allocated == nil {
 		allocated = make(map[string]string)
 	}
-	for _, v := range ipPool.Spec.IPv4Config.Pool.Exclude {
-		allocated[v.String()] = util.ExcludedMark
+	for _, eIP := range ipPool.Spec.IPv4Config.Pool.Exclude {
+		allocated[eIP] = util.ExcludedMark
 	}
 	// For DeepEqual
 	if len(allocated) == 0 {
@@ -230,6 +230,7 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 	}
 
 	h.ipAllocator.DeleteIPSubnet(ipPool.Spec.NetworkName)
+	h.cacheAllocator.DeleteMACSet(ipPool.Spec.NetworkName)
 
 	return ipPool, nil
 }
@@ -286,8 +287,6 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 		return status, nil
 	}
 
-	// Construct IPAM from IPPool spec
-
 	logrus.Infof("initialize ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 	if err := h.ipAllocator.NewIPSubnet(
 		ipPool.Spec.NetworkName,
@@ -298,16 +297,20 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 		return status, err
 	}
 
-	// Revoke excluded IP addresses in IPAM
-	for _, ip := range ipPool.Spec.IPv4Config.Pool.Exclude {
-		if err := h.ipAllocator.RevokeIP(ipPool.Spec.NetworkName, ip.String()); err != nil {
-			return status, err
-		}
-		logrus.Infof("excluded ip %s was revoked in ipam %s", ip, ipPool.Spec.NetworkName)
+	logrus.Infof("initialize mac cache for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	if err := h.cacheAllocator.NewMACSet(ipPool.Spec.NetworkName); err != nil {
+		return status, err
 	}
 
-	// Construct IPAM from IPPool status
+	// Revoke excluded IP addresses in IPAM
+	for _, eIP := range ipPool.Spec.IPv4Config.Pool.Exclude {
+		if err := h.ipAllocator.RevokeIP(ipPool.Spec.NetworkName, eIP); err != nil {
+			return status, err
+		}
+		logrus.Infof("excluded ip %s was revoked in ipam %s", eIP, ipPool.Spec.NetworkName)
+	}
 
+	// (Re)build caches from IPPool status
 	if ipPool.Status.IPv4 != nil {
 		for ip, mac := range ipPool.Status.IPv4.Allocated {
 			if mac == util.ExcludedMark {
@@ -316,19 +319,14 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 			if _, err := h.ipAllocator.AllocateIP(ipPool.Spec.NetworkName, ip); err != nil {
 				return status, err
 			}
+			if err := h.cacheAllocator.AddMAC(ipPool.Spec.NetworkName, mac, ip); err != nil {
+				return status, err
+			}
 			logrus.Infof("previously allocated ip %s was re-allocated in ipam %s", ip, ipPool.Spec.NetworkName)
 		}
 	}
 
-	logrus.Infof("ipam %s for ippool %s/%s has been updated", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
-
-	// Construct cache
-
-	if err := h.cacheAllocator.NewMACIPMap(ipPool.Spec.NetworkName); err != nil {
-		return status, err
-	}
-
-	logrus.Infof("cache %s for ippool %s/%s has been initialized", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
+	logrus.Infof("ipam and mac cache %s for ippool %s/%s has been updated", ipPool.Spec.NetworkName, ipPool.Namespace, ipPool.Name)
 
 	return status, nil
 }

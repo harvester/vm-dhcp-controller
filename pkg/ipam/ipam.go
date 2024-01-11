@@ -6,11 +6,8 @@ import (
 	"net/netip"
 	"sync"
 
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 	"github.com/sirupsen/logrus"
-)
-
-var (
-	UnspecifiedIPAddress = net.IP{0, 0, 0, 0}
 )
 
 type IPSubnet struct {
@@ -23,7 +20,7 @@ type IPSubnet struct {
 
 type IPAllocator struct {
 	ipam  map[string]IPSubnet
-	mutex *sync.RWMutex
+	mutex sync.RWMutex
 }
 
 func New() *IPAllocator {
@@ -32,12 +29,11 @@ func New() *IPAllocator {
 
 func NewIPAllocator() *IPAllocator {
 	return &IPAllocator{
-		ipam:  make(map[string]IPSubnet),
-		mutex: new(sync.RWMutex),
+		ipam: make(map[string]IPSubnet),
 	}
 }
 
-func (a *IPAllocator) NewIPSubnet(name string, cidr string, start, end net.IP) error {
+func (a *IPAllocator) NewIPSubnet(name, cidr, start, end string) error {
 	// Calculate the broadcast IP address
 	ip, ipNet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -50,24 +46,42 @@ func (a *IPAllocator) NewIPSubnet(name string, cidr string, start, end net.IP) e
 		broadcast[i] = octet | ^mask[i]
 	}
 
-	// Expand the map of allocated IP addresses ranging from the start to end IP address
-	ips := make(map[string]bool)
-	firstIP, ok := netip.AddrFromSlice(start)
+	startIP := net.ParseIP(start)
+	if !ipNet.Contains(startIP) {
+		return fmt.Errorf("start ip address %s is not within subnet %s range", start, cidr)
+	}
+	endIP := net.ParseIP(end)
+	if !ipNet.Contains(endIP) {
+		return fmt.Errorf("end ip address %s is not within subnet %s range", end, cidr)
+	}
+
+	startAddr, ok := netip.AddrFromSlice(startIP)
 	if !ok {
 		return fmt.Errorf("cannot convert ip address %s", start)
 	}
-	lastIP, ok := netip.AddrFromSlice(end)
+	endAddr, ok := netip.AddrFromSlice(endIP)
 	if !ok {
 		return fmt.Errorf("cannot convert ip address %s", end)
 	}
-	for ip := firstIP; lastIP.Compare(ip.Prev()) > 0; ip = ip.Next() {
+
+	if !startAddr.Less(endAddr) {
+		return fmt.Errorf("end ip address %s is less than start ip addreee %s", end, start)
+	}
+
+	if endIP.Equal(broadcast) {
+		return fmt.Errorf("end ip address %s equals broadcast ip address %s", end, broadcast.String())
+	}
+
+	// Expand the map of allocated IP addresses ranging from the start to end IP address
+	ips := make(map[string]bool)
+	for ip := startAddr; endAddr.Compare(ip.Prev()) > 0; ip = ip.Next() {
 		ips[ip.Unmap().String()] = false
 	}
 
 	ipSubnet := IPSubnet{
 		ipNet:     ipNet,
-		start:     start,
-		end:       end,
+		start:     startIP.To4(),
+		end:       endIP.To4(),
 		broadcast: broadcast,
 		ips:       ips,
 	}
@@ -82,54 +96,54 @@ func (a *IPAllocator) DeleteIPSubnet(name string) {
 }
 
 func (a *IPAllocator) IsNetworkInitialized(name string) bool {
-	_, ok := a.ipam[name]
-	return ok
+	_, exists := a.ipam[name]
+	return exists
 }
 
-func (a *IPAllocator) AllocateIP(name string, designatedIPStr string) (net.IP, error) {
+func (a *IPAllocator) AllocateIP(name string, ipAddress string) (string, error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
 	// Sanity check
 	if _, exists := a.ipam[name]; !exists {
-		return UnspecifiedIPAddress, fmt.Errorf("network %s does not exist", name)
+		return "", fmt.Errorf("network %s does not exist", name)
 	}
 
-	designatedIP := net.ParseIP(designatedIPStr)
+	designatedIP := net.ParseIP(ipAddress)
 
-	if designatedIP.String() != UnspecifiedIPAddress.String() {
+	if !designatedIP.IsUnspecified() {
 		ok := a.ipam[name].ipNet.Contains(designatedIP)
 		if !ok {
-			return UnspecifiedIPAddress, fmt.Errorf("designated ip %s is not in the subnet %s/%s", designatedIP.String(), a.ipam[name].ipNet.IP.String(), a.ipam[name].ipNet.Mask.String())
+			return util.UnspecifiedIPAddress, fmt.Errorf("designated ip %s is not in the subnet %s/%s", designatedIP.String(), a.ipam[name].ipNet.IP.String(), a.ipam[name].ipNet.Mask.String())
 		}
 
 		if a.ipam[name].broadcast.Equal(designatedIP) {
-			return UnspecifiedIPAddress, fmt.Errorf("designated ip %s equals the broadcast address %s", designatedIP.String(), a.ipam[name].broadcast.String())
+			return util.UnspecifiedIPAddress, fmt.Errorf("designated ip %s equals broadcast address %s", designatedIP.String(), a.ipam[name].broadcast.String())
 		}
 	}
 
 	for ip, isAllocated := range a.ipam[name].ips {
-		if designatedIP.String() != UnspecifiedIPAddress.String() {
+		if !designatedIP.IsUnspecified() {
 			if ip == designatedIP.String() {
 				if isAllocated {
-					return UnspecifiedIPAddress, fmt.Errorf("designated ip %s is already allocated", designatedIP.String())
+					return util.UnspecifiedIPAddress, fmt.Errorf("designated ip %s is already allocated", designatedIP.String())
 				} else {
 					a.ipam[name].ips[ip] = true
-					return net.ParseIP(ip), nil
+					return ip, nil
 				}
 			}
 		} else {
 			if !isAllocated {
 				a.ipam[name].ips[ip] = true
-				return net.ParseIP(ip), nil
+				return ip, nil
 			}
 		}
 	}
 
-	return UnspecifiedIPAddress, fmt.Errorf("no more ip addresses left in network %s", name)
+	return util.UnspecifiedIPAddress, fmt.Errorf("no more ip addresses left in network %s", name)
 }
 
-func (a *IPAllocator) DeallocateIP(name string, designatedIPStr string) error {
+func (a *IPAllocator) DeallocateIP(name, ipAddress string) error {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
@@ -138,18 +152,18 @@ func (a *IPAllocator) DeallocateIP(name string, designatedIPStr string) error {
 		return fmt.Errorf("network %s does not exist", name)
 	}
 
-	isAllocated, exists := a.ipam[name].ips[designatedIPStr]
+	isAllocated, exists := a.ipam[name].ips[ipAddress]
 	if !exists {
-		return fmt.Errorf("to-be-deallocated ip %s was not found in network %s ipam", designatedIPStr, name)
+		return fmt.Errorf("to-be-deallocated ip %s was not found in network %s ipam", ipAddress, name)
 	}
 	if isAllocated {
-		a.ipam[name].ips[designatedIPStr] = false
+		a.ipam[name].ips[ipAddress] = false
 	}
 
 	return nil
 }
 
-func (a *IPAllocator) RevokeIP(name string, designatedIPStr string) error {
+func (a *IPAllocator) RevokeIP(name, ipAddress string) error {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
@@ -158,12 +172,12 @@ func (a *IPAllocator) RevokeIP(name string, designatedIPStr string) error {
 		return fmt.Errorf("network %s does not exist", name)
 	}
 
-	delete(a.ipam[name].ips, designatedIPStr)
+	delete(a.ipam[name].ips, ipAddress)
 
 	return nil
 }
 
-func (a *IPAllocator) IsAllocated(name string, designatedIPStr string) (bool, error) {
+func (a *IPAllocator) IsAllocated(name, ipAddress string) (bool, error) {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()
 
@@ -174,9 +188,9 @@ func (a *IPAllocator) IsAllocated(name string, designatedIPStr string) (bool, er
 		return isAllocated, fmt.Errorf("network %s does not exist", name)
 	}
 
-	isAllocated, exists := a.ipam[name].ips[designatedIPStr]
+	isAllocated, exists := a.ipam[name].ips[ipAddress]
 	if !exists {
-		return isAllocated, fmt.Errorf("desigated ip %s was not found in network %s ipam", designatedIPStr, name)
+		return isAllocated, fmt.Errorf("ip %s was not found in network %s ipam", ipAddress, name)
 	}
 
 	return isAllocated, nil

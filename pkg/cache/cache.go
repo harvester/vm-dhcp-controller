@@ -2,11 +2,12 @@ package cache
 
 import (
 	"fmt"
+	"net"
 	"sync"
 )
 
 type MACSet struct {
-	macs map[string]struct{}
+	macs map[string]net.IP
 }
 
 type CacheAllocator struct {
@@ -24,14 +25,18 @@ func NewCacheAllocator() *CacheAllocator {
 	}
 }
 
-func (c *CacheAllocator) NewMACIPMap(name string) error {
+func (c *CacheAllocator) NewMACSet(name string) error {
 	c.cache[name] = MACSet{
-		macs: make(map[string]struct{}),
+		macs: make(map[string]net.IP),
 	}
 	return nil
 }
 
-func (c *CacheAllocator) AddEntry(name, macAddress string) error {
+func (c *CacheAllocator) DeleteMACSet(name string) {
+	delete(c.cache, name)
+}
+
+func (c *CacheAllocator) AddMAC(name, macAddress, ipAddress string) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -40,12 +45,12 @@ func (c *CacheAllocator) AddEntry(name, macAddress string) error {
 		return fmt.Errorf("network %s does not exist", name)
 	}
 
-	c.cache[name].macs[macAddress] = struct{}{}
+	c.cache[name].macs[macAddress] = net.ParseIP(ipAddress)
 
 	return nil
 }
 
-func (c *CacheAllocator) DeleteEntry(name, macAddress string) error {
+func (c *CacheAllocator) DeleteMAC(name, macAddress string) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -59,7 +64,7 @@ func (c *CacheAllocator) DeleteEntry(name, macAddress string) error {
 	return nil
 }
 
-func (c *CacheAllocator) HasEntry(name, macAddress string) (bool, error) {
+func (c *CacheAllocator) HasMAC(name, macAddress string) (bool, error) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
@@ -71,4 +76,21 @@ func (c *CacheAllocator) HasEntry(name, macAddress string) (bool, error) {
 	_, exists := c.cache[name].macs[macAddress]
 
 	return exists, nil
+}
+
+func (c *CacheAllocator) GetIPByMAC(name, macAddress string) (string, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	// Sanity check
+	if _, exists := c.cache[name]; !exists {
+		return "", fmt.Errorf("network %s does not exist", name)
+	}
+
+	ipAddress, exists := c.cache[name].macs[macAddress]
+	if !exists {
+		return "", fmt.Errorf("mac %s not found in network %s", macAddress, name)
+	}
+
+	return ipAddress.String(), nil
 }

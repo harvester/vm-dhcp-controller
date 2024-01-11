@@ -1,8 +1,6 @@
 package v1alpha1
 
 import (
-	"net"
-
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,15 +38,15 @@ type IPPoolSpec struct {
 }
 
 type IPv4Config struct {
-	ServerIP net.IP `json:"serverIP,omitempty"`
+	ServerIP string `json:"serverIP,omitempty"`
 	CIDR     string `json:"cidr,omitempty"`
 	Pool     Pool   `json:"pool,omitempty"`
 
 	// +optional
-	Router net.IP `json:"router,omitempty"`
+	Router string `json:"router,omitempty"`
 
 	// +optional
-	DNS []net.IP `json:"dns,omitempty"`
+	DNS []string `json:"dns,omitempty"`
 
 	// +optional
 	DomainName *string `json:"domainName,omitempty"`
@@ -64,11 +62,11 @@ type IPv4Config struct {
 }
 
 type Pool struct {
-	Start net.IP `json:"start,omitempty"`
-	End   net.IP `json:"end,omitempty"`
+	Start string `json:"start,omitempty"`
+	End   string `json:"end,omitempty"`
 
 	// +optional
-	Exclude []net.IP `json:"exclude,omitempty"`
+	Exclude []string `json:"exclude,omitempty"`
 }
 
 type IPPoolStatus struct {

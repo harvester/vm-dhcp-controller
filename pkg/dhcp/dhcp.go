@@ -44,14 +44,14 @@ func NewDHCPAllocator() *DHCPAllocator {
 
 func (a *DHCPAllocator) AddLease(
 	hwAddr string,
-	serverIP net.IP,
-	clientIP net.IP,
+	serverIP string,
+	clientIP string,
 	cidr string,
-	routerIP net.IP,
-	DNSServers []net.IP,
+	routerIP string,
+	dnsServers []string,
 	domainName *string,
 	domainSearch []string,
-	NTPServers []string,
+	ntpServers []string,
 	leaseTime *int,
 ) (err error) {
 	a.mutex.Lock()
@@ -70,8 +70,8 @@ func (a *DHCPAllocator) AddLease(
 	}
 
 	lease := DHCPLease{}
-	lease.ServerIP = serverIP
-	lease.ClientIP = clientIP
+	lease.ServerIP = net.ParseIP(serverIP)
+	lease.ClientIP = net.ParseIP(clientIP)
 
 	_, ipNet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -79,31 +79,35 @@ func (a *DHCPAllocator) AddLease(
 	}
 	lease.SubnetMask = ipNet.Mask
 
-	lease.Router = routerIP
-	lease.DNS = append(lease.DNS, DNSServers...)
+	lease.Router = net.ParseIP(routerIP)
+	for _, dnsServer := range dnsServers {
+		dnsServerIP := net.ParseIP(dnsServer)
+		lease.DNS = append(lease.DNS, dnsServerIP)
+	}
 	if domainName == nil {
 		lease.DomainName = ""
 	} else {
 		lease.DomainName = *domainName
 	}
 	lease.DomainSearch = domainSearch
-	for i := 0; i < len(NTPServers); i++ {
-		hostip := net.ParseIP(NTPServers[i])
-		if hostip.To4() != nil {
-			lease.NTP = append(lease.NTP, net.ParseIP(NTPServers[i]))
-		} else {
-			hostips, err := net.LookupIP(NTPServers[i])
-			if err != nil {
-				logrus.Errorf("(dhcp.AddLease) cannot get any ip addresses from ntp domainname entry %s: %s", NTPServers[i], err)
-			}
-			for _, ip := range hostips {
-				if ip.To4() != nil {
-					lease.NTP = append(lease.NTP, ip)
-				}
 
+	for _, ntpServer := range ntpServers {
+		ntpServerIP := net.ParseIP(ntpServer)
+		if ntpServerIP.To4() != nil {
+			lease.NTP = append(lease.NTP, ntpServerIP.To4())
+		} else {
+			ntpServerIPs, err := net.LookupIP(ntpServer)
+			if err != nil {
+				logrus.Errorf("(dhcp.AddLease) cannot get any ip addresses from ntp domainname entry %s: %s", ntpServer, err)
+			}
+			for _, ip := range ntpServerIPs {
+				if ip.To4() != nil {
+					lease.NTP = append(lease.NTP, ip.To4())
+				}
 			}
 		}
 	}
+
 	if leaseTime == nil {
 		lease.LeaseTime = 0
 	} else {
