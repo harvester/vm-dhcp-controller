@@ -70,8 +70,7 @@ type Pool struct {
 }
 
 type IPPoolStatus struct {
-	LastUpdate            metav1.Time `json:"lastUpdate,omitempty"`
-	LastUpdateBeforeStart metav1.Time `json:"lastUpdateBeforeStart,omitempty"`
+	LastUpdate metav1.Time `json:"lastUpdate,omitempty"`
 
 	// +optional
 	IPv4 *IPv4Status `json:"ipv4,omitempty"`

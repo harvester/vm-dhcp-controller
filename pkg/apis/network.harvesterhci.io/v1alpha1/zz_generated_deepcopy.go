@@ -108,7 +108,6 @@ func (in *IPPoolSpec) DeepCopy() *IPPoolSpec {
 func (in *IPPoolStatus) DeepCopyInto(out *IPPoolStatus) {
 	*out = *in
 	in.LastUpdate.DeepCopyInto(&out.LastUpdate)
-	in.LastUpdateBeforeStart.DeepCopyInto(&out.LastUpdateBeforeStart)
 	if in.IPv4 != nil {
 		in, out := &in.IPv4, &out.IPv4
 		*out = new(IPv4Status)
