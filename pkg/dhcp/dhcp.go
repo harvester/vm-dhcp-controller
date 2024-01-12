@@ -2,6 +2,7 @@ package dhcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"sync"
@@ -26,10 +27,18 @@ type DHCPLease struct {
 	LeaseTime    int
 }
 
+func (l *DHCPLease) String() string {
+	b, err := json.Marshal(l)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
 type DHCPAllocator struct {
 	leases  map[string]DHCPLease
 	servers map[string]*server4.Server
-	mutex   sync.Mutex
+	mutex   sync.RWMutex
 }
 
 func NewDHCPAllocator() *DHCPAllocator {
@@ -65,7 +74,7 @@ func (a *DHCPAllocator) AddLease(
 		return fmt.Errorf("hwaddr %s is not valid", hwAddr)
 	}
 
-	if a.CheckLease(hwAddr) {
+	if a.checkLease(hwAddr) {
 		return fmt.Errorf("lease for hwaddr %s already exists", hwAddr)
 	}
 
@@ -121,12 +130,16 @@ func (a *DHCPAllocator) AddLease(
 	return
 }
 
-func (a *DHCPAllocator) CheckLease(hwAddr string) bool {
+func (a *DHCPAllocator) checkLease(hwAddr string) bool {
 	_, exists := a.leases[hwAddr]
+
 	return exists
 }
 
 func (a *DHCPAllocator) GetLease(hwAddr string) (lease DHCPLease) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
 	return a.leases[hwAddr]
 }
 
@@ -134,7 +147,7 @@ func (a *DHCPAllocator) DeleteLease(hwAddr string) (err error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	if !a.CheckLease(hwAddr) {
+	if !a.checkLease(hwAddr) {
 		return fmt.Errorf("lease for hwaddr %s does not exists", hwAddr)
 	}
 
@@ -146,6 +159,9 @@ func (a *DHCPAllocator) DeleteLease(hwAddr string) (err error) {
 }
 
 func (a *DHCPAllocator) Usage() {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
 	for hwaddr, lease := range a.leases {
 		logrus.Infof("(dhcp.Usage) lease: hwaddr=%s, clientip=%s, netmask=%s, router=%s, dns=%+v, domain=%s, domainsearch=%+v, ntp=%+v, leasetime=%d",
 			hwaddr,
@@ -162,6 +178,9 @@ func (a *DHCPAllocator) Usage() {
 }
 
 func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv4.DHCPv4) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
 	if m == nil {
 		logrus.Errorf("(dhcp.dhcpHandler) packet is nil!")
 		return
@@ -298,4 +317,16 @@ func (a *DHCPAllocator) Stop(nic string) (err error) {
 	logrus.Infof("(dhcp.Stop) stopping DHCP service on nic %s", nic)
 
 	return a.servers[nic].Close()
+}
+
+func (a *DHCPAllocator) ListAll(name string) (map[string]string, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
+	leases := make(map[string]string, len(a.leases))
+	for mac, lease := range a.leases {
+		leases[mac] = lease.String()
+	}
+
+	return leases, nil
 }

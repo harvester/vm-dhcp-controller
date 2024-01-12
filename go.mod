@@ -27,7 +27,7 @@ require (
 )
 
 require (
-	github.com/gorilla/mux v1.8.0 // indirect
+	github.com/gorilla/mux v1.8.0
 	github.com/rancher/dynamiclistener v0.3.5 // indirect
 	golang.org/x/crypto v0.14.0 // indirect
 	k8s.io/klog v1.0.0 // indirect

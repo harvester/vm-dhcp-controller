@@ -25,72 +25,89 @@ func NewCacheAllocator() *CacheAllocator {
 	}
 }
 
-func (c *CacheAllocator) NewMACSet(name string) error {
-	c.cache[name] = MACSet{
+func (a *CacheAllocator) NewMACSet(name string) error {
+	a.cache[name] = MACSet{
 		macs: make(map[string]net.IP),
 	}
 	return nil
 }
 
-func (c *CacheAllocator) DeleteMACSet(name string) {
-	delete(c.cache, name)
+func (a *CacheAllocator) DeleteMACSet(name string) {
+	delete(a.cache, name)
 }
 
-func (c *CacheAllocator) AddMAC(name, macAddress, ipAddress string) error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+func (a *CacheAllocator) AddMAC(name, macAddress, ipAddress string) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
 
 	// Sanity check
-	if _, exists := c.cache[name]; !exists {
+	if _, exists := a.cache[name]; !exists {
 		return fmt.Errorf("network %s does not exist", name)
 	}
 
-	c.cache[name].macs[macAddress] = net.ParseIP(ipAddress)
+	a.cache[name].macs[macAddress] = net.ParseIP(ipAddress)
 
 	return nil
 }
 
-func (c *CacheAllocator) DeleteMAC(name, macAddress string) error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+func (a *CacheAllocator) DeleteMAC(name, macAddress string) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
 
 	// Sanity check
-	if _, exists := c.cache[name]; !exists {
+	if _, exists := a.cache[name]; !exists {
 		return fmt.Errorf("network %s does not exist", name)
 	}
 
-	delete(c.cache[name].macs, macAddress)
+	delete(a.cache[name].macs, macAddress)
 
 	return nil
 }
 
-func (c *CacheAllocator) HasMAC(name, macAddress string) (bool, error) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+func (a *CacheAllocator) HasMAC(name, macAddress string) (bool, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
 
 	// Sanity check
-	if _, exists := c.cache[name]; !exists {
+	if _, exists := a.cache[name]; !exists {
 		return false, fmt.Errorf("network %s does not exist", name)
 	}
 
-	_, exists := c.cache[name].macs[macAddress]
+	_, exists := a.cache[name].macs[macAddress]
 
 	return exists, nil
 }
 
-func (c *CacheAllocator) GetIPByMAC(name, macAddress string) (string, error) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+func (a *CacheAllocator) GetIPByMAC(name, macAddress string) (string, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
 
 	// Sanity check
-	if _, exists := c.cache[name]; !exists {
+	if _, exists := a.cache[name]; !exists {
 		return "", fmt.Errorf("network %s does not exist", name)
 	}
 
-	ipAddress, exists := c.cache[name].macs[macAddress]
+	ipAddress, exists := a.cache[name].macs[macAddress]
 	if !exists {
 		return "", fmt.Errorf("mac %s not found in network %s", macAddress, name)
 	}
 
 	return ipAddress.String(), nil
+}
+
+func (a *CacheAllocator) ListAll(name string) (map[string]string, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
+	// Sanity check
+	if _, exists := a.cache[name]; !exists {
+		return nil, fmt.Errorf("network %s does not exist", name)
+	}
+
+	macs := make(map[string]string, len(a.cache[name].macs))
+	for mac, ip := range a.cache[name].macs {
+		macs[mac] = ip.String()
+	}
+
+	return macs, nil
 }

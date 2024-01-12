@@ -16,7 +16,6 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/dhcp"
 	clientset "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned"
-	"github.com/harvester/vm-dhcp-controller/pkg/server"
 )
 
 const (
@@ -33,7 +32,7 @@ type Agent struct {
 	k8sClient *clientset.Clientset
 
 	ippoolEventHandler *ippool.EventHandler
-	dhcpAllocator      *dhcp.DHCPAllocator
+	DHCPAllocator      *dhcp.DHCPAllocator
 	poolCache          map[string]string
 }
 
@@ -85,7 +84,7 @@ func NewAgent(ctx context.Context, options *config.AgentOptions) *Agent {
 		k8sClient: NewK8sClient(options.KubeconfigPath),
 		poolRef:   options.IPPoolRef,
 
-		dhcpAllocator: dhcpAllocator,
+		DHCPAllocator: dhcpAllocator,
 		ippoolEventHandler: ippool.NewEventHandler(
 			ctx,
 			kubeconfigPath,
@@ -109,7 +108,7 @@ func (a *Agent) Run() error {
 		case <-egctx.Done():
 			return nil
 		default:
-			return a.dhcpAllocator.Run(defaultNetworkInterface, a.dryRun)
+			return a.DHCPAllocator.Run(defaultNetworkInterface, a.dryRun)
 		}
 	})
 
@@ -123,15 +122,6 @@ func (a *Agent) Run() error {
 				logrus.Fatal(err)
 			}
 			return a.ippoolEventHandler.EventListener()
-		}
-	})
-
-	eg.Go(func() error {
-		select {
-		case <-egctx.Done():
-			return nil
-		default:
-			return server.NewServer(egctx)
 		}
 	})
 

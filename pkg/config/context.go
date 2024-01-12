@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	harvesterv1 "github.com/harvester/harvester/pkg/apis/harvesterhci.io/v1beta1"
 	"github.com/rancher/lasso/pkg/controller"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
+	"github.com/harvester/vm-dhcp-controller/pkg/allocator"
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/cache"
 	"github.com/harvester/vm-dhcp-controller/pkg/crd"
@@ -46,6 +48,24 @@ func init() {
 }
 
 type RegisterFunc func(context.Context, *Management) error
+
+type RegisterHandlerFunc func(allocator.Allocator) http.Handler
+
+type Handle struct {
+	Allocator allocator.Allocator
+	Path      string
+	RegisterHandlerFunc
+}
+
+type Route struct {
+	Prefix  string
+	Handles []Handle
+}
+
+type RouteConfig struct {
+	Prefix    string
+	Allocator allocator.Allocator
+}
 
 type Image struct {
 	Repository string

@@ -11,7 +11,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
-	"github.com/harvester/vm-dhcp-controller/pkg/controllers"
+	"github.com/harvester/vm-dhcp-controller/pkg/controller"
+	"github.com/harvester/vm-dhcp-controller/pkg/server"
+	controllerserver "github.com/harvester/vm-dhcp-controller/pkg/server/controller"
 )
 
 var (
@@ -43,7 +45,7 @@ func run(options *config.ControllerOptions) error {
 	}
 
 	callback := func(ctx context.Context) {
-		if err := management.Register(ctx, cfg, controllers.RegisterFuncList); err != nil {
+		if err := management.Register(ctx, cfg, controller.RegisterFuncList); err != nil {
 			panic(err)
 		}
 
@@ -53,6 +55,10 @@ func run(options *config.ControllerOptions) error {
 
 		<-ctx.Done()
 	}
+
+	s := server.NewHTTPServer()
+	s.Register(controllerserver.NewRoutes(management))
+	go s.Run()
 
 	if noLeaderElection {
 		callback(ctx)

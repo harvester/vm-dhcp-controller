@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strconv"
 	"sync"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
@@ -271,4 +272,21 @@ func (a *IPAllocator) GetUsage(name string) error {
 	)
 
 	return nil
+}
+
+func (a *IPAllocator) ListAll(name string) (map[string]string, error) {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+
+	// Sanity check
+	if _, exists := a.ipam[name]; !exists {
+		return nil, fmt.Errorf("network %s does not exist", name)
+	}
+
+	ips := make(map[string]string, len(a.ipam[name].ips))
+	for ip, isAllocated := range a.ipam[name].ips {
+		ips[ip] = strconv.FormatBool(isAllocated)
+	}
+
+	return ips, nil
 }
