@@ -59,7 +59,7 @@ securityContext: {}
 
 service:
   type: ClusterIP
-  port: 8080
+  metricsPort: 8080
 
 ingress:
   enabled: false
