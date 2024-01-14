@@ -8,7 +8,6 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/agent"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/server"
-	agentserver "github.com/harvester/vm-dhcp-controller/pkg/server/agent"
 )
 
 func run(ctx context.Context, options *config.AgentOptions) error {
@@ -16,13 +15,11 @@ func run(ctx context.Context, options *config.AgentOptions) error {
 
 	agent := agent.NewAgent(ctx, options)
 
-	var routeConfigs = []config.RouteConfig{
-		{
-			Allocator: agent.DHCPAllocator,
-		},
+	httpServerOptions := config.HTTPServerOptions{
+		DHCPAllocator: agent.DHCPAllocator,
 	}
-	s := server.NewHTTPServer()
-	s.Register(agentserver.NewRoutes(routeConfigs))
+	s := server.NewHTTPServer(&httpServerOptions)
+	s.RegisterAgentHandlers()
 	go s.Run()
 
 	return agent.Run()

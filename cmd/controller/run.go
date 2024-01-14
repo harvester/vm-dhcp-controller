@@ -13,7 +13,6 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/controller"
 	"github.com/harvester/vm-dhcp-controller/pkg/server"
-	controllerserver "github.com/harvester/vm-dhcp-controller/pkg/server/controller"
 )
 
 var (
@@ -56,8 +55,13 @@ func run(options *config.ControllerOptions) error {
 		<-ctx.Done()
 	}
 
-	s := server.NewHTTPServer()
-	s.Register(controllerserver.NewRoutes(management))
+	httpServerOptions := config.HTTPServerOptions{
+		IPAllocator:      management.IPAllocator,
+		CacheAllocator:   management.CacheAllocator,
+		MetricsAllocator: management.MetricsAllocator,
+	}
+	s := server.NewHTTPServer(&httpServerOptions)
+	s.RegisterControllerHandlers()
 	go s.Run()
 
 	if noLeaderElection {

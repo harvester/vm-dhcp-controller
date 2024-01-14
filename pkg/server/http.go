@@ -15,16 +15,18 @@ import (
 const defaultPort = 8080
 
 type HTTPServer struct {
+	*config.HTTPServerOptions
 	router *mux.Router
 }
 
-func NewHTTPServer() *HTTPServer {
+func NewHTTPServer(httpServerOptions *config.HTTPServerOptions) *HTTPServer {
 	return &HTTPServer{
-		router: mux.NewRouter(),
+		HTTPServerOptions: httpServerOptions,
+		router:            mux.NewRouter(),
 	}
 }
 
-func (s *HTTPServer) Register(routes []config.Route) {
+func (s *HTTPServer) registerProbeHandlers() {
 	s.router.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewEncoder(w).Encode(map[string]bool{"ok": true}); err != nil {
 			logrus.Fatal(err)
@@ -35,19 +37,20 @@ func (s *HTTPServer) Register(routes []config.Route) {
 			logrus.Fatal(err)
 		}
 	})
+}
 
-	for _, route := range routes {
-		if route.Prefix != "" {
-			sr := s.router.PathPrefix(route.Prefix).Subrouter()
-			for _, handle := range route.Handles {
-				sr.Handle(handle.Path, handle.RegisterHandlerFunc(handle.Allocator))
-			}
-		} else {
-			for _, handle := range route.Handles {
-				s.router.Handle(handle.Path, handle.RegisterHandlerFunc(handle.Allocator))
-			}
-		}
-	}
+func (s *HTTPServer) RegisterControllerHandlers() {
+	s.registerProbeHandlers()
+
+	s.router.Handle("/ipams/{networkName:.*}", listIPByNetworkHandler(s.IPAllocator))
+	s.router.Handle("/caches/{networkName:.*}", listCacheByNetworkHandler(s.CacheAllocator))
+	s.router.Handle("/metrics", metricsHandler(s.MetricsAllocator))
+}
+
+func (s *HTTPServer) RegisterAgentHandlers() {
+	s.registerProbeHandlers()
+
+	s.router.Handle("/leases", listLeaseHandler(s.DHCPAllocator))
 }
 
 func (s *HTTPServer) Run() {

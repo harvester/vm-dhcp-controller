@@ -25,6 +25,7 @@ import (
 	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
+	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
@@ -65,8 +66,9 @@ type Handler struct {
 	noAgent                 bool
 	noDHCP                  bool
 
-	cacheAllocator *cache.CacheAllocator
-	ipAllocator    *ipam.IPAllocator
+	cacheAllocator   *cache.CacheAllocator
+	ipAllocator      *ipam.IPAllocator
+	metricsAllocator *metrics.MetricsAllocator
 
 	ippoolController ctlnetworkv1.IPPoolController
 	ippoolClient     ctlnetworkv1.IPPoolClient
@@ -88,8 +90,9 @@ func Register(ctx context.Context, management *config.Management) error {
 		noAgent:                 management.Options.NoAgent,
 		noDHCP:                  management.Options.NoDHCP,
 
-		cacheAllocator: management.CacheAllocator,
-		ipAllocator:    management.IPAllocator,
+		cacheAllocator:   management.CacheAllocator,
+		ipAllocator:      management.IPAllocator,
+		metricsAllocator: management.MetricsAllocator,
 
 		ippoolController: ippools,
 		ippoolClient:     ippools,
@@ -185,6 +188,19 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 	}
 	ipv4Status.Available = available
 
+	// Update IPPool metrics
+	h.metricsAllocator.UpdateIPPoolUsed(
+		key,
+		ipPool.Spec.IPv4Config.CIDR,
+		ipPool.Spec.NetworkName,
+		used,
+	)
+	h.metricsAllocator.UpdateIPPoolAvailable(key,
+		ipPool.Spec.IPv4Config.CIDR,
+		ipPool.Spec.NetworkName,
+		available,
+	)
+
 	allocated := ipv4Status.Allocated
 	if allocated == nil {
 		allocated = make(map[string]string)
@@ -231,6 +247,11 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 
 	h.ipAllocator.DeleteIPSubnet(ipPool.Spec.NetworkName)
 	h.cacheAllocator.DeleteMACSet(ipPool.Spec.NetworkName)
+	h.metricsAllocator.DeleteIPPool(
+		key,
+		ipPool.Spec.IPv4Config.CIDR,
+		ipPool.Spec.NetworkName,
+	)
 
 	return ipPool, nil
 }

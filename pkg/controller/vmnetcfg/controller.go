@@ -2,6 +2,7 @@ package vmnetcfg
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	"github.com/rancher/wrangler/pkg/kv"
@@ -14,14 +15,16 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
+	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
 const controllerName = "vm-dhcp-vmnetcfg-controller"
 
 type Handler struct {
-	cacheAllocator *cache.CacheAllocator
-	ipAllocator    *ipam.IPAllocator
+	cacheAllocator   *cache.CacheAllocator
+	ipAllocator      *ipam.IPAllocator
+	metricsAllocator *metrics.MetricsAllocator
 
 	vmnetcfgController ctlnetworkv1.VirtualMachineNetworkConfigController
 	vmnetcfgClient     ctlnetworkv1.VirtualMachineNetworkConfigClient
@@ -36,8 +39,9 @@ func Register(ctx context.Context, management *config.Management) error {
 	ippools := management.HarvesterNetworkFactory.Network().V1alpha1().IPPool()
 
 	handler := &Handler{
-		cacheAllocator: management.CacheAllocator,
-		ipAllocator:    management.IPAllocator,
+		cacheAllocator:   management.CacheAllocator,
+		ipAllocator:      management.IPAllocator,
+		metricsAllocator: management.MetricsAllocator,
 
 		vmnetcfgController: vmnetcfgs,
 		vmnetcfgClient:     vmnetcfgs,
@@ -84,6 +88,15 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 				Status:             "Allocated",
 			}
 			ncStatuses = append(ncStatuses, ncStatus)
+
+			// Update VirtualMachineNetworkConfig metrics
+			h.metricsAllocator.UpdateVmNetCfgStatus(
+				fmt.Sprintf("%s/%s", vmNetCfg.Namespace, vmNetCfg.Name),
+				ncStatus.NetworkName,
+				ncStatus.MACAddress,
+				ncStatus.AllocatedIPAddress,
+				ncStatus.Status,
+			)
 
 			// Update IPPool status
 			ipPoolNamespace, ipPoolName := kv.RSplit(nc.NetworkName, "/")
@@ -149,6 +162,15 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 		}
 		ncStatuses = append(ncStatuses, ncStatus)
 
+		// Update VirtualMachineNetworkConfig metrics
+		h.metricsAllocator.UpdateVmNetCfgStatus(
+			fmt.Sprintf("%s/%s", vmNetCfg.Namespace, vmNetCfg.Name),
+			ncStatus.NetworkName,
+			ncStatus.MACAddress,
+			ncStatus.AllocatedIPAddress,
+			ncStatus.Status,
+		)
+
 		// Update IPPool status
 		ipPoolNamespace, ipPoolName := kv.RSplit(nc.NetworkName, "/")
 		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
@@ -198,6 +220,8 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 	}
 
 	logrus.Debugf("(vmnetcfg.OnRemove) vmnetcfg configuration %s/%s has been removed", vmNetCfg.Namespace, vmNetCfg.Name)
+
+	h.metricsAllocator.DeleteVmNetCfgStatus(key)
 
 	for _, nc := range vmNetCfg.Status.NetworkConfig {
 		// Deallocate IP address from IPAM

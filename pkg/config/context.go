@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	harvesterv1 "github.com/harvester/harvester/pkg/apis/harvesterhci.io/v1beta1"
 	"github.com/rancher/lasso/pkg/controller"
@@ -21,15 +20,16 @@ import (
 	"k8s.io/client-go/tools/record"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/harvester/vm-dhcp-controller/pkg/allocator"
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/cache"
 	"github.com/harvester/vm-dhcp-controller/pkg/crd"
+	"github.com/harvester/vm-dhcp-controller/pkg/dhcp"
 	ctlcore "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core"
 	ctlcni "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io"
 	ctlkubevirt "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/kubevirt.io"
 	ctlnetwork "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io"
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
+	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
 )
 
 var (
@@ -48,24 +48,6 @@ func init() {
 }
 
 type RegisterFunc func(context.Context, *Management) error
-
-type RegisterHandlerFunc func(allocator.Allocator) http.Handler
-
-type Handle struct {
-	Allocator allocator.Allocator
-	Path      string
-	RegisterHandlerFunc
-}
-
-type Route struct {
-	Prefix  string
-	Handles []Handle
-}
-
-type RouteConfig struct {
-	Prefix    string
-	Allocator allocator.Allocator
-}
 
 type Image struct {
 	Repository string
@@ -97,6 +79,13 @@ type AgentOptions struct {
 	IPPoolRef      types.NamespacedName
 }
 
+type HTTPServerOptions struct {
+	CacheAllocator   *cache.CacheAllocator
+	IPAllocator      *ipam.IPAllocator
+	DHCPAllocator    *dhcp.DHCPAllocator
+	MetricsAllocator *metrics.MetricsAllocator
+}
+
 type Management struct {
 	ctx context.Context
 
@@ -110,8 +99,9 @@ type Management struct {
 
 	ClientSet *kubernetes.Clientset
 
-	CacheAllocator *cache.CacheAllocator
-	IPAllocator    *ipam.IPAllocator
+	CacheAllocator   *cache.CacheAllocator
+	IPAllocator      *ipam.IPAllocator
+	MetricsAllocator *metrics.MetricsAllocator
 
 	Options *ControllerOptions
 
@@ -160,6 +150,7 @@ func SetupManagement(ctx context.Context, restConfig *rest.Config, options *Cont
 
 	management.CacheAllocator = cache.NewCacheAllocator()
 	management.IPAllocator = ipam.NewIPAllocator()
+	management.MetricsAllocator = metrics.NewMetricsAllocator()
 
 	harvesterNetwork, err := ctlnetwork.NewFactoryFromConfigWithOptions(restConfig, opts)
 	if err != nil {
