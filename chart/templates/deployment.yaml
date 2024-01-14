@@ -41,6 +41,10 @@ spec:
           - "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag | default .Chart.AppVersion }}"
           - --service-account-name
           - {{ include "harvester-vm-dhcp-controller.serviceAccountName" . }}-agent
+          ports:
+          - name: metrics
+            protocol: TCP
+            containerPort: {{ .Values.service.metricsPort }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

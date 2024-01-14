@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    {{- include "harvester-vm-dhcp-controller.labels" . | nindent 4 }}
+  name: {{ include "harvester-vm-dhcp-controller.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  endpoints:
+    - port: metrics
+      scheme: http
+  jobLabel: jobLabel
+  selector:
+    matchLabels:
+      {{- include "harvester-vm-dhcp-controller.selectorLabels" . | nindent 6 }}
