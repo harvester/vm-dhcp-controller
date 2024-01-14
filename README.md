@@ -151,3 +151,79 @@ spec:
     networkName: default/net-48
 EOF
 ```
+
+## Observability
+
+### Metrics
+
+The following metrics are included in the application which can be used for monitoring:
+
+```
+Name: vmdhcpcontroller_ippool_used
+Description: Amount of IP addresses which are in use in an IPPool
+```
+
+```
+Dame: vmdhcpcontroller_ippool_available
+Description: Amount of IP addresses which are available in an IPPool
+```
+
+```
+Name: vmdhcpcontroller_vmnetcfg_status
+Description: Information and status of the VirtualMachineNetworkConfig objects
+```
+
+The chart also contains a ServiceMonitor object which can be automatically picked up by the Prometheus monitoring solution. To get a taste of what they look like, you can query the `/metrics` endpoint of the controller:
+
+```
+$ curl localhost:8080/metrics
+# HELP promhttp_metric_handler_errors_total Total number of internal errors encountered by the promhttp metric handler.
+# TYPE promhttp_metric_handler_errors_total counter
+promhttp_metric_handler_errors_total{cause="encoding"} 0
+promhttp_metric_handler_errors_total{cause="gathering"} 0
+# HELP vmdhcpcontroller_ippool_available Amount of IP addresses which are available
+# TYPE vmdhcpcontroller_ippool_available gauge
+vmdhcpcontroller_ippool_available{ippool="net-48",network="default/net-48",subnet="192.168.48.0/24"} 6
+vmdhcpcontroller_ippool_available{ippool="priv-net-all",network="default/priv-net-all",subnet="172.19.150.0/28"} 10
+vmdhcpcontroller_ippool_available{ippool="priv-net-cp",network="default/priv-net-cp",subnet="172.19.100.0/28"} 5
+vmdhcpcontroller_ippool_available{ippool="priv-net-wk",network="default/priv-net-wk",subnet="172.19.200.0/28"} 5
+# HELP vmdhcpcontroller_ippool_used Amount of IP addresses which are in use
+# TYPE vmdhcpcontroller_ippool_used gauge
+vmdhcpcontroller_ippool_used{ippool="net-48",network="default/net-48",subnet="192.168.48.0/24"} 2
+vmdhcpcontroller_ippool_used{ippool="priv-net-all",network="default/priv-net-all",subnet="172.19.150.0/28"} 0
+vmdhcpcontroller_ippool_used{ippool="priv-net-cp",network="default/priv-net-cp",subnet="172.19.100.0/28"} 0
+vmdhcpcontroller_ippool_used{ippool="priv-net-wk",network="default/priv-net-wk",subnet="172.19.200.0/28"} 0
+# HELP vmdhcpcontroller_vmnetcfg_status Status of the vmnetcfg objects
+# TYPE vmdhcpcontroller_vmnetcfg_status gauge
+vmdhcpcontroller_vmnetcfg_status{ip="192.168.48.82",mac="e2:67:41:51:64:ae",network="default/net-48",status="Allocated",vm="default/test-vm-01"} 1
+vmdhcpcontroller_vmnetcfg_status{ip="192.168.48.85",mac="aa:c9:4d:9d:59:53",network="default/net-48",status="Allocated",vm="default/test-vm-02"} 1
+```
+
+### Cache Dump
+
+#### Control Plane
+
+Besides checking the status of the custom resources like IPPool and VirtualMachineNetworkConfig objects, you can peek the caches to know the controller's current state.
+
+Check the IPAM cache to see the current IP address allocation of an IPPool:
+
+```
+$ curl localhost:8080/caches/default/net-48      
+{"aa:c9:4d:9d:59:53":"192.168.48.85","e2:67:41:51:64:ae":"192.168.48.82"}
+```
+
+Check the MAC cache to see the current MAC-to-IP address mapping of an IPPool:
+
+```
+$ curl localhost:8080/caches/default/net-48
+{"aa:c9:4d:9d:59:53":"192.168.48.85","e2:67:41:51:64:ae":"192.168.48.82"}
+```
+
+#### Data Plane
+
+DHCP leases are stored in memory. By querying the `/leases` endpoint of the agent, you can get a clear view on what leases are served by the embedded DHCP server for that particular IPPool.
+
+```
+$ curl localhost:8080/leases
+{"aa:c9:4d:9d:59:53":"{\"ServerIP\":\"192.168.48.77\",\"ClientIP\":\"192.168.48.85\",\"SubnetMask\":\"////AA==\",\"Router\":\"192.168.48.1\",\"DNS\":[\"1.1.1.1\"],\"DomainName\":\"aibao.moe\",\"DomainSearch\":[\"aibao.moe\"],\"NTP\":[\"103.147.22.149\",\"17.253.116.253\",\"112.104.189.124\",\"118.163.74.161\"],\"LeaseTime\":300}","e2:67:41:51:64:ae":"{\"ServerIP\":\"192.168.48.77\",\"ClientIP\":\"192.168.48.82\",\"SubnetMask\":\"////AA==\",\"Router\":\"192.168.48.1\",\"DNS\":[\"1.1.1.1\"],\"DomainName\":\"aibao.moe\",\"DomainSearch\":[\"aibao.moe\"],\"NTP\":[\"112.104.189.124\",\"118.163.74.161\",\"17.253.116.253\",\"103.147.22.149\"],\"LeaseTime\":300}"}
+```
