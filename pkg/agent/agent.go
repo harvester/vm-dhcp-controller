@@ -2,20 +2,15 @@ package agent
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/agent/ippool"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/dhcp"
-	clientset "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned"
 )
 
 const (
@@ -29,66 +24,26 @@ type Agent struct {
 	dryRun  bool
 	poolRef types.NamespacedName
 
-	k8sClient *clientset.Clientset
-
 	ippoolEventHandler *ippool.EventHandler
 	DHCPAllocator      *dhcp.DHCPAllocator
 	poolCache          map[string]string
 }
 
-func NewK8sClient(kubeconfigPath string) *clientset.Clientset {
-	var (
-		config *rest.Config
-		err    error
-	)
-
-	// creates the in-cluster config
-	config, err = rest.InClusterConfig()
-	if err != nil {
-		if err == rest.ErrNotInCluster {
-			// uses the current context in kubeconfig
-			// path-to-kubeconfig -- for example, /root/.kube/config
-			config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-			if err != nil {
-				panic(err.Error())
-			}
-		} else {
-			panic(err.Error())
-		}
-	}
-
-	clientset, err := clientset.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	return clientset
-}
-
 func NewAgent(ctx context.Context, options *config.AgentOptions) *Agent {
-	kubeconfigPath := os.Getenv("KUBECONFIG")
-	if kubeconfigPath == "" {
-		homeDir := os.Getenv("HOME")
-		kubeconfigPath = filepath.Join(homeDir, ".kube", "config")
-	}
-
-	kubeconfigContext := os.Getenv("KUBECONTEXT")
-
 	dhcpAllocator := dhcp.NewDHCPAllocator()
 	poolCache := make(map[string]string, 10)
 
 	return &Agent{
 		ctx: ctx,
 
-		dryRun:    options.DryRun,
-		k8sClient: NewK8sClient(options.KubeconfigPath),
-		poolRef:   options.IPPoolRef,
+		dryRun:  options.DryRun,
+		poolRef: options.IPPoolRef,
 
 		DHCPAllocator: dhcpAllocator,
 		ippoolEventHandler: ippool.NewEventHandler(
 			ctx,
-			kubeconfigPath,
-			kubeconfigContext,
+			options.KubeConfigPath,
+			options.KubeContext,
 			nil,
 			options.IPPoolRef,
 			dhcpAllocator,

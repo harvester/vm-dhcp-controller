@@ -19,7 +19,8 @@ var (
 
 	name           string
 	dryRun         bool
-	kubeconfigPath string
+	kubeConfigPath string
+	kubeContext    string
 	ippoolRef      string
 )
 
@@ -43,7 +44,8 @@ var rootCmd = &cobra.Command{
 		ipPoolNamespace, ipPoolName := kv.RSplit(ippoolRef, "/")
 		options := &config.AgentOptions{
 			DryRun:         dryRun,
-			KubeconfigPath: kubeconfigPath,
+			KubeConfigPath: kubeConfigPath,
+			KubeContext:    kubeContext,
 			IPPoolRef: types.NamespacedName{
 				Namespace: ipPoolNamespace,
 				Name:      ipPoolName,
@@ -65,7 +67,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&logTrace, "trace", trace, "set logging level to trace")
 
 	rootCmd.Flags().StringVar(&name, "name", os.Getenv("VM_DHCP_AGENT_NAME"), "The name of the vm-dhcp-agent instance")
-	rootCmd.Flags().StringVar(&kubeconfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to the kubeconfig file")
+	rootCmd.Flags().StringVar(&kubeConfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to the kubeconfig file")
+	rootCmd.Flags().StringVar(&kubeContext, "kubecontext", os.Getenv("KUBECONTEXT"), "Context name")
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Run vm-dhcp-agent without starting the DHCP server")
 	rootCmd.Flags().StringVar(&ippoolRef, "ippool-ref", os.Getenv("IPPOOL_REF"), "The IPPool object the agent should sync with")
 }

@@ -75,7 +75,8 @@ type ControllerOptions struct {
 
 type AgentOptions struct {
 	DryRun         bool
-	KubeconfigPath string
+	KubeConfigPath string
+	KubeContext    string
 	IPPoolRef      types.NamespacedName
 }
 

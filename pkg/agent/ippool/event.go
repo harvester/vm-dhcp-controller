@@ -83,8 +83,13 @@ func (e *EventHandler) getKubeConfig() (config *rest.Config, err error) {
 	}
 
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: e.kubeConfig},
-		&clientcmd.ConfigOverrides{ClusterInfo: clientcmdapi.Cluster{}, CurrentContext: e.kubeContext},
+		&clientcmd.ClientConfigLoadingRules{
+			ExplicitPath: e.kubeConfig,
+		},
+		&clientcmd.ConfigOverrides{
+			ClusterInfo:    clientcmdapi.Cluster{},
+			CurrentContext: e.kubeContext,
+		},
 	).ClientConfig()
 }
 
