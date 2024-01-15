@@ -10,8 +10,8 @@ import (
 )
 
 func (c *Controller) Update(ipPool *networkv1.IPPool) error {
-	if ipPool.Status.IPv4 == nil || ipPool.Status.IPv4.Allocated == nil {
-		return fmt.Errorf("ippool status has no record")
+	if ipPool.Status.IPv4 == nil {
+		return fmt.Errorf("ippool status has no records")
 	}
 	allocated := ipPool.Status.IPv4.Allocated
 	filterExcluded(allocated)

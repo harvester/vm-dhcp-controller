@@ -69,7 +69,7 @@ func (c *Controller) sync(event Event) (err error) {
 	}
 
 	if event.poolName != c.poolRef.Name {
-		logrus.Infof("(ippool.sync) IPPool %s is not our target", event.key)
+		logrus.Debugf("(ippool.sync) IPPool %s is not our target", event.key)
 		return
 	}
 
@@ -81,7 +81,7 @@ func (c *Controller) sync(event Event) (err error) {
 		}
 		logrus.Infof("(ippool.sync) UPDATE %s/%s", ipPool.Namespace, ipPool.Name)
 		if err := c.Update(ipPool); err != nil {
-			logrus.Errorf("(ippool.sync) failed to update DHCP lease store")
+			logrus.Errorf("(ippool.sync) failed to update DHCP lease store: %s", err.Error())
 		}
 	}
 

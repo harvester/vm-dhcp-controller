@@ -153,7 +153,7 @@ func (a *DHCPAllocator) DeleteLease(hwAddr string) (err error) {
 
 	delete(a.leases, hwAddr)
 
-	logrus.Debugf("(dhcp.DeleteLease) lease deleted for hardware address: %s", hwAddr)
+	logrus.Infof("(dhcp.DeleteLease) lease deleted for hardware address: %s", hwAddr)
 
 	return
 }
