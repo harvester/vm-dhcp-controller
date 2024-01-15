@@ -65,8 +65,8 @@ func (a *IPAllocator) NewIPSubnet(name, cidr, start, end string) error {
 		return fmt.Errorf("cannot convert ip address %s", end)
 	}
 
-	if !startAddr.Less(endAddr) {
-		return fmt.Errorf("end ip address %s is less than start ip addreee %s", end, start)
+	if startAddr.Compare(endAddr) > 0 {
+		return fmt.Errorf("end ip address %s is less than start ip address %s", end, start)
 	}
 
 	if endIP.Equal(broadcast) {
