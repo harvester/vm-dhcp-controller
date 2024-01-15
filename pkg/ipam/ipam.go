@@ -109,17 +109,26 @@ func (a *IPAllocator) AllocateIP(name string, ipAddress string) (string, error) 
 	if _, exists := a.ipam[name]; !exists {
 		return "", fmt.Errorf("network %s does not exist", name)
 	}
+	if ipAddress == "" {
+		ipAddress = util.UnspecifiedIPAddress
+	}
 
 	designatedIP := net.ParseIP(ipAddress)
 
 	if !designatedIP.IsUnspecified() {
 		ok := a.ipam[name].ipNet.Contains(designatedIP)
 		if !ok {
-			return util.UnspecifiedIPAddress, fmt.Errorf("designated ip %s is not in the subnet %s/%s", designatedIP.String(), a.ipam[name].ipNet.IP.String(), a.ipam[name].ipNet.Mask.String())
+			subnetMask, _ := a.ipam[name].ipNet.Mask.Size()
+			return util.UnspecifiedIPAddress, fmt.Errorf(
+				"designated ip %s is not in subnet %s/%d",
+				designatedIP.String(),
+				a.ipam[name].ipNet.IP.String(),
+				subnetMask,
+			)
 		}
 
 		if a.ipam[name].broadcast.Equal(designatedIP) {
-			return util.UnspecifiedIPAddress, fmt.Errorf("designated ip %s equals broadcast address %s", designatedIP.String(), a.ipam[name].broadcast.String())
+			return util.UnspecifiedIPAddress, fmt.Errorf("designated ip %s equals broadcast ip address %s", designatedIP.String(), a.ipam[name].broadcast.String())
 		}
 	}
 
@@ -141,7 +150,7 @@ func (a *IPAllocator) AllocateIP(name string, ipAddress string) (string, error) 
 		}
 	}
 
-	return util.UnspecifiedIPAddress, fmt.Errorf("no more ip addresses left in network %s", name)
+	return util.UnspecifiedIPAddress, fmt.Errorf("no more ip addresses left in network %s ipam", name)
 }
 
 func (a *IPAllocator) DeallocateIP(name, ipAddress string) error {
@@ -152,14 +161,19 @@ func (a *IPAllocator) DeallocateIP(name, ipAddress string) error {
 	if _, exists := a.ipam[name]; !exists {
 		return fmt.Errorf("network %s does not exist", name)
 	}
+	if ipAddress == "" {
+		return fmt.Errorf("designated ip is empty")
+	}
 
 	isAllocated, exists := a.ipam[name].ips[ipAddress]
 	if !exists {
 		return fmt.Errorf("to-be-deallocated ip %s was not found in network %s ipam", ipAddress, name)
 	}
-	if isAllocated {
-		a.ipam[name].ips[ipAddress] = false
+	if !isAllocated {
+		return fmt.Errorf("to-be-deallocated ip %s was not allocated", ipAddress)
 	}
+
+	a.ipam[name].ips[ipAddress] = false
 
 	return nil
 }
