@@ -41,6 +41,10 @@ type DHCPAllocator struct {
 	mutex   sync.RWMutex
 }
 
+func New() *DHCPAllocator {
+	return NewDHCPAllocator()
+}
+
 func NewDHCPAllocator() *DHCPAllocator {
 	leases := make(map[string]DHCPLease)
 	servers := make(map[string]*server4.Server)
