@@ -4,7 +4,6 @@ set -e
 cd $(dirname $0)
 
 ./build
-./test
 ./package
 ./package-agent
 ./package-webhook

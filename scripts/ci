@@ -6,6 +6,3 @@ cd $(dirname $0)
 ./validate
 ./build
 ./test
-./package
-./package-agent
-./package-webhook
