@@ -56,7 +56,7 @@ steps:
     password:
       from_secret: docker_password
     repo: rancher/harvester-vm-dhcp-controller
-    tag: ${DRONE_TAG}"
+    tag: ${DRONE_TAG}
     username:
       from_secret: docker_username
   when:
@@ -96,7 +96,7 @@ steps:
     password:
       from_secret: docker_password
     repo: rancher/harvester-vm-dhcp-agent
-    tag: ${DRONE_TAG}"
+    tag: ${DRONE_TAG}
     username:
       from_secret: docker_username
   when:
