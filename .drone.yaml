@@ -36,7 +36,7 @@ steps:
     dockerfile: package/Dockerfile
     password:
       from_secret: docker_password
-    repo:  "rancher/harvester-vm-dhcp-controller"
+    repo: rancher/harvester-vm-dhcp-controller
     tag: ${DRONE_BRANCH}-head
     username:
       from_secret: docker_username
@@ -55,8 +55,8 @@ steps:
     dockerfile: package/Dockerfile
     password:
       from_secret: docker_password
-    repo: "rancher/harvester-vm-dhcp-controller"
-    tag: "${DRONE_TAG}"
+    repo: rancher/harvester-vm-dhcp-controller
+    tag: ${DRONE_TAG}"
     username:
       from_secret: docker_username
   when:
@@ -76,7 +76,7 @@ steps:
     dockerfile: package/Dockerfile.agent
     password:
       from_secret: docker_password
-    repo:  "rancher/harvester-vm-dhcp-agent"
+    repo: rancher/harvester-vm-dhcp-agent
     tag: ${DRONE_BRANCH}-head
     username:
       from_secret: docker_username
@@ -95,8 +95,8 @@ steps:
     dockerfile: package/Dockerfile.agent
     password:
       from_secret: docker_password
-    repo: "rancher/harvester-vm-dhcp-agent"
-    tag: "${DRONE_TAG}"
+    repo: rancher/harvester-vm-dhcp-agent
+    tag: ${DRONE_TAG}"
     username:
       from_secret: docker_username
   when:
@@ -116,7 +116,7 @@ steps:
     dockerfile: package/Dockerfile.webhook
     password:
       from_secret: docker_password
-    repo:  "rancher/harvester-vm-dhcp-webhook"
+    repo: rancher/harvester-vm-dhcp-webhook
     tag: ${DRONE_BRANCH}-head
     username:
       from_secret: docker_username
@@ -135,8 +135,8 @@ steps:
     dockerfile: package/Dockerfile.webhook
     password:
       from_secret: docker_password
-    repo: "rancher/harvester-vm-dhcp-webhook"
-    tag: "${DRONE_TAG}"
+    repo: rancher/harvester-vm-dhcp-webhook
+    tag: ${DRONE_TAG}
     username:
       from_secret: docker_username
   when:
