@@ -41,8 +41,9 @@ steps:
     username:
       from_secret: docker_username
   when:
-    branch:
-    - main
+    ref:
+    - refs/heads/main
+    - refs/heads/release/v*
     event:
     - push
 
@@ -81,8 +82,9 @@ steps:
     username:
       from_secret: docker_username
   when:
-    branch:
-    - main
+    ref:
+    - refs/heads/main
+    - refs/heads/release/v*
     event:
     - push
 
@@ -121,8 +123,9 @@ steps:
     username:
       from_secret: docker_username
   when:
-    branch:
-    - main
+    ref:
+    - refs/heads/main
+    - refs/heads/release/v*
     event:
     - push
 
