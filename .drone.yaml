@@ -1,0 +1,154 @@
+---
+kind: pipeline
+name: harvester-vm-dhcp-controller
+
+platform:
+  os: linux
+  arch: amd64
+
+steps:
+- name: fetch
+  image: alpine/git
+  commands:
+  - git fetch --tags
+  when:
+    instance:
+    - drone-publish.rancher.io
+    ref:
+    - refs/head/main
+    - refs/tags/*
+    event:
+    - tag
+
+- name: build
+  image: rancher/dapper:v0.6.0
+  commands:
+  - dapper ci
+  volumes:
+  - name: docker
+    path: /var/run/docker.sock
+
+- name: docker-publish-main
+  image: plugins/docker
+  settings:
+    build_args:
+    - VERSION=${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:8}-head
+    dockerfile: package/Dockerfile
+    password:
+      from_secret: docker_password
+    repo:  "rancher/harvester-vm-dhcp-controller"
+    tag: ${DRONE_BRANCH}-head
+    username:
+      from_secret: docker_username
+  when:
+    branch:
+    - main
+    event:
+    - push
+
+- name: docker-publish
+  image: plugins/docker
+  settings:
+    build_args:
+    - VERSION=${DRONE_TAG}
+    custom_dns: 1.1.1.1
+    dockerfile: package/Dockerfile
+    password:
+      from_secret: docker_password
+    repo: "rancher/harvester-vm-dhcp-controller"
+    tag: "${DRONE_TAG}"
+    username:
+      from_secret: docker_username
+  when:
+    instance:
+    - drone-publish.rancher.io
+    ref:
+    - refs/head/main
+    - refs/tags/*
+    event:
+    - tag
+
+- name: docker-publish-agent-main
+  image: plugins/docker
+  settings:
+    build_args:
+    - VERSION=${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:8}-head
+    dockerfile: package/Dockerfile.agent
+    password:
+      from_secret: docker_password
+    repo:  "rancher/harvester-vm-dhcp-agent"
+    tag: ${DRONE_BRANCH}-head
+    username:
+      from_secret: docker_username
+  when:
+    branch:
+    - main
+    event:
+    - push
+
+- name: docker-publish-agent
+  image: plugins/docker
+  settings:
+    build_args:
+    - VERSION=${DRONE_TAG}
+    custom_dns: 1.1.1.1
+    dockerfile: package/Dockerfile.agent
+    password:
+      from_secret: docker_password
+    repo: "rancher/harvester-vm-dhcp-agent"
+    tag: "${DRONE_TAG}"
+    username:
+      from_secret: docker_username
+  when:
+    instance:
+    - drone-publish.rancher.io
+    ref:
+    - refs/head/main
+    - refs/tags/*
+    event:
+    - tag
+
+- name: docker-publish-webhook-main
+  image: plugins/docker
+  settings:
+    build_args:
+    - VERSION=${DRONE_BRANCH}-${DRONE_COMMIT_SHA:0:8}-head
+    dockerfile: package/Dockerfile.webhook
+    password:
+      from_secret: docker_password
+    repo:  "rancher/harvester-vm-dhcp-webhook"
+    tag: ${DRONE_BRANCH}-head
+    username:
+      from_secret: docker_username
+  when:
+    branch:
+    - main
+    event:
+    - push
+
+- name: docker-publish-webhook
+  image: plugins/docker
+  settings:
+    build_args:
+    - VERSION=${DRONE_TAG}
+    custom_dns: 1.1.1.1
+    dockerfile: package/Dockerfile.webhook
+    password:
+      from_secret: docker_password
+    repo: "rancher/harvester-vm-dhcp-webhook"
+    tag: "${DRONE_TAG}"
+    username:
+      from_secret: docker_username
+  when:
+    instance:
+    - drone-publish.rancher.io
+    ref:
+    - refs/head/main
+    - refs/tags/*
+    event:
+    - tag
+
+volumes:
+- name: docker
+  host:
+    path: /var/run/docker.sock
