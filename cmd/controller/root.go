@@ -19,6 +19,7 @@ var (
 	name                    string
 	noLeaderElection        bool
 	noAgent                 bool
+	enableCacheDumpAPI      bool
 	agentNamespace          string
 	agentImage              string
 	agentServiceAccountName string
@@ -83,6 +84,7 @@ func init() {
 	rootCmd.Flags().StringVar(&name, "name", os.Getenv("VM_DHCP_CONTROLLER_NAME"), "The name of the vm-dhcp-controller instance")
 	rootCmd.Flags().BoolVar(&noLeaderElection, "no-leader-election", false, "Run vm-dhcp-controller with leader-election disabled")
 	rootCmd.Flags().BoolVar(&noAgent, "no-agent", false, "Run vm-dhcp-controller without spawning agents")
+	rootCmd.Flags().BoolVar(&enableCacheDumpAPI, "enable-cache-dump-api", false, "Enable cache dump APIs")
 	rootCmd.Flags().BoolVar(&noDHCP, "no-dhcp", false, "Disable DHCP server on the spawned agents")
 	rootCmd.Flags().StringVar(&agentNamespace, "namespace", os.Getenv("AGENT_NAMESPACE"), "The namespace for the spawned agents")
 	rootCmd.Flags().StringVar(&agentImage, "image", os.Getenv("AGENT_IMAGE"), "The container image for the spawned agents")

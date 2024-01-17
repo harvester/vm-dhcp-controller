@@ -56,6 +56,7 @@ func run(options *config.ControllerOptions) error {
 	}
 
 	httpServerOptions := config.HTTPServerOptions{
+		DebugMode:        enableCacheDumpAPI,
 		IPAllocator:      management.IPAllocator,
 		CacheAllocator:   management.CacheAllocator,
 		MetricsAllocator: management.MetricsAllocator,

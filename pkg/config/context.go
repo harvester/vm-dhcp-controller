@@ -81,6 +81,7 @@ type AgentOptions struct {
 }
 
 type HTTPServerOptions struct {
+	DebugMode        bool
 	CacheAllocator   *cache.CacheAllocator
 	IPAllocator      *ipam.IPAllocator
 	DHCPAllocator    *dhcp.DHCPAllocator
