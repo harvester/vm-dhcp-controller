@@ -42,15 +42,20 @@ func (s *HTTPServer) registerProbeHandlers() {
 func (s *HTTPServer) RegisterControllerHandlers() {
 	s.registerProbeHandlers()
 
-	s.router.Handle("/ipams/{networkName:.*}", listIPByNetworkHandler(s.IPAllocator))
-	s.router.Handle("/caches/{networkName:.*}", listCacheByNetworkHandler(s.CacheAllocator))
+	if s.DebugMode {
+		s.router.Handle("/ipams/{networkName:.*}", listIPByNetworkHandler(s.IPAllocator))
+		s.router.Handle("/caches/{networkName:.*}", listCacheByNetworkHandler(s.CacheAllocator))
+	}
+
 	s.router.Handle("/metrics", metricsHandler(s.MetricsAllocator))
 }
 
 func (s *HTTPServer) RegisterAgentHandlers() {
 	s.registerProbeHandlers()
 
-	s.router.Handle("/leases", listLeaseHandler(s.DHCPAllocator))
+	if s.DebugMode {
+		s.router.Handle("/leases", listLeaseHandler(s.DHCPAllocator))
+	}
 }
 
 func (s *HTTPServer) Run() {

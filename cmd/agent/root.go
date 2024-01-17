@@ -17,11 +17,12 @@ var (
 	logDebug bool
 	logTrace bool
 
-	name           string
-	dryRun         bool
-	kubeConfigPath string
-	kubeContext    string
-	ippoolRef      string
+	name               string
+	dryRun             bool
+	enableCacheDumpAPI bool
+	kubeConfigPath     string
+	kubeContext        string
+	ippoolRef          string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -70,6 +71,7 @@ func init() {
 	rootCmd.Flags().StringVar(&kubeConfigPath, "kubeconfig", os.Getenv("KUBECONFIG"), "Path to the kubeconfig file")
 	rootCmd.Flags().StringVar(&kubeContext, "kubecontext", os.Getenv("KUBECONTEXT"), "Context name")
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Run vm-dhcp-agent without starting the DHCP server")
+	rootCmd.Flags().BoolVar(&enableCacheDumpAPI, "enable-cache-dump-api", false, "Enable cache dump APIs")
 	rootCmd.Flags().StringVar(&ippoolRef, "ippool-ref", os.Getenv("IPPOOL_REF"), "The IPPool object the agent should sync with")
 }
 

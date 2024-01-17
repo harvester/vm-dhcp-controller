@@ -16,6 +16,7 @@ func run(ctx context.Context, options *config.AgentOptions) error {
 	agent := agent.NewAgent(ctx, options)
 
 	httpServerOptions := config.HTTPServerOptions{
+		DebugMode:     enableCacheDumpAPI,
 		DHCPAllocator: agent.DHCPAllocator,
 	}
 	s := server.NewHTTPServer(&httpServerOptions)
