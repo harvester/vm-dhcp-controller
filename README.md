@@ -27,7 +27,6 @@ Components:
 
 - `vm-dhcp-controller` (control plane)
   - Manage the lifecycle of the agent for each IPPool
-  - ~~Create/remove IPPool when NetworkAttachmentDefinition is created/deleted~~
   - Create/remove VirtualMachineNetworkConfig when VirtualMachine is created/deleted
 - `vm-dhcp-agent` (data plane)
   - Maintain DHCP lease store for the IP pool it is responsible for
