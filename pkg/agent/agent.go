@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -13,15 +12,13 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/dhcp"
 )
 
-const (
-	defaultInterval         = 10 * time.Second
-	defaultNetworkInterface = "eth1"
-)
+const DefaultNetworkInterface = "eth1"
 
 type Agent struct {
 	ctx context.Context
 
 	dryRun  bool
+	nic     string
 	poolRef types.NamespacedName
 
 	ippoolEventHandler *ippool.EventHandler
@@ -37,6 +34,7 @@ func NewAgent(ctx context.Context, options *config.AgentOptions) *Agent {
 		ctx: ctx,
 
 		dryRun:  options.DryRun,
+		nic:     options.Nic,
 		poolRef: options.IPPoolRef,
 
 		DHCPAllocator: dhcpAllocator,
@@ -63,7 +61,7 @@ func (a *Agent) Run() error {
 		case <-egctx.Done():
 			return nil
 		default:
-			return a.DHCPAllocator.Run(defaultNetworkInterface, a.dryRun)
+			return a.DHCPAllocator.Run(a.nic, a.dryRun)
 		}
 	})
 

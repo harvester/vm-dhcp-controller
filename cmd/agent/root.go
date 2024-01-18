@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/harvester/vm-dhcp-controller/pkg/config"
-	"github.com/harvester/vm-dhcp-controller/pkg/util"
 	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/harvester/vm-dhcp-controller/pkg/agent"
+	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
 var (
@@ -19,6 +21,7 @@ var (
 
 	name               string
 	dryRun             bool
+	nic                string
 	enableCacheDumpAPI bool
 	kubeConfigPath     string
 	kubeContext        string
@@ -45,6 +48,7 @@ var rootCmd = &cobra.Command{
 		ipPoolNamespace, ipPoolName := kv.RSplit(ippoolRef, "/")
 		options := &config.AgentOptions{
 			DryRun:         dryRun,
+			Nic:            nic,
 			KubeConfigPath: kubeConfigPath,
 			KubeContext:    kubeContext,
 			IPPoolRef: types.NamespacedName{
@@ -73,6 +77,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Run vm-dhcp-agent without starting the DHCP server")
 	rootCmd.Flags().BoolVar(&enableCacheDumpAPI, "enable-cache-dump-api", false, "Enable cache dump APIs")
 	rootCmd.Flags().StringVar(&ippoolRef, "ippool-ref", os.Getenv("IPPOOL_REF"), "The IPPool object the agent should sync with")
+	rootCmd.Flags().StringVar(&nic, "nic", agent.DefaultNetworkInterface, "The network interface the embedded DHCP server listens on")
 }
 
 // execute adds all child commands to the root command and sets flags appropriately.
