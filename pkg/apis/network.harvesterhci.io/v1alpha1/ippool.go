@@ -35,6 +35,9 @@ type IPPool struct {
 type IPPoolSpec struct {
 	IPv4Config  IPv4Config `json:"ipv4Config,omitempty"`
 	NetworkName string     `json:"networkName,omitempty"`
+
+	// +optional
+	Paused *bool `json:"paused,omitempty"`
 }
 
 type IPv4Config struct {
