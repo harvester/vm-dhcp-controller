@@ -158,9 +158,23 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 
 	ipPoolCpy := ipPool.DeepCopy()
 
+	// Check if the IPPool is administratively disabled
+	if ipPool.Spec.Paused != nil && *ipPool.Spec.Paused {
+		logrus.Infof("(ippool.OnChange) try to cleanup cache and agent for ippool %s", key)
+		if err := h.cleanup(ipPool); err != nil {
+			return ipPool, err
+		}
+		ipPoolCpy.Status.AgentPodRef = nil
+		networkv1.Disabled.True(ipPoolCpy)
+		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
+			return h.ippoolClient.UpdateStatus(ipPoolCpy)
+		}
+		return ipPool, nil
+	}
+	networkv1.Disabled.False(ipPoolCpy)
+
 	if !h.ipAllocator.IsNetworkInitialized(ipPool.Spec.NetworkName) {
 		networkv1.CacheReady.False(ipPoolCpy)
-		networkv1.CacheReady.SetStatus(ipPoolCpy, string(corev1.ConditionFalse))
 		networkv1.CacheReady.Reason(ipPoolCpy, "NotInitialized")
 		networkv1.CacheReady.Message(ipPoolCpy, "")
 		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
@@ -236,28 +250,19 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return ipPool, nil
 	}
 
-	if ipPool.Status.AgentPodRef == nil {
-		return ipPool, nil
+	if err := h.cleanup(ipPool); err != nil {
+		return ipPool, err
 	}
-
-	logrus.Infof("(ippool.OnRemove) remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, ipPool.Namespace, ipPool.Name)
-	if err := h.podClient.Delete(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, &metav1.DeleteOptions{}); err != nil {
-		return nil, err
-	}
-
-	h.ipAllocator.DeleteIPSubnet(ipPool.Spec.NetworkName)
-	h.cacheAllocator.DeleteMACSet(ipPool.Spec.NetworkName)
-	h.metricsAllocator.DeleteIPPool(
-		key,
-		ipPool.Spec.IPv4Config.CIDR,
-		ipPool.Spec.NetworkName,
-	)
 
 	return ipPool, nil
 }
 
 func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
 	logrus.Debugf("(ippool.DeployAgent) deploy agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+
+	if ipPool.Spec.Paused != nil && *ipPool.Spec.Paused {
+		return status, fmt.Errorf("ippool %s/%s was administratively disabled", ipPool.Namespace, ipPool.Name)
+	}
 
 	if h.noAgent {
 		return status, nil
@@ -303,6 +308,10 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 
 func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
 	logrus.Debugf("(ippool.BuildCache) build ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+
+	if ipPool.Spec.Paused != nil && *ipPool.Spec.Paused {
+		return status, fmt.Errorf("ippool %s/%s was administratively disabled", ipPool.Namespace, ipPool.Name)
+	}
 
 	if networkv1.CacheReady.IsTrue(ipPool) {
 		return status, nil
@@ -354,6 +363,10 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 
 func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
 	logrus.Debugf("(ippool.MonitorAgent) monitor agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
+
+	if ipPool.Spec.Paused != nil && *ipPool.Spec.Paused {
+		return status, fmt.Errorf("ippool %s/%s was administratively disabled", ipPool.Namespace, ipPool.Name)
+	}
 
 	if h.noAgent {
 		return status, nil
@@ -508,4 +521,25 @@ func isPodReady(pod *corev1.Pod) bool {
 		}
 	}
 	return false
+}
+
+func (h *Handler) cleanup(ipPool *networkv1.IPPool) error {
+	if ipPool.Status.AgentPodRef == nil {
+		return nil
+	}
+
+	logrus.Infof("(ippool.cleanup) remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, ipPool.Namespace, ipPool.Name)
+	if err := h.podClient.Delete(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, &metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	h.ipAllocator.DeleteIPSubnet(ipPool.Spec.NetworkName)
+	h.cacheAllocator.DeleteMACSet(ipPool.Spec.NetworkName)
+	h.metricsAllocator.DeleteIPPool(
+		ipPool.Namespace+"/"+ipPool.Name,
+		ipPool.Spec.IPv4Config.CIDR,
+		ipPool.Spec.NetworkName,
+	)
+
+	return nil
 }
