@@ -6,10 +6,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	AllocatedState NetworkConfigState = "Allocated"
+	PendingState   NetworkConfigState = "Pending"
+)
+
 var (
 	Allocated condition.Cond = "Allocated"
 	Disabled  condition.Cond = "Disabled"
 )
+
+type NetworkConfigState string
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -29,25 +36,29 @@ type VirtualMachineNetworkConfig struct {
 type VirtualMachineNetworkConfigSpec struct {
 	VMName        string          `json:"vmName,omitempty"`
 	NetworkConfig []NetworkConfig `json:"networkConfig,omitempty"`
+
+	// +optional
+	Paused *bool `json:"paused,omitempty"`
 }
 
 type NetworkConfig struct {
 	NetworkName string `json:"networkName,omitempty"`
 	MACAddress  string `json:"macAddress,omitempty"`
+
 	// +optional
 	IPAddress *string `json:"ipAddress,omitempty"`
 }
 
 type VirtualMachineNetworkConfigStatus struct {
 	NetworkConfig []NetworkConfigStatus `json:"networkConfig,omitempty"`
-	// Conditions is a list of Wrangler conditions that describe the state
-	// of the VirtualMachineNetworkConfigStatus.
+
+	// +optional
 	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
 }
 
 type NetworkConfigStatus struct {
-	AllocatedIPAddress string `json:"allocatedIPAddress,omitempty"`
-	MACAddress         string `json:"macAddress,omitempty"`
-	NetworkName        string `json:"networkName,omitempty"`
-	Status             string `json:"status,omitempty"`
+	AllocatedIPAddress string             `json:"allocatedIPAddress,omitempty"`
+	MACAddress         string             `json:"macAddress,omitempty"`
+	NetworkName        string             `json:"networkName,omitempty"`
+	State              NetworkConfigState `json:"state,omitempty"`
 }
