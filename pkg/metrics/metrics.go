@@ -16,7 +16,7 @@ var (
 	LabelVmNetCfgName = "vmnetcfg"
 	LabelMACAddress   = "mac"
 	LabelIPAddress    = "ip"
-	LabelStatus       = "status"
+	LabelState        = "state"
 )
 
 type MetricsAllocator struct {
@@ -60,7 +60,7 @@ func NewMetricsAllocator() *MetricsAllocator {
 				LabelNetworkName,
 				LabelMACAddress,
 				LabelIPAddress,
-				LabelStatus,
+				LabelState,
 			},
 		),
 	}
@@ -103,13 +103,13 @@ func (a *MetricsAllocator) DeleteIPPool(name string, cidr string, networkName st
 	})
 }
 
-func (a *MetricsAllocator) UpdateVmNetCfgStatus(name, networkName, macAddress, ipAddress, status string) {
+func (a *MetricsAllocator) UpdateVmNetCfgStatus(name, networkName, macAddress, ipAddress, state string) {
 	a.vmNetCfgStatus.With(prometheus.Labels{
 		LabelVmNetCfgName: name,
 		LabelNetworkName:  networkName,
 		LabelMACAddress:   macAddress,
 		LabelIPAddress:    ipAddress,
-		LabelStatus:       status,
+		LabelState:        state,
 	}).Set(float64(1))
 }
 

@@ -59,13 +59,49 @@ func Register(ctx context.Context, management *config.Management) error {
 		handler.Allocate,
 	)
 
+	vmnetcfgs.OnChange(ctx, controllerName, handler.OnChange)
 	vmnetcfgs.OnRemove(ctx, controllerName, handler.OnRemove)
 
 	return nil
 }
 
+func (h *Handler) OnChange(key string, vmNetCfg *networkv1.VirtualMachineNetworkConfig) (*networkv1.VirtualMachineNetworkConfig, error) {
+	if vmNetCfg == nil || vmNetCfg.DeletionTimestamp != nil {
+		return nil, nil
+	}
+
+	logrus.Debugf("(vmnetcfg.OnChange) vmnetcfg configuration %s has been changed: %+v", key, vmNetCfg.Spec.NetworkConfig)
+
+	vmNetCfgCpy := vmNetCfg.DeepCopy()
+
+	// Check if the VirtualMachineNetworkConfig is administratively disabled
+	if vmNetCfg.Spec.Paused != nil && *vmNetCfg.Spec.Paused {
+		logrus.Infof("(vmnetcfg.OnChange) try to cleanup ipam and cache, and update ippool status for vmnetcfg %s", key)
+		if err := h.cleanup(vmNetCfg); err != nil {
+			return vmNetCfg, err
+		}
+		networkv1.Disabled.True(vmNetCfgCpy)
+		updateAllNetworkConfigState(vmNetCfgCpy.Status.NetworkConfig)
+		if !reflect.DeepEqual(vmNetCfgCpy, vmNetCfg) {
+			return h.vmnetcfgClient.UpdateStatus(vmNetCfgCpy)
+		}
+		return vmNetCfg, nil
+	}
+	networkv1.Disabled.False(vmNetCfgCpy)
+
+	if !reflect.DeepEqual(vmNetCfgCpy, vmNetCfg) {
+		return h.vmnetcfgClient.UpdateStatus(vmNetCfgCpy)
+	}
+
+	return vmNetCfg, nil
+}
+
 func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status networkv1.VirtualMachineNetworkConfigStatus) (networkv1.VirtualMachineNetworkConfigStatus, error) {
 	logrus.Debugf("(vmnetcfg.Allocate) allocate ip for vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
+
+	if vmNetCfg.Spec.Paused != nil && *vmNetCfg.Spec.Paused {
+		return status, fmt.Errorf("vmnetcfg %s/%s was administratively disabled", vmNetCfg.Namespace, vmNetCfg.Name)
+	}
 
 	var ncStatuses []networkv1.NetworkConfigStatus
 	for _, nc := range vmNetCfg.Spec.NetworkConfig {
@@ -75,6 +111,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 		}
 		if exists {
 			// Recover IP from cache
+
 			ip, err := h.cacheAllocator.GetIPByMAC(nc.NetworkName, nc.MACAddress)
 			if err != nil {
 				return status, err
@@ -85,7 +122,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 				AllocatedIPAddress: ip,
 				MACAddress:         nc.MACAddress,
 				NetworkName:        nc.NetworkName,
-				Status:             "Allocated",
+				State:              networkv1.AllocatedState,
 			}
 			ncStatuses = append(ncStatuses, ncStatus)
 
@@ -95,7 +132,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 				ncStatus.NetworkName,
 				ncStatus.MACAddress,
 				ncStatus.AllocatedIPAddress,
-				ncStatus.Status,
+				string(ncStatus.State),
 			)
 
 			// Update IPPool status
@@ -139,9 +176,14 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 		}
 
 		// Allocate new IP
+
 		dIP := util.UnspecifiedIPAddress
 		if nc.IPAddress != nil {
 			dIP = *nc.IPAddress
+		}
+		// Recover IP from status (resume from paused state)
+		if oIP, err := findIPAddressFromNetworkConfigStatusByMACAddress(vmNetCfg.Status.NetworkConfig, nc.MACAddress); err == nil {
+			dIP = oIP
 		}
 
 		ip, err := h.ipAllocator.AllocateIP(nc.NetworkName, dIP)
@@ -158,7 +200,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 			AllocatedIPAddress: ip,
 			MACAddress:         nc.MACAddress,
 			NetworkName:        nc.NetworkName,
-			Status:             "Allocated",
+			State:              networkv1.AllocatedState,
 		}
 		ncStatuses = append(ncStatuses, ncStatus)
 
@@ -168,7 +210,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 			ncStatus.NetworkName,
 			ncStatus.MACAddress,
 			ncStatus.AllocatedIPAddress,
-			ncStatus.Status,
+			string(ncStatus.State),
 		)
 
 		// Update IPPool status
@@ -221,32 +263,40 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 
 	logrus.Debugf("(vmnetcfg.OnRemove) vmnetcfg configuration %s/%s has been removed", vmNetCfg.Namespace, vmNetCfg.Name)
 
-	h.metricsAllocator.DeleteVmNetCfgStatus(key)
+	if err := h.cleanup(vmNetCfg); err != nil {
+		return vmNetCfg, err
+	}
 
-	for _, nc := range vmNetCfg.Status.NetworkConfig {
+	return vmNetCfg, nil
+}
+
+func (h *Handler) cleanup(vmNetCfg *networkv1.VirtualMachineNetworkConfig) error {
+	h.metricsAllocator.DeleteVmNetCfgStatus(vmNetCfg.Namespace + "/" + vmNetCfg.Name)
+
+	for _, ncStatus := range vmNetCfg.Status.NetworkConfig {
 		// Deallocate IP address from IPAM
-		isAllocated, err := h.ipAllocator.IsAllocated(nc.NetworkName, nc.AllocatedIPAddress)
+		isAllocated, err := h.ipAllocator.IsAllocated(ncStatus.NetworkName, ncStatus.AllocatedIPAddress)
 		if err != nil {
-			return vmNetCfg, err
+			return err
 		}
 		if isAllocated {
-			if err := h.ipAllocator.DeallocateIP(nc.NetworkName, nc.AllocatedIPAddress); err != nil {
-				return vmNetCfg, err
+			if err := h.ipAllocator.DeallocateIP(ncStatus.NetworkName, ncStatus.AllocatedIPAddress); err != nil {
+				return err
 			}
 		}
 
 		// Remove entry from cache
-		exists, err := h.cacheAllocator.HasMAC(nc.NetworkName, nc.MACAddress)
+		exists, err := h.cacheAllocator.HasMAC(ncStatus.NetworkName, ncStatus.MACAddress)
 		if err != nil {
-			return vmNetCfg, err
+			return err
 		}
 		if exists {
-			if err := h.cacheAllocator.DeleteMAC(nc.NetworkName, nc.MACAddress); err != nil {
-				return vmNetCfg, err
+			if err := h.cacheAllocator.DeleteMAC(ncStatus.NetworkName, ncStatus.MACAddress); err != nil {
+				return err
 			}
 		}
 
-		ipPoolNamespace, ipPoolName := kv.RSplit(nc.NetworkName, "/")
+		ipPoolNamespace, ipPoolName := kv.RSplit(ncStatus.NetworkName, "/")
 		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 			ipPool, err := h.ippoolCache.Get(ipPoolNamespace, ipPoolName)
 			if err != nil {
@@ -256,10 +306,10 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 			ipPoolCpy := ipPool.DeepCopy()
 
 			// Remove record in IPPool status
-			delete(ipPoolCpy.Status.IPv4.Allocated, nc.AllocatedIPAddress)
+			delete(ipPoolCpy.Status.IPv4.Allocated, ncStatus.AllocatedIPAddress)
 
 			if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-				logrus.Infof("(vmnetcfg.OnRemove) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+				logrus.Infof("(vmnetcfg.cleanup) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
 				ipPoolCpy.Status.LastUpdate = metav1.Now()
 				_, err := h.ippoolClient.UpdateStatus(ipPoolCpy)
 				return err
@@ -267,9 +317,23 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 
 			return nil
 		}); err != nil {
-			return vmNetCfg, err
+			return err
 		}
 	}
+	return nil
+}
 
-	return vmNetCfg, nil
+func findIPAddressFromNetworkConfigStatusByMACAddress(ncStatuses []networkv1.NetworkConfigStatus, macAddress string) (ipAddress string, err error) {
+	for _, ncStatus := range ncStatuses {
+		if ncStatus.MACAddress == macAddress && ncStatus.AllocatedIPAddress != "" {
+			return ncStatus.AllocatedIPAddress, nil
+		}
+	}
+	return util.UnspecifiedIPAddress, fmt.Errorf("could not find allocated ip for mac %s", macAddress)
+}
+
+func updateAllNetworkConfigState(ncStatuses []networkv1.NetworkConfigStatus) {
+	for i := range ncStatuses {
+		ncStatuses[i].State = networkv1.PendingState
+	}
 }
