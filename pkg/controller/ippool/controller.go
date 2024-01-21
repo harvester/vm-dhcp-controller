@@ -2,9 +2,7 @@ package ippool
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net"
 	"reflect"
 
 	"github.com/rancher/wrangler/pkg/kv"
@@ -15,7 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
@@ -283,10 +280,7 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 		return status, fmt.Errorf("could not find clusternetwork for nad %s", ipPool.Spec.NetworkName)
 	}
 
-	agent, err := h.prepareAgentPod(ipPool, clusterNetwork)
-	if err != nil {
-		return status, err
-	}
+	agent := prepareAgentPod(ipPool, h.noDHCP, h.agentNamespace, clusterNetwork, h.agentServiceAccountName, h.agentImage)
 
 	agentPod, err := h.podClient.Create(agent)
 	if err != nil {
@@ -386,132 +380,6 @@ func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPool
 	}
 
 	return status, nil
-}
-
-func (h *Handler) prepareAgentPod(ipPool *networkv1.IPPool, clusterNetwork string) (*corev1.Pod, error) {
-	name := fmt.Sprintf("%s-%s-agent", ipPool.Namespace, ipPool.Name)
-
-	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
-	networks := []Network{
-		{
-			Namespace:     nadNamespace,
-			Name:          nadName,
-			InterfaceName: "eth1",
-		},
-	}
-	networksStr, err := json.Marshal(networks)
-	if err != nil {
-		return nil, err
-	}
-
-	_, ipNet, err := net.ParseCIDR(ipPool.Spec.IPv4Config.CIDR)
-	if err != nil {
-		return nil, err
-	}
-	prefixLength, _ := ipNet.Mask.Size()
-
-	args := []string{
-		"--ippool-ref",
-		fmt.Sprintf("%s/%s", ipPool.Namespace, ipPool.Name),
-	}
-	if h.noDHCP {
-		args = append(args, "--dry-run")
-	}
-
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Annotations: map[string]string{
-				multusNetworksAnnotationKey: string(networksStr),
-			},
-			Labels: map[string]string{
-				vmDHCPControllerLabelKey: "agent",
-				ipPoolNamespaceLabelKey:  ipPool.Namespace,
-				ipPoolNameLabelKey:       ipPool.Name,
-			},
-			Name:      name,
-			Namespace: h.agentNamespace,
-		},
-		Spec: corev1.PodSpec{
-			Affinity: &corev1.Affinity{
-				NodeAffinity: &corev1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-						NodeSelectorTerms: []corev1.NodeSelectorTerm{
-							{
-								MatchExpressions: []corev1.NodeSelectorRequirement{
-									{
-										Key:      network.GroupName + "/" + clusterNetwork,
-										Operator: corev1.NodeSelectorOpIn,
-										Values: []string{
-											"true",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			ServiceAccountName: h.agentServiceAccountName,
-			InitContainers: []corev1.Container{
-				{
-					Name:  "ip-setter",
-					Image: "busybox",
-					Command: []string{
-						"/bin/sh",
-						"-c",
-						fmt.Sprintf(setIPAddrScript, ipPool.Spec.IPv4Config.ServerIP, prefixLength),
-					},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser:  &runAsUserID,
-						RunAsGroup: &runAsGroupID,
-						Capabilities: &corev1.Capabilities{
-							Add: []corev1.Capability{
-								"NET_ADMIN",
-							},
-						},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "agent",
-					Image: h.agentImage.String(),
-					Args:  args,
-					Env: []corev1.EnvVar{
-						{
-							Name:  "VM_DHCP_AGENT_NAME",
-							Value: name,
-						},
-					},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser:  &runAsUserID,
-						RunAsGroup: &runAsGroupID,
-						Capabilities: &corev1.Capabilities{
-							Add: []corev1.Capability{
-								"NET_ADMIN",
-							},
-						},
-					},
-					LivenessProbe: &corev1.Probe{
-						ProbeHandler: corev1.ProbeHandler{
-							HTTPGet: &corev1.HTTPGetAction{
-								Path: "/healthz",
-								Port: intstr.FromInt(8080),
-							},
-						},
-					},
-					ReadinessProbe: &corev1.Probe{
-						ProbeHandler: corev1.ProbeHandler{
-							HTTPGet: &corev1.HTTPGetAction{
-								Path: "/readyz",
-								Port: intstr.FromInt(8080),
-							},
-						},
-					},
-				},
-			},
-		},
-	}, nil
 }
 
 func isPodReady(pod *corev1.Pod) bool {
