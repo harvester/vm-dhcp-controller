@@ -12,6 +12,7 @@ replace (
 
 require (
 	github.com/harvester/harvester v1.2.1
+	github.com/harvester/webhook v0.1.4
 	github.com/insomniacslk/dhcp v0.0.0-20231206064809-8c70d406f6d2
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
 	github.com/rancher/lasso v0.0.0-20230830164424-d684fdeb6f29
@@ -53,7 +54,6 @@ require (
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/harvester/webhook v0.1.3
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
