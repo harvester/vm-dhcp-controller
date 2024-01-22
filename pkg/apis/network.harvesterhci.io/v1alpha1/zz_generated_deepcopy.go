@@ -91,6 +91,11 @@ func (in *IPPoolList) DeepCopyObject() runtime.Object {
 func (in *IPPoolSpec) DeepCopyInto(out *IPPoolSpec) {
 	*out = *in
 	in.IPv4Config.DeepCopyInto(&out.IPv4Config)
+	if in.Paused != nil {
+		in, out := &in.Paused, &out.Paused
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 

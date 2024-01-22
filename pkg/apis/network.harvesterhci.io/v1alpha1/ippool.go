@@ -81,10 +81,7 @@ type IPPoolStatus struct {
 	// +optional
 	AgentPodRef *PodReference `json:"agentPodRef,omitempty"`
 
-	// // +optional
-	// Conditions []Condition `json:"conditions,omitempty"`
-	// Conditions is a list of Wrangler conditions that describe the state
-	// of the IPPool.
+	// +optional
 	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
 }
 
