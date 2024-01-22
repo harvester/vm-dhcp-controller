@@ -21,6 +21,28 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/util/fakeclient"
 )
 
+const (
+	testIPPoolNamespace    = "default"
+	testIPPoolName         = "ippool-1"
+	testPodNamespace       = "default"
+	testPodName            = "default-ippool-1-agent"
+	testNADNamespace       = "default"
+	testNADName            = "net-1"
+	testClusterNetworkName = "provider"
+)
+
+func newTestIPPoolBuilder() *ipPoolBuilder {
+	return newIPPoolBuilder(testIPPoolNamespace, testIPPoolName)
+}
+
+func newTestPodBuilder() *podBuilder {
+	return newPodBuilder(testPodNamespace, testPodName)
+}
+
+func newTestNetworkAttachmentDefinitionBuilder() *networkAttachmentDefinitionBuilder {
+	return newNetworkAttachmentDefinitionBuilder(testNADNamespace, testNADName)
+}
+
 func TestHandler_OnChange(t *testing.T) {
 	type input struct {
 		key    string
@@ -43,21 +65,17 @@ func TestHandler_OnChange(t *testing.T) {
 			name: "pause ippool",
 			given: input{
 				key: "default/ippool-1",
-				ipPool: newIPPoolBuilder("default", "ippool-1").
+				ipPool: newTestIPPoolBuilder().
 					Paused().
 					AgentPodRef("default", "default-ippool-1-agent").
 					Build(),
 				pods: []*corev1.Pod{
-					{
-						ObjectMeta: metav1.ObjectMeta{
-							Namespace: "default",
-							Name:      "default-ippool-1-agent",
-						},
-					},
+					newTestPodBuilder().
+						Build(),
 				},
 			},
 			expected: output{
-				ipPool: newIPPoolBuilder("default", "ippool-1").
+				ipPool: newTestIPPoolBuilder().
 					Paused().
 					DisabledCondition(corev1.ConditionTrue, "", "").
 					Build(),
@@ -125,20 +143,14 @@ func TestHandler_DeployAgent(t *testing.T) {
 			name: "resume ippool",
 			given: input{
 				key: "default/ippool-1",
-				ipPool: newIPPoolBuilder("default", "ippool-1").
+				ipPool: newTestIPPoolBuilder().
 					ServerIP("192.168.0.2").
 					CIDR("192.168.0.0/24").
 					NetworkName("default/net-1").
 					Build(),
-				nad: &cniv1.NetworkAttachmentDefinition{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							clusterNetworkLabelKey: "provider",
-						},
-						Namespace: "default",
-						Name:      "net-1",
-					},
-				},
+				nad: newTestNetworkAttachmentDefinitionBuilder().
+					Label(clusterNetworkLabelKey, testClusterNetworkName).
+					Build(),
 			},
 			expected: output{
 				ipPoolStatus: networkv1.IPPoolStatus{
