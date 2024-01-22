@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 
+	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/rancher/wrangler/pkg/kv"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -174,8 +175,8 @@ func newIPPoolBuilder(namespace, name string) *ipPoolBuilder {
 	return &ipPoolBuilder{
 		ipPool: &networkv1.IPPool{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
 				Namespace: namespace,
+				Name:      name,
 			},
 		},
 	}
@@ -248,6 +249,52 @@ func (b *ipPoolBuilder) DisabledCondition(status corev1.ConditionStatus, reason,
 	return b
 }
 
-func (p *ipPoolBuilder) Build() *networkv1.IPPool {
-	return p.ipPool
+func (b *ipPoolBuilder) Build() *networkv1.IPPool {
+	return b.ipPool
+}
+
+type podBuilder struct {
+	pod *corev1.Pod
+}
+
+func newPodBuilder(namespace, name string) *podBuilder {
+	return &podBuilder{
+		pod: &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      name,
+			},
+		},
+	}
+}
+
+func (b *podBuilder) Build() *corev1.Pod {
+	return b.pod
+}
+
+type networkAttachmentDefinitionBuilder struct {
+	nad *cniv1.NetworkAttachmentDefinition
+}
+
+func newNetworkAttachmentDefinitionBuilder(namespace, name string) *networkAttachmentDefinitionBuilder {
+	return &networkAttachmentDefinitionBuilder{
+		nad: &cniv1.NetworkAttachmentDefinition{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      name,
+			},
+		},
+	}
+}
+
+func (b *networkAttachmentDefinitionBuilder) Label(key, value string) *networkAttachmentDefinitionBuilder {
+	if b.nad.Labels == nil {
+		b.nad.Labels = make(map[string]string)
+	}
+	b.nad.Labels[key] = value
+	return b
+}
+
+func (b *networkAttachmentDefinitionBuilder) Build() *cniv1.NetworkAttachmentDefinition {
+	return b.nad
 }
