@@ -13,7 +13,9 @@ import (
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/cache"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 )
 
 func prepareAgentPod(
@@ -215,8 +217,8 @@ func (b *ipPoolBuilder) PoolRange(start, end string) *ipPoolBuilder {
 	return b
 }
 
-func (b *ipPoolBuilder) Exclude(exclude []string) *ipPoolBuilder {
-	b.ipPool.Spec.IPv4Config.Pool.Exclude = exclude
+func (b *ipPoolBuilder) Exclude(ipAddressList ...string) *ipPoolBuilder {
+	b.ipPool.Spec.IPv4Config.Pool.Exclude = append(b.ipPool.Spec.IPv4Config.Pool.Exclude, ipAddressList...)
 	return b
 }
 
@@ -226,6 +228,33 @@ func (b *ipPoolBuilder) AgentPodRef(namespace, name string) *ipPoolBuilder {
 	}
 	b.ipPool.Status.AgentPodRef.Namespace = namespace
 	b.ipPool.Status.AgentPodRef.Name = name
+	return b
+}
+
+func (b *ipPoolBuilder) Allocated(ipAddress, macAddress string) *ipPoolBuilder {
+	if b.ipPool.Status.IPv4 == nil {
+		b.ipPool.Status.IPv4 = new(networkv1.IPv4Status)
+	}
+	if b.ipPool.Status.IPv4.Allocated == nil {
+		b.ipPool.Status.IPv4.Allocated = make(map[string]string, 2)
+	}
+	b.ipPool.Status.IPv4.Allocated[ipAddress] = macAddress
+	return b
+}
+
+func (b *ipPoolBuilder) Available(count int) *ipPoolBuilder {
+	if b.ipPool.Status.IPv4 == nil {
+		b.ipPool.Status.IPv4 = new(networkv1.IPv4Status)
+	}
+	b.ipPool.Status.IPv4.Available = count
+	return b
+}
+
+func (b *ipPoolBuilder) Used(count int) *ipPoolBuilder {
+	if b.ipPool.Status.IPv4 == nil {
+		b.ipPool.Status.IPv4 = new(networkv1.IPv4Status)
+	}
+	b.ipPool.Status.IPv4.Used = count
 	return b
 }
 
@@ -253,6 +282,57 @@ func (b *ipPoolBuilder) Build() *networkv1.IPPool {
 	return b.ipPool
 }
 
+type ipPoolStatusBuilder struct {
+	ipPoolStatus networkv1.IPPoolStatus
+}
+
+func newIPPoolStatusBuilder() *ipPoolStatusBuilder {
+	return &ipPoolStatusBuilder{
+		ipPoolStatus: networkv1.IPPoolStatus{},
+	}
+}
+
+func (b *ipPoolStatusBuilder) AgentPodRef(namespace, name string) *ipPoolStatusBuilder {
+	if b.ipPoolStatus.AgentPodRef == nil {
+		b.ipPoolStatus.AgentPodRef = new(networkv1.PodReference)
+	}
+	b.ipPoolStatus.AgentPodRef.Namespace = namespace
+	b.ipPoolStatus.AgentPodRef.Name = name
+	return b
+}
+
+func (b *ipPoolStatusBuilder) RegisteredCondition(status corev1.ConditionStatus, reason, message string) *ipPoolStatusBuilder {
+	networkv1.Registered.SetStatus(&b.ipPoolStatus, string(status))
+	networkv1.Registered.Reason(&b.ipPoolStatus, reason)
+	networkv1.Registered.Message(&b.ipPoolStatus, message)
+	return b
+}
+
+func (b *ipPoolStatusBuilder) CacheReadyCondition(status corev1.ConditionStatus, reason, message string) *ipPoolStatusBuilder {
+	networkv1.CacheReady.SetStatus(&b.ipPoolStatus, string(status))
+	networkv1.CacheReady.Reason(&b.ipPoolStatus, reason)
+	networkv1.CacheReady.Message(&b.ipPoolStatus, message)
+	return b
+}
+
+func (b *ipPoolStatusBuilder) AgentReadyCondition(status corev1.ConditionStatus, reason, message string) *ipPoolStatusBuilder {
+	networkv1.AgentReady.SetStatus(&b.ipPoolStatus, string(status))
+	networkv1.AgentReady.Reason(&b.ipPoolStatus, reason)
+	networkv1.AgentReady.Message(&b.ipPoolStatus, message)
+	return b
+}
+
+func (b *ipPoolStatusBuilder) DisabledCondition(status corev1.ConditionStatus, reason, message string) *ipPoolStatusBuilder {
+	networkv1.Disabled.SetStatus(&b.ipPoolStatus, string(status))
+	networkv1.Disabled.Reason(&b.ipPoolStatus, reason)
+	networkv1.Disabled.Message(&b.ipPoolStatus, message)
+	return b
+}
+
+func (b *ipPoolStatusBuilder) Build() networkv1.IPPoolStatus {
+	return b.ipPoolStatus
+}
+
 type podBuilder struct {
 	pod *corev1.Pod
 }
@@ -266,6 +346,26 @@ func newPodBuilder(namespace, name string) *podBuilder {
 			},
 		},
 	}
+}
+
+func (b *podBuilder) PodReady(ready corev1.ConditionStatus) *podBuilder {
+	var found bool
+	if b.pod.Status.Conditions == nil {
+		b.pod.Status.Conditions = make([]corev1.PodCondition, 0, 1)
+	}
+	for i := range b.pod.Status.Conditions {
+		if b.pod.Status.Conditions[i].Type == corev1.PodReady {
+			b.pod.Status.Conditions[i].Status = corev1.ConditionTrue
+			break
+		}
+	}
+	if !found {
+		b.pod.Status.Conditions = append(b.pod.Status.Conditions, corev1.PodCondition{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionTrue,
+		})
+	}
+	return b
 }
 
 func (b *podBuilder) Build() *corev1.Pod {
@@ -297,4 +397,61 @@ func (b *networkAttachmentDefinitionBuilder) Label(key, value string) *networkAt
 
 func (b *networkAttachmentDefinitionBuilder) Build() *cniv1.NetworkAttachmentDefinition {
 	return b.nad
+}
+
+type cacheAllocatorBuilder struct {
+	cacheAllocator *cache.CacheAllocator
+}
+
+func newCacheAllocatorBuilder() *cacheAllocatorBuilder {
+	return &cacheAllocatorBuilder{
+		cacheAllocator: cache.New(),
+	}
+}
+
+func (b *cacheAllocatorBuilder) MACSet(name string) *cacheAllocatorBuilder {
+	_ = b.cacheAllocator.NewMACSet(name)
+	return b
+}
+
+func (b *cacheAllocatorBuilder) Add(name, macAddress, ipAddress string) *cacheAllocatorBuilder {
+	_ = b.cacheAllocator.AddMAC(name, macAddress, ipAddress)
+	return b
+}
+
+func (b *cacheAllocatorBuilder) Build() *cache.CacheAllocator {
+	return b.cacheAllocator
+}
+
+type ipAllocatorBuilder struct {
+	ipAllocator *ipam.IPAllocator
+}
+
+func newIPAllocatorBuilder() *ipAllocatorBuilder {
+	return &ipAllocatorBuilder{
+		ipAllocator: ipam.New(),
+	}
+}
+
+func (b *ipAllocatorBuilder) IPSubnet(name, cidr, start, end string) *ipAllocatorBuilder {
+	_ = b.ipAllocator.NewIPSubnet(name, cidr, start, end)
+	return b
+}
+
+func (b *ipAllocatorBuilder) Revoke(name string, ipAddressList ...string) *ipAllocatorBuilder {
+	for _, ip := range ipAddressList {
+		_ = b.ipAllocator.RevokeIP(name, ip)
+	}
+	return b
+}
+
+func (b *ipAllocatorBuilder) Allocate(name string, ipAddressList ...string) *ipAllocatorBuilder {
+	for _, ip := range ipAddressList {
+		_, _ = b.ipAllocator.AllocateIP(name, ip)
+	}
+	return b
+}
+
+func (b *ipAllocatorBuilder) Build() *ipam.IPAllocator {
+	return b.ipAllocator
 }
