@@ -3,6 +3,7 @@ package vmnetcfg
 import (
 	"context"
 	"fmt"
+	"net"
 	"reflect"
 
 	"github.com/rancher/wrangler/pkg/kv"
@@ -16,7 +17,6 @@ import (
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
-	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
 const controllerName = "vm-dhcp-vmnetcfg-controller"
@@ -177,7 +177,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 
 		// Allocate new IP
 
-		dIP := util.UnspecifiedIPAddress
+		dIP := net.IPv4zero.String()
 		if nc.IPAddress != nil {
 			dIP = *nc.IPAddress
 		}
@@ -329,7 +329,7 @@ func findIPAddressFromNetworkConfigStatusByMACAddress(ncStatuses []networkv1.Net
 			return ncStatus.AllocatedIPAddress, nil
 		}
 	}
-	return util.UnspecifiedIPAddress, fmt.Errorf("could not find allocated ip for mac %s", macAddress)
+	return net.IPv4zero.String(), fmt.Errorf("could not find allocated ip for mac %s", macAddress)
 }
 
 func updateAllNetworkConfigState(ncStatuses []networkv1.NetworkConfigStatus) {

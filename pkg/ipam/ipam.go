@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/harvester/vm-dhcp-controller/pkg/util"
 	"github.com/sirupsen/logrus"
 )
 
@@ -110,7 +109,7 @@ func (a *IPAllocator) AllocateIP(name string, ipAddress string) (string, error) 
 		return "", fmt.Errorf("network %s does not exist", name)
 	}
 	if ipAddress == "" {
-		ipAddress = util.UnspecifiedIPAddress
+		ipAddress = net.IPv4zero.String()
 	}
 
 	designatedIP := net.ParseIP(ipAddress)
@@ -119,7 +118,7 @@ func (a *IPAllocator) AllocateIP(name string, ipAddress string) (string, error) 
 		ok := a.ipam[name].ipNet.Contains(designatedIP)
 		if !ok {
 			subnetMask, _ := a.ipam[name].ipNet.Mask.Size()
-			return util.UnspecifiedIPAddress, fmt.Errorf(
+			return net.IPv4zero.String(), fmt.Errorf(
 				"designated ip %s is not in subnet %s/%d",
 				designatedIP.String(),
 				a.ipam[name].ipNet.IP.String(),
@@ -128,7 +127,7 @@ func (a *IPAllocator) AllocateIP(name string, ipAddress string) (string, error) 
 		}
 
 		if a.ipam[name].broadcast.Equal(designatedIP) {
-			return util.UnspecifiedIPAddress, fmt.Errorf("designated ip %s equals broadcast ip address %s", designatedIP.String(), a.ipam[name].broadcast.String())
+			return net.IPv4zero.String(), fmt.Errorf("designated ip %s equals broadcast ip address %s", designatedIP.String(), a.ipam[name].broadcast.String())
 		}
 	}
 
@@ -136,7 +135,7 @@ func (a *IPAllocator) AllocateIP(name string, ipAddress string) (string, error) 
 		if !designatedIP.IsUnspecified() {
 			if ip == designatedIP.String() {
 				if isAllocated {
-					return util.UnspecifiedIPAddress, fmt.Errorf("designated ip %s is already allocated", designatedIP.String())
+					return net.IPv4zero.String(), fmt.Errorf("designated ip %s is already allocated", designatedIP.String())
 				} else {
 					a.ipam[name].ips[ip] = true
 					return ip, nil
@@ -150,7 +149,7 @@ func (a *IPAllocator) AllocateIP(name string, ipAddress string) (string, error) 
 		}
 	}
 
-	return util.UnspecifiedIPAddress, fmt.Errorf("no more ip addresses left in network %s ipam", name)
+	return net.IPv4zero.String(), fmt.Errorf("no more ip addresses left in network %s ipam", name)
 }
 
 func (a *IPAllocator) DeallocateIP(name, ipAddress string) error {
