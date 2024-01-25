@@ -162,13 +162,13 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 			return ipPool, err
 		}
 		ipPoolCpy.Status.AgentPodRef = nil
-		networkv1.Disabled.True(ipPoolCpy)
+		networkv1.Stopped.True(ipPoolCpy)
 		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
 			return h.ippoolClient.UpdateStatus(ipPoolCpy)
 		}
 		return ipPool, nil
 	}
-	networkv1.Disabled.False(ipPoolCpy)
+	networkv1.Stopped.False(ipPoolCpy)
 
 	if !h.ipAllocator.IsNetworkInitialized(ipPool.Spec.NetworkName) {
 		networkv1.CacheReady.False(ipPoolCpy)

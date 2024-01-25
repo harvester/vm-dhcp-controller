@@ -103,7 +103,7 @@ func TestHandler_OnChange(t *testing.T) {
 			},
 			expected: output{
 				ipPool: newTestIPPoolBuilder().
-					DisabledCondition(corev1.ConditionFalse, "", "").
+					StoppedCondition(corev1.ConditionFalse, "", "").
 					CacheReadyCondition(corev1.ConditionFalse, "NotInitialized", "").
 					Build(),
 			},
@@ -130,7 +130,7 @@ func TestHandler_OnChange(t *testing.T) {
 					NetworkName(testNetworkName).
 					Available(100).
 					Used(0).
-					DisabledCondition(corev1.ConditionFalse, "", "").
+					StoppedCondition(corev1.ConditionFalse, "", "").
 					Build(),
 			},
 		},
@@ -152,7 +152,7 @@ func TestHandler_OnChange(t *testing.T) {
 			expected: output{
 				ipPool: newTestIPPoolBuilder().
 					Paused().
-					DisabledCondition(corev1.ConditionTrue, "", "").
+					StoppedCondition(corev1.ConditionTrue, "", "").
 					Build(),
 			},
 		},
@@ -169,7 +169,7 @@ func TestHandler_OnChange(t *testing.T) {
 			expected: output{
 				ipPool: newTestIPPoolBuilder().
 					UnPaused().
-					DisabledCondition(corev1.ConditionFalse, "", "").
+					StoppedCondition(corev1.ConditionFalse, "", "").
 					CacheReadyCondition(corev1.ConditionFalse, "NotInitialized", "").
 					Build(),
 			},
