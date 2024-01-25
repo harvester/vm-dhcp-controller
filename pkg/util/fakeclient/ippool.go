@@ -19,7 +19,7 @@ func (c IPPoolClient) Update(ipPool *networkv1.IPPool) (*networkv1.IPPool, error
 	return c(ipPool.Namespace).Update(context.TODO(), ipPool, metav1.UpdateOptions{})
 }
 func (c IPPoolClient) Get(namespace, name string, options metav1.GetOptions) (*networkv1.IPPool, error) {
-	panic("implement me")
+	return c(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 func (c IPPoolClient) Create(*networkv1.IPPool) (*networkv1.IPPool, error) {
 	panic("implement me")

@@ -3,7 +3,6 @@ package ippool
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -22,13 +21,13 @@ import (
 )
 
 const (
-	testIPPoolNamespace    = "default"
-	testIPPoolName         = "ippool-1"
-	testKey                = testIPPoolNamespace + "/" + testIPPoolName
-	testPodNamespace       = "harvester-system"
-	testPodName            = "default-ippool-1-agent"
 	testNADNamespace       = "default"
 	testNADName            = "net-1"
+	testIPPoolNamespace    = testNADNamespace
+	testIPPoolName         = testNADName
+	testKey                = testIPPoolNamespace + "/" + testIPPoolName
+	testPodNamespace       = "harvester-system"
+	testPodName            = testNADNamespace + "-" + testNADName + "-agent"
 	testClusterNetwork     = "provider"
 	testServerIP           = "192.168.0.2"
 	testNetworkName        = testNADNamespace + "/" + testNADName
@@ -50,16 +49,16 @@ const (
 	testMAC2         = "22:33:44:55:66:77"
 )
 
-func newTestCacheAllocatorBuilder() *cacheAllocatorBuilder {
-	return newCacheAllocatorBuilder()
+func newTestCacheAllocatorBuilder() *cache.CacheAllocatorBuilder {
+	return cache.NewCacheAllocatorBuilder()
 }
 
-func newTestIPAllocatorBuilder() *ipAllocatorBuilder {
-	return newIPAllocatorBuilder()
+func newTestIPAllocatorBuilder() *ipam.IPAllocatorBuilder {
+	return ipam.NewIPAllocatorBuilder()
 }
 
-func newTestIPPoolBuilder() *ipPoolBuilder {
-	return newIPPoolBuilder(testIPPoolNamespace, testIPPoolName)
+func newTestIPPoolBuilder() *IPPoolBuilder {
+	return NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName)
 }
 
 func newTestPodBuilder() *podBuilder {
@@ -207,8 +206,8 @@ func TestHandler_OnChange(t *testing.T) {
 		actual.ipPool, actual.err = handler.OnChange(tc.given.key, tc.given.ipPool)
 		assert.Nil(t, actual.err)
 
-		sanitizeStatus(&tc.expected.ipPool.Status)
-		sanitizeStatus(&actual.ipPool.Status)
+		SanitizeStatus(&tc.expected.ipPool.Status)
+		SanitizeStatus(&actual.ipPool.Status)
 
 		assert.Equal(t, tc.expected.ipPool, actual.ipPool, tc.name)
 
@@ -228,7 +227,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 		expectedStatus := newTestIPPoolStatusBuilder().
 			AgentPodRef(testPodNamespace, testPodName).Build()
 		expectedPod := prepareAgentPod(
-			newIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
+			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
@@ -324,7 +323,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 		givenPod := prepareAgentPod(
-			newIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
+			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
@@ -341,7 +340,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 		expectedStatus := newTestIPPoolStatusBuilder().
 			AgentPodRef(testPodNamespace, testPodName).Build()
 		expectedPod := prepareAgentPod(
-			newIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
+			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
@@ -598,13 +597,4 @@ func TestHandler_MonitorAgent(t *testing.T) {
 		_, err := handler.MonitorAgent(givenIPPool, givenIPPool.Status)
 		assert.Equal(t, fmt.Sprintf("agent for ippool %s is not deployed", testIPPoolNamespace+"/"+testIPPoolName), err.Error())
 	})
-}
-
-func sanitizeStatus(status *networkv1.IPPoolStatus) {
-	now := time.Time{}
-	status.LastUpdate = metav1.NewTime(now)
-	for i := range status.Conditions {
-		status.Conditions[i].LastTransitionTime = ""
-		status.Conditions[i].LastUpdateTime = ""
-	}
 }
