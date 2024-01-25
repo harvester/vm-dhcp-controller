@@ -351,6 +351,11 @@ func (in *VirtualMachineNetworkConfigSpec) DeepCopyInto(out *VirtualMachineNetwo
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.Paused != nil {
+		in, out := &in.Paused, &out.Paused
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 
