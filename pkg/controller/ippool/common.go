@@ -162,10 +162,10 @@ func setAgentReadyCondition(ipPool *networkv1.IPPool, status corev1.ConditionSta
 	networkv1.AgentReady.Message(ipPool, message)
 }
 
-func setDisabledCondition(ipPool *networkv1.IPPool, status corev1.ConditionStatus, reason, message string) {
-	networkv1.Disabled.SetStatus(ipPool, string(status))
-	networkv1.Disabled.Reason(ipPool, reason)
-	networkv1.Disabled.Message(ipPool, message)
+func setStoppedCondition(ipPool *networkv1.IPPool, status corev1.ConditionStatus, reason, message string) {
+	networkv1.Stopped.SetStatus(ipPool, string(status))
+	networkv1.Stopped.Reason(ipPool, reason)
+	networkv1.Stopped.Message(ipPool, message)
 }
 
 type IPPoolBuilder struct {
@@ -272,8 +272,8 @@ func (b *IPPoolBuilder) AgentReadyCondition(status corev1.ConditionStatus, reaso
 	return b
 }
 
-func (b *IPPoolBuilder) DisabledCondition(status corev1.ConditionStatus, reason, message string) *IPPoolBuilder {
-	setDisabledCondition(b.ipPool, status, reason, message)
+func (b *IPPoolBuilder) StoppedCondition(status corev1.ConditionStatus, reason, message string) *IPPoolBuilder {
+	setStoppedCondition(b.ipPool, status, reason, message)
 	return b
 }
 
@@ -321,10 +321,10 @@ func (b *ipPoolStatusBuilder) AgentReadyCondition(status corev1.ConditionStatus,
 	return b
 }
 
-func (b *ipPoolStatusBuilder) DisabledCondition(status corev1.ConditionStatus, reason, message string) *ipPoolStatusBuilder {
-	networkv1.Disabled.SetStatus(&b.ipPoolStatus, string(status))
-	networkv1.Disabled.Reason(&b.ipPoolStatus, reason)
-	networkv1.Disabled.Message(&b.ipPoolStatus, message)
+func (b *ipPoolStatusBuilder) StoppedCondition(status corev1.ConditionStatus, reason, message string) *ipPoolStatusBuilder {
+	networkv1.Stopped.SetStatus(&b.ipPoolStatus, string(status))
+	networkv1.Stopped.Reason(&b.ipPoolStatus, reason)
+	networkv1.Stopped.Message(&b.ipPoolStatus, message)
 	return b
 }
 
