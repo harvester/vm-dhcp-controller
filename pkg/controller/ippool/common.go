@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/rancher/wrangler/pkg/kv"
@@ -13,9 +14,7 @@ import (
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
-	"github.com/harvester/vm-dhcp-controller/pkg/cache"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
-	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 )
 
 func prepareAgentPod(
@@ -169,12 +168,12 @@ func setDisabledCondition(ipPool *networkv1.IPPool, status corev1.ConditionStatu
 	networkv1.Disabled.Message(ipPool, message)
 }
 
-type ipPoolBuilder struct {
+type IPPoolBuilder struct {
 	ipPool *networkv1.IPPool
 }
 
-func newIPPoolBuilder(namespace, name string) *ipPoolBuilder {
-	return &ipPoolBuilder{
+func NewIPPoolBuilder(namespace, name string) *IPPoolBuilder {
+	return &IPPoolBuilder{
 		ipPool: &networkv1.IPPool{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: namespace,
@@ -184,45 +183,45 @@ func newIPPoolBuilder(namespace, name string) *ipPoolBuilder {
 	}
 }
 
-func (b *ipPoolBuilder) NetworkName(networkName string) *ipPoolBuilder {
+func (b *IPPoolBuilder) NetworkName(networkName string) *IPPoolBuilder {
 	b.ipPool.Spec.NetworkName = networkName
 	return b
 }
 
-func (b *ipPoolBuilder) Paused() *ipPoolBuilder {
+func (b *IPPoolBuilder) Paused() *IPPoolBuilder {
 	paused := true
 	b.ipPool.Spec.Paused = &paused
 	return b
 }
 
-func (b *ipPoolBuilder) UnPaused() *ipPoolBuilder {
+func (b *IPPoolBuilder) UnPaused() *IPPoolBuilder {
 	paused := false
 	b.ipPool.Spec.Paused = &paused
 	return b
 }
 
-func (b *ipPoolBuilder) ServerIP(serverIP string) *ipPoolBuilder {
+func (b *IPPoolBuilder) ServerIP(serverIP string) *IPPoolBuilder {
 	b.ipPool.Spec.IPv4Config.ServerIP = serverIP
 	return b
 }
 
-func (b *ipPoolBuilder) CIDR(cidr string) *ipPoolBuilder {
+func (b *IPPoolBuilder) CIDR(cidr string) *IPPoolBuilder {
 	b.ipPool.Spec.IPv4Config.CIDR = cidr
 	return b
 }
 
-func (b *ipPoolBuilder) PoolRange(start, end string) *ipPoolBuilder {
+func (b *IPPoolBuilder) PoolRange(start, end string) *IPPoolBuilder {
 	b.ipPool.Spec.IPv4Config.Pool.Start = start
 	b.ipPool.Spec.IPv4Config.Pool.End = end
 	return b
 }
 
-func (b *ipPoolBuilder) Exclude(ipAddressList ...string) *ipPoolBuilder {
+func (b *IPPoolBuilder) Exclude(ipAddressList ...string) *IPPoolBuilder {
 	b.ipPool.Spec.IPv4Config.Pool.Exclude = append(b.ipPool.Spec.IPv4Config.Pool.Exclude, ipAddressList...)
 	return b
 }
 
-func (b *ipPoolBuilder) AgentPodRef(namespace, name string) *ipPoolBuilder {
+func (b *IPPoolBuilder) AgentPodRef(namespace, name string) *IPPoolBuilder {
 	if b.ipPool.Status.AgentPodRef == nil {
 		b.ipPool.Status.AgentPodRef = new(networkv1.PodReference)
 	}
@@ -231,7 +230,7 @@ func (b *ipPoolBuilder) AgentPodRef(namespace, name string) *ipPoolBuilder {
 	return b
 }
 
-func (b *ipPoolBuilder) Allocated(ipAddress, macAddress string) *ipPoolBuilder {
+func (b *IPPoolBuilder) Allocated(ipAddress, macAddress string) *IPPoolBuilder {
 	if b.ipPool.Status.IPv4 == nil {
 		b.ipPool.Status.IPv4 = new(networkv1.IPv4Status)
 	}
@@ -242,7 +241,7 @@ func (b *ipPoolBuilder) Allocated(ipAddress, macAddress string) *ipPoolBuilder {
 	return b
 }
 
-func (b *ipPoolBuilder) Available(count int) *ipPoolBuilder {
+func (b *IPPoolBuilder) Available(count int) *IPPoolBuilder {
 	if b.ipPool.Status.IPv4 == nil {
 		b.ipPool.Status.IPv4 = new(networkv1.IPv4Status)
 	}
@@ -250,7 +249,7 @@ func (b *ipPoolBuilder) Available(count int) *ipPoolBuilder {
 	return b
 }
 
-func (b *ipPoolBuilder) Used(count int) *ipPoolBuilder {
+func (b *IPPoolBuilder) Used(count int) *IPPoolBuilder {
 	if b.ipPool.Status.IPv4 == nil {
 		b.ipPool.Status.IPv4 = new(networkv1.IPv4Status)
 	}
@@ -258,27 +257,27 @@ func (b *ipPoolBuilder) Used(count int) *ipPoolBuilder {
 	return b
 }
 
-func (b *ipPoolBuilder) RegisteredCondition(status corev1.ConditionStatus, reason, message string) *ipPoolBuilder {
+func (b *IPPoolBuilder) RegisteredCondition(status corev1.ConditionStatus, reason, message string) *IPPoolBuilder {
 	setRegisteredCondition(b.ipPool, status, reason, message)
 	return b
 }
 
-func (b *ipPoolBuilder) CacheReadyCondition(status corev1.ConditionStatus, reason, message string) *ipPoolBuilder {
+func (b *IPPoolBuilder) CacheReadyCondition(status corev1.ConditionStatus, reason, message string) *IPPoolBuilder {
 	setCacheReadyCondition(b.ipPool, status, reason, message)
 	return b
 }
 
-func (b *ipPoolBuilder) AgentReadyCondition(status corev1.ConditionStatus, reason, message string) *ipPoolBuilder {
+func (b *IPPoolBuilder) AgentReadyCondition(status corev1.ConditionStatus, reason, message string) *IPPoolBuilder {
 	setAgentReadyCondition(b.ipPool, status, reason, message)
 	return b
 }
 
-func (b *ipPoolBuilder) DisabledCondition(status corev1.ConditionStatus, reason, message string) *ipPoolBuilder {
+func (b *IPPoolBuilder) DisabledCondition(status corev1.ConditionStatus, reason, message string) *IPPoolBuilder {
 	setDisabledCondition(b.ipPool, status, reason, message)
 	return b
 }
 
-func (b *ipPoolBuilder) Build() *networkv1.IPPool {
+func (b *IPPoolBuilder) Build() *networkv1.IPPool {
 	return b.ipPool
 }
 
@@ -399,59 +398,11 @@ func (b *networkAttachmentDefinitionBuilder) Build() *cniv1.NetworkAttachmentDef
 	return b.nad
 }
 
-type cacheAllocatorBuilder struct {
-	cacheAllocator *cache.CacheAllocator
-}
-
-func newCacheAllocatorBuilder() *cacheAllocatorBuilder {
-	return &cacheAllocatorBuilder{
-		cacheAllocator: cache.New(),
+func SanitizeStatus(status *networkv1.IPPoolStatus) {
+	now := time.Time{}
+	status.LastUpdate = metav1.NewTime(now)
+	for i := range status.Conditions {
+		status.Conditions[i].LastTransitionTime = ""
+		status.Conditions[i].LastUpdateTime = ""
 	}
-}
-
-func (b *cacheAllocatorBuilder) MACSet(name string) *cacheAllocatorBuilder {
-	_ = b.cacheAllocator.NewMACSet(name)
-	return b
-}
-
-func (b *cacheAllocatorBuilder) Add(name, macAddress, ipAddress string) *cacheAllocatorBuilder {
-	_ = b.cacheAllocator.AddMAC(name, macAddress, ipAddress)
-	return b
-}
-
-func (b *cacheAllocatorBuilder) Build() *cache.CacheAllocator {
-	return b.cacheAllocator
-}
-
-type ipAllocatorBuilder struct {
-	ipAllocator *ipam.IPAllocator
-}
-
-func newIPAllocatorBuilder() *ipAllocatorBuilder {
-	return &ipAllocatorBuilder{
-		ipAllocator: ipam.New(),
-	}
-}
-
-func (b *ipAllocatorBuilder) IPSubnet(name, cidr, start, end string) *ipAllocatorBuilder {
-	_ = b.ipAllocator.NewIPSubnet(name, cidr, start, end)
-	return b
-}
-
-func (b *ipAllocatorBuilder) Revoke(name string, ipAddressList ...string) *ipAllocatorBuilder {
-	for _, ip := range ipAddressList {
-		_ = b.ipAllocator.RevokeIP(name, ip)
-	}
-	return b
-}
-
-func (b *ipAllocatorBuilder) Allocate(name string, ipAddressList ...string) *ipAllocatorBuilder {
-	for _, ip := range ipAddressList {
-		_, _ = b.ipAllocator.AllocateIP(name, ip)
-	}
-	return b
-}
-
-func (b *ipAllocatorBuilder) Build() *ipam.IPAllocator {
-	return b.ipAllocator
 }
