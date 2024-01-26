@@ -16,9 +16,6 @@ rules:
   resources: [ "nodes" ]
   verbs: [ "get", "watch", "list" ]
 - apiGroups: [ "" ]
-  resources: [ "configmaps", "events" ]
-  verbs: [ "get", "watch", "list", "update" ]
-- apiGroups: [ "" ]
   resources: [ "namespaces" ]
   verbs: [ "get", "watch", "list" ]
 - apiGroups: [ "" ]
@@ -115,6 +112,9 @@ metadata:
   name: {{ include "harvester-vm-dhcp-controller.name" . }}-lease-manager
   namespace: kube-system
 rules:
+- apiGroups: [ "" ]
+  resources: [ "configmaps" ]
+  verbs: [ "get", "watch", "list", "update", "create" ]
 - apiGroups: [ "coordination.k8s.io" ]
   resources: [ "leases" ]
   verbs: [ "get", "watch", "list", "update", "create" ]
