@@ -8,6 +8,7 @@ import (
 
 const (
 	ExcludedMark = "EXCLUDED"
+	ReservedMark = "RESERVED"
 
 	AgentSuffixName = "agent"
 )

@@ -216,6 +216,12 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 	if allocated == nil {
 		allocated = make(map[string]string)
 	}
+	if util.IsIPInBetweenOf(ipPool.Spec.IPv4Config.ServerIP, ipPool.Spec.IPv4Config.Pool.Start, ipPool.Spec.IPv4Config.Pool.End) {
+		allocated[ipPool.Spec.IPv4Config.ServerIP] = util.ReservedMark
+	}
+	if util.IsIPInBetweenOf(ipPool.Spec.IPv4Config.Router, ipPool.Spec.IPv4Config.Pool.Start, ipPool.Spec.IPv4Config.Pool.End) {
+		allocated[ipPool.Spec.IPv4Config.Router] = util.ReservedMark
+	}
 	for _, eIP := range ipPool.Spec.IPv4Config.Pool.Exclude {
 		allocated[eIP] = util.ExcludedMark
 	}
@@ -350,6 +356,18 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 	if err := h.cacheAllocator.NewMACSet(ipPool.Spec.NetworkName); err != nil {
 		return status, err
 	}
+
+	// Revoke server IP address in IPAM
+	if err := h.ipAllocator.RevokeIP(ipPool.Spec.NetworkName, ipPool.Spec.IPv4Config.ServerIP); err != nil {
+		return status, err
+	}
+	logrus.Debugf("(ippool.BuildCache) server ip %s was revoked in ipam %s", ipPool.Spec.IPv4Config.ServerIP, ipPool.Spec.NetworkName)
+
+	// Revoke router IP address in IPAM
+	if err := h.ipAllocator.RevokeIP(ipPool.Spec.NetworkName, ipPool.Spec.IPv4Config.Router); err != nil {
+		return status, err
+	}
+	logrus.Debugf("(ippool.BuildCache) router ip %s was revoked in ipam %s", ipPool.Spec.IPv4Config.Router, ipPool.Spec.NetworkName)
 
 	// Revoke excluded IP addresses in IPAM
 	for _, eIP := range ipPool.Spec.IPv4Config.Pool.Exclude {

@@ -75,6 +75,12 @@ func run(ctx context.Context, cfg *rest.Config, options *config.Options) error {
 		return err
 	}
 
+	if err := webhookServer.RegisterMutators(
+		ippool.NewMutator(),
+	); err != nil {
+		return err
+	}
+
 	if err := webhookServer.Start(); err != nil {
 		return err
 	}
