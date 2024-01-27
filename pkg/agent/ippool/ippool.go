@@ -17,7 +17,7 @@ func (c *Controller) Update(ipPool *networkv1.IPPool) error {
 		return nil
 	}
 	allocated := ipPool.Status.IPv4.Allocated
-	filterExcluded(allocated)
+	filterExcludedAndReserved(allocated)
 	return c.updatePoolCacheAndLeaseStore(allocated, ipPool.Spec.IPv4Config)
 }
 
@@ -62,9 +62,9 @@ func (c *Controller) updatePoolCacheAndLeaseStore(latest map[string]string, ipv4
 	return nil
 }
 
-func filterExcluded(allocated map[string]string) {
+func filterExcludedAndReserved(allocated map[string]string) {
 	for ip, mac := range allocated {
-		if mac == util.ExcludedMark {
+		if mac == util.ExcludedMark || mac == util.ReservedMark {
 			delete(allocated, ip)
 		}
 	}

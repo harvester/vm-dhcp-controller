@@ -31,10 +31,13 @@ const (
 	testPodName            = testNADNamespace + "-" + testNADName + "-agent"
 	testUID                = "3a955369-9eaa-43db-94f3-9153289d7dc2"
 	testClusterNetwork     = "provider"
-	testServerIP           = "192.168.0.2"
+	testServerIP1          = "192.168.0.2"
+	testServerIP2          = "192.168.0.110"
 	testNetworkName        = testNADNamespace + "/" + testNADName
 	testNetworkNameLong    = testNADNamespace + "/" + testNADNameLong
 	testCIDR               = "192.168.0.0/24"
+	testRouter1            = "192.168.0.1"
+	testRouter2            = "192.168.0.120"
 	testStartIP            = "192.168.0.101"
 	testEndIP              = "192.168.0.200"
 	testServiceAccountName = "vdca"
@@ -125,14 +128,14 @@ func TestHandler_OnChange(t *testing.T) {
 			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
 			Build()
 		givenIPPool := newTestIPPoolBuilder().
-			ServerIP(testServerIP).
+			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			PoolRange(testStartIP, testEndIP).
 			NetworkName(testNetworkName).
 			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
 
 		expectedIPPool := newTestIPPoolBuilder().
-			ServerIP(testServerIP).
+			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			PoolRange(testStartIP, testEndIP).
 			NetworkName(testNetworkName).
@@ -268,7 +271,7 @@ func TestHandler_OnChange(t *testing.T) {
 func TestHandler_DeployAgent(t *testing.T) {
 	t.Run("ippool created", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
-			ServerIP(testServerIP).
+			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			NetworkName(testNetworkName).Build()
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
@@ -278,7 +281,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
 		expectedPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
-				ServerIP(testServerIP).
+				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
@@ -367,7 +370,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 
 	t.Run("agent pod already exists", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
-			ServerIP(testServerIP).
+			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			NetworkName(testNetworkName).
 			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
@@ -375,7 +378,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 		givenPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
-				ServerIP(testServerIP).
+				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
@@ -392,7 +395,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
 		expectedPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
-				ServerIP(testServerIP).
+				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
@@ -442,7 +445,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 
 	t.Run("very long name ippool created", func(t *testing.T) {
 		givenIPPool := NewIPPoolBuilder(testIPPoolNamespace, testIPPoolNameLong).
-			ServerIP(testServerIP).
+			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			NetworkName(testNetworkNameLong).Build()
 		givenNAD := NewNetworkAttachmentDefinitionBuilder(testNADNamespace, testNADNameLong).
@@ -452,7 +455,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			AgentPodRef(testPodNamespace, testPodNameLong, testImage, "").Build()
 		expectedPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolNameLong).
-				ServerIP(testServerIP).
+				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkNameLong).Build(),
 			false,
@@ -500,7 +503,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 
 	t.Run("agent pod upgrade (from main to dev)", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
-			ServerIP(testServerIP).
+			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			NetworkName(testNetworkName).
 			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
@@ -615,7 +618,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 
 	t.Run("existing agent pod uid mismatch", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
-			ServerIP(testServerIP).
+			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			NetworkName(testNetworkName).
 			AgentPodRef(testPodNamespace, testPodName, testImage, testUID).Build()
@@ -623,7 +626,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 		givenPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
-				ServerIP(testServerIP).
+				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,

@@ -18,7 +18,7 @@ type PoolInfo struct {
 	RouterIPAddr    netip.Addr
 }
 
-func loadCIDR(cidr string) (ipNet *net.IPNet, networkIPAddr netip.Addr, broadcastIPAddr netip.Addr, err error) {
+func LoadCIDR(cidr string) (ipNet *net.IPNet, networkIPAddr netip.Addr, broadcastIPAddr netip.Addr, err error) {
 	_, ipNet, err = net.ParseCIDR(cidr)
 	if err != nil {
 		return
@@ -45,7 +45,7 @@ func loadCIDR(cidr string) (ipNet *net.IPNet, networkIPAddr netip.Addr, broadcas
 }
 
 func LoadPool(ipPool *networkv1.IPPool) (pi PoolInfo, err error) {
-	pi.IPNet, pi.NetworkIPAddr, pi.BroadcastIPAddr, err = loadCIDR(ipPool.Spec.IPv4Config.CIDR)
+	pi.IPNet, pi.NetworkIPAddr, pi.BroadcastIPAddr, err = LoadCIDR(ipPool.Spec.IPv4Config.CIDR)
 	if err != nil {
 		return
 	}
@@ -90,4 +90,30 @@ func LoadAllocated(allocated map[string]string) (ipAddrList []netip.Addr) {
 		ipAddrList = append(ipAddrList, ipAddr)
 	}
 	return
+}
+
+func IsIPAddrInList(ipAddr netip.Addr, ipAddrList []netip.Addr) bool {
+	for i := range ipAddrList {
+		if ipAddr == ipAddrList[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func IsIPInBetweenOf(ip, ip1, ip2 string) bool {
+	ipAddr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return false
+	}
+	ip1Addr, err := netip.ParseAddr(ip1)
+	if err != nil {
+		return false
+	}
+	ip2Addr, err := netip.ParseAddr(ip2)
+	if err != nil {
+		return false
+	}
+
+	return ipAddr.Compare(ip1Addr) >= 0 && ipAddr.Compare(ip2Addr) <= 0
 }
