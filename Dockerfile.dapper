@@ -9,9 +9,12 @@ RUN if [ "${ARCH}" = "amd64" ]; then \
     curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.55.2; \
     fi
 
+## install controller-gen
+RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.14.0
+
 ENV DAPPER_ENV REPO PUSH TAG DRONE_TAG ARCH
 ENV DAPPER_SOURCE /go/src/github.com/harvester/vm-dhcp-controller
-ENV DAPPER_OUTPUT ./bin ./dist
+ENV DAPPER_OUTPUT ./bin ./dist ./chart/crds
 ENV DAPPER_DOCKER_SOCKET true
 WORKDIR ${DAPPER_SOURCE}
 
