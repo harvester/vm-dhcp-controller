@@ -2,9 +2,10 @@ module github.com/harvester/vm-dhcp-controller
 
 go 1.21
 
-replace github.com/openshift/api => github.com/openshift/api v0.0.0-20230406152840-ce21e3fe5da2
-
 replace (
+	github.com/openshift/api => github.com/openshift/api v0.0.0-20191219222812-2987a591a72c
+	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c
+	github.com/rancher/rancher/pkg/apis => github.com/rancher/rancher/pkg/apis v0.0.0-20230124173128-2207cfed1803
 	k8s.io/api => k8s.io/api v0.27.9
 	k8s.io/apimachinery => k8s.io/apimachinery v0.27.9
 	k8s.io/client-go => k8s.io/client-go v0.27.9
