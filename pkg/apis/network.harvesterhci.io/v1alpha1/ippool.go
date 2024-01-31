@@ -4,6 +4,7 @@ import (
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var (
@@ -92,6 +93,8 @@ type IPv4Status struct {
 }
 
 type PodReference struct {
-	Namespace string `json:"namespace,omitempty"`
-	Name      string `json:"name,omitempty"`
+	Namespace string    `json:"namespace,omitempty"`
+	Name      string    `json:"name,omitempty"`
+	Image     string    `json:"image,omitempty"`
+	UID       types.UID `json:"uid,omitempty"`
 }

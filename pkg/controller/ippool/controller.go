@@ -282,6 +282,12 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 
 	agent := prepareAgentPod(ipPool, h.noDHCP, h.agentNamespace, clusterNetwork, h.agentServiceAccountName, h.agentImage)
 
+	if status.AgentPodRef == nil {
+		status.AgentPodRef = new(networkv1.PodReference)
+	}
+
+	status.AgentPodRef.Image = h.agentImage.String()
+
 	agentPod, err := h.podClient.Create(agent)
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
@@ -292,10 +298,9 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 
 	logrus.Infof("(ippool.DeployAgent) agent for ippool %s/%s has been deployed", ipPool.Namespace, ipPool.Name)
 
-	status.AgentPodRef = &networkv1.PodReference{
-		Namespace: agentPod.Namespace,
-		Name:      agentPod.Name,
-	}
+	status.AgentPodRef.Namespace = agentPod.Namespace
+	status.AgentPodRef.Name = agentPod.Name
+	status.AgentPodRef.UID = agentPod.GetUID()
 
 	return status, nil
 }
@@ -373,6 +378,10 @@ func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPool
 	agentPod, err := h.podCache.Get(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name)
 	if err != nil {
 		return status, err
+	}
+
+	if agentPod.GetUID() != ipPool.Status.AgentPodRef.UID || agentPod.Spec.Containers[0].Image != ipPool.Status.AgentPodRef.Image {
+		return status, h.podClient.Delete(agentPod.Namespace, agentPod.Name, &metav1.DeleteOptions{})
 	}
 
 	if !isPodReady(agentPod) {
