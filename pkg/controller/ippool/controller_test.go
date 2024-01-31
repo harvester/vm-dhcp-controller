@@ -82,8 +82,8 @@ func newTestIPPoolStatusBuilder() *ipPoolStatusBuilder {
 	return newIPPoolStatusBuilder()
 }
 
-func newTestNetworkAttachmentDefinitionBuilder() *networkAttachmentDefinitionBuilder {
-	return newNetworkAttachmentDefinitionBuilder(testNADNamespace, testNADName)
+func newTestNetworkAttachmentDefinitionBuilder() *NetworkAttachmentDefinitionBuilder {
+	return NewNetworkAttachmentDefinitionBuilder(testNADNamespace, testNADName)
 }
 
 func TestHandler_OnChange(t *testing.T) {

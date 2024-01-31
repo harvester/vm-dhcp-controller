@@ -212,6 +212,11 @@ func (b *IPPoolBuilder) CIDR(cidr string) *IPPoolBuilder {
 	return b
 }
 
+func (b *IPPoolBuilder) Router(router string) *IPPoolBuilder {
+	b.ipPool.Spec.IPv4Config.Router = router
+	return b
+}
+
 func (b *IPPoolBuilder) PoolRange(start, end string) *IPPoolBuilder {
 	b.ipPool.Spec.IPv4Config.Pool.Start = start
 	b.ipPool.Spec.IPv4Config.Pool.End = end
@@ -386,12 +391,12 @@ func (b *podBuilder) Build() *corev1.Pod {
 	return b.pod
 }
 
-type networkAttachmentDefinitionBuilder struct {
+type NetworkAttachmentDefinitionBuilder struct {
 	nad *cniv1.NetworkAttachmentDefinition
 }
 
-func newNetworkAttachmentDefinitionBuilder(namespace, name string) *networkAttachmentDefinitionBuilder {
-	return &networkAttachmentDefinitionBuilder{
+func NewNetworkAttachmentDefinitionBuilder(namespace, name string) *NetworkAttachmentDefinitionBuilder {
+	return &NetworkAttachmentDefinitionBuilder{
 		nad: &cniv1.NetworkAttachmentDefinition{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: namespace,
@@ -401,7 +406,7 @@ func newNetworkAttachmentDefinitionBuilder(namespace, name string) *networkAttac
 	}
 }
 
-func (b *networkAttachmentDefinitionBuilder) Label(key, value string) *networkAttachmentDefinitionBuilder {
+func (b *NetworkAttachmentDefinitionBuilder) Label(key, value string) *NetworkAttachmentDefinitionBuilder {
 	if b.nad.Labels == nil {
 		b.nad.Labels = make(map[string]string)
 	}
@@ -409,7 +414,7 @@ func (b *networkAttachmentDefinitionBuilder) Label(key, value string) *networkAt
 	return b
 }
 
-func (b *networkAttachmentDefinitionBuilder) Build() *cniv1.NetworkAttachmentDefinition {
+func (b *NetworkAttachmentDefinitionBuilder) Build() *cniv1.NetworkAttachmentDefinition {
 	return b.nad
 }
 
