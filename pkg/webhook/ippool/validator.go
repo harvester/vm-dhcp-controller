@@ -37,11 +37,11 @@ func (v *Validator) Create(_ *admission.Request, newObj runtime.Object) error {
 	logrus.Infof("create ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if err := v.checkNAD(ipPool); err != nil {
-		return fmt.Errorf(webhook.CreateErr, ipPool.Kind, ipPool.Namespace, ipPool.Name, err)
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
 	if err := v.checkServerIP(ipPool); err != nil {
-		return fmt.Errorf(webhook.CreateErr, ipPool.Kind, ipPool.Namespace, ipPool.Name, err)
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
 	return nil
@@ -57,11 +57,11 @@ func (v *Validator) Update(_ *admission.Request, _, newObj runtime.Object) error
 	logrus.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if err := v.checkNAD(ipPool); err != nil {
-		return fmt.Errorf(webhook.CreateErr, ipPool.Kind, ipPool.Namespace, ipPool.Name, err)
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
 	if err := v.checkServerIP(ipPool); err != nil {
-		return fmt.Errorf(webhook.CreateErr, ipPool.Kind, ipPool.Namespace, ipPool.Name, err)
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
 	return nil
