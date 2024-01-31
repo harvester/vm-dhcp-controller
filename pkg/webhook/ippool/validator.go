@@ -2,6 +2,7 @@ package ippool
 
 import (
 	"fmt"
+	"net/netip"
 	"strings"
 
 	"github.com/harvester/webhook/pkg/server/admission"
@@ -31,24 +32,43 @@ func NewValidator(nadCache ctlcniv1.NetworkAttachmentDefinitionCache, vmnetcfgCa
 	}
 }
 
-func (v *Validator) Create(request *admission.Request, newObj runtime.Object) error {
+func (v *Validator) Create(_ *admission.Request, newObj runtime.Object) error {
 	ipPool := newObj.(*networkv1.IPPool)
 	logrus.Infof("create ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
-	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
-	if nadNamespace == "" {
-		nadNamespace = "default"
+	if err := v.checkNAD(ipPool); err != nil {
+		return fmt.Errorf(webhook.CreateErr, ipPool.Kind, ipPool.Namespace, ipPool.Name, err)
 	}
 
-	if _, err := v.nadCache.Get(nadNamespace, nadName); err != nil {
+	if err := v.checkServerIP(ipPool); err != nil {
 		return fmt.Errorf(webhook.CreateErr, ipPool.Kind, ipPool.Namespace, ipPool.Name, err)
 	}
 
 	return nil
 }
 
-func (v *Validator) Delete(request *admission.Request, newObj runtime.Object) error {
+func (v *Validator) Update(_ *admission.Request, _, newObj runtime.Object) error {
 	ipPool := newObj.(*networkv1.IPPool)
+
+	if ipPool.DeletionTimestamp != nil {
+		return nil
+	}
+
+	logrus.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+
+	if err := v.checkNAD(ipPool); err != nil {
+		return fmt.Errorf(webhook.CreateErr, ipPool.Kind, ipPool.Namespace, ipPool.Name, err)
+	}
+
+	if err := v.checkServerIP(ipPool); err != nil {
+		return fmt.Errorf(webhook.CreateErr, ipPool.Kind, ipPool.Namespace, ipPool.Name, err)
+	}
+
+	return nil
+}
+
+func (v *Validator) Delete(_ *admission.Request, oldObj runtime.Object) error {
+	ipPool := oldObj.(*networkv1.IPPool)
 	logrus.Infof("delete ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
 	if err := v.checkVmNetCfgs(ipPool); err != nil {
@@ -67,9 +87,63 @@ func (v *Validator) Resource() admission.Resource {
 		ObjectType: &networkv1.IPPool{},
 		OperationTypes: []admissionregv1.OperationType{
 			admissionregv1.Create,
+			admissionregv1.Update,
 			admissionregv1.Delete,
 		},
 	}
+}
+
+func (v *Validator) checkNAD(ipPool *networkv1.IPPool) error {
+	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
+	if nadNamespace == "" {
+		nadNamespace = "default"
+	}
+
+	_, err := v.nadCache.Get(nadNamespace, nadName)
+	return err
+}
+
+func (v *Validator) checkServerIP(ipPool *networkv1.IPPool) error {
+	ipNet, networkIPAddr, broadcastIPAddr, err := util.LoadCIDR(ipPool.Spec.IPv4Config.CIDR)
+	if err != nil {
+		return err
+	}
+
+	routerIPAddr, err := netip.ParseAddr(ipPool.Spec.IPv4Config.Router)
+	if err != nil {
+		routerIPAddr = netip.Addr{}
+	}
+
+	serverIPAddr, err := netip.ParseAddr(ipPool.Spec.IPv4Config.ServerIP)
+	if err != nil {
+		return err
+	}
+
+	if !ipNet.Contains(serverIPAddr.AsSlice()) {
+		return fmt.Errorf("server ip %s is not within subnet", serverIPAddr)
+	}
+
+	if serverIPAddr.As4() == networkIPAddr.As4() {
+		return fmt.Errorf("server ip %s cannot be the same as network ip", serverIPAddr)
+	}
+
+	if serverIPAddr.As4() == broadcastIPAddr.As4() {
+		return fmt.Errorf("server ip %s cannot be the same as broadcast ip", serverIPAddr)
+	}
+
+	if routerIPAddr.IsValid() && serverIPAddr.As4() == routerIPAddr.As4() {
+		return fmt.Errorf("server ip %s cannot be the same as router ip", serverIPAddr)
+	}
+
+	if ipPool.Status.IPv4 != nil {
+		for ip, mac := range ipPool.Status.IPv4.Allocated {
+			if serverIPAddr.String() == ip {
+				return fmt.Errorf("server ip %s is already allocated by mac %s", serverIPAddr, mac)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (v *Validator) checkVmNetCfgs(ipPool *networkv1.IPPool) error {
