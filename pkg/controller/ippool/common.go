@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/wrangler/pkg/kv"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
@@ -222,12 +223,14 @@ func (b *IPPoolBuilder) Exclude(ipAddressList ...string) *IPPoolBuilder {
 	return b
 }
 
-func (b *IPPoolBuilder) AgentPodRef(namespace, name string) *IPPoolBuilder {
+func (b *IPPoolBuilder) AgentPodRef(namespace, name, image, uid string) *IPPoolBuilder {
 	if b.ipPool.Status.AgentPodRef == nil {
 		b.ipPool.Status.AgentPodRef = new(networkv1.PodReference)
 	}
 	b.ipPool.Status.AgentPodRef.Namespace = namespace
 	b.ipPool.Status.AgentPodRef.Name = name
+	b.ipPool.Status.AgentPodRef.Image = image
+	b.ipPool.Status.AgentPodRef.UID = types.UID(uid)
 	return b
 }
 
@@ -292,12 +295,14 @@ func newIPPoolStatusBuilder() *ipPoolStatusBuilder {
 	}
 }
 
-func (b *ipPoolStatusBuilder) AgentPodRef(namespace, name string) *ipPoolStatusBuilder {
+func (b *ipPoolStatusBuilder) AgentPodRef(namespace, name, image, uid string) *ipPoolStatusBuilder {
 	if b.ipPoolStatus.AgentPodRef == nil {
 		b.ipPoolStatus.AgentPodRef = new(networkv1.PodReference)
 	}
 	b.ipPoolStatus.AgentPodRef.Namespace = namespace
 	b.ipPoolStatus.AgentPodRef.Name = name
+	b.ipPoolStatus.AgentPodRef.Image = image
+	b.ipPoolStatus.AgentPodRef.UID = types.UID(uid)
 	return b
 }
 
@@ -346,6 +351,15 @@ func newPodBuilder(namespace, name string) *podBuilder {
 			},
 		},
 	}
+}
+
+func (b *podBuilder) Container(name, repository, tag string) *podBuilder {
+	container := corev1.Container{
+		Name:  name,
+		Image: repository + ":" + tag,
+	}
+	b.pod.Spec.Containers = append(b.pod.Spec.Containers, container)
+	return b
 }
 
 func (b *podBuilder) PodReady(ready corev1.ConditionStatus) *podBuilder {

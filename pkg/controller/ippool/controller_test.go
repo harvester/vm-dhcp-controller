@@ -39,8 +39,12 @@ const (
 	testStartIP            = "192.168.0.101"
 	testEndIP              = "192.168.0.200"
 	testServiceAccountName = "vdca"
-	testImageRepository    = "rancher/harvester-vm-dhcp-controller"
+	testImageRepository    = "rancher/harvester-vm-dhcp-agent"
 	testImageTag           = "main"
+	testImageTagNew        = "dev"
+	testImage              = testImageRepository + ":" + testImageTag
+	testImageNew           = testImageRepository + ":" + testImageTagNew
+	testContainerName      = "agent"
 
 	testExcludedIP1 = "192.168.0.150"
 	testExcludedIP2 = "192.168.0.187"
@@ -150,7 +154,7 @@ func TestHandler_OnChange(t *testing.T) {
 					Build(),
 				ipPool: newTestIPPoolBuilder().
 					Paused().
-					AgentPodRef("default", "default-ippool-1-agent").
+					AgentPodRef("default", "default-ippool-1-agent", testImage, "").
 					Build(),
 				pods: []*corev1.Pod{
 					newTestPodBuilder().
@@ -233,7 +237,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 
 		expectedStatus := newTestIPPoolStatusBuilder().
-			AgentPodRef(testPodNamespace, testPodName).Build()
+			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
 		expectedPod := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP).
@@ -327,7 +331,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			ServerIP(testServerIP).
 			CIDR(testCIDR).
 			NetworkName(testNetworkName).
-			AgentPodRef(testPodNamespace, testPodName).Build()
+			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 		givenPod := prepareAgentPod(
@@ -346,7 +350,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 		)
 
 		expectedStatus := newTestIPPoolStatusBuilder().
-			AgentPodRef(testPodNamespace, testPodName).Build()
+			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
 		expectedPod := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP).
@@ -405,7 +409,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 
 		expectedStatus := newTestIPPoolStatusBuilder().
-			AgentPodRef(testPodNamespace, testPodNameLong).Build()
+			AgentPodRef(testPodNamespace, testPodNameLong, testImage, "").Build()
 		expectedPod := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolNameLong).
 				ServerIP(testServerIP).
@@ -452,26 +456,61 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, expectedPod, pod)
 	})
+
+	t.Run("agent pod upgrade (from main to dev)", func(t *testing.T) {
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			NetworkName(testNetworkName).
+			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
+			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
+
+		expectedStatus := newTestIPPoolStatusBuilder().
+			AgentPodRef(testPodNamespace, testPodName, testImageNew, "").Build()
+
+		nadGVR := schema.GroupVersionResource{
+			Group:    "k8s.cni.cncf.io",
+			Version:  "v1",
+			Resource: "network-attachment-definitions",
+		}
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Create(nadGVR, givenNAD, givenNAD.Namespace)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		k8sclientset := k8sfake.NewSimpleClientset()
+
+		handler := Handler{
+			agentNamespace: testPodNamespace,
+			agentImage: &config.Image{
+				Repository: testImageRepository,
+				Tag:        testImageTagNew,
+			},
+			agentServiceAccountName: testServiceAccountName,
+			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
+			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+		}
+
+		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedStatus, status)
+	})
 }
 
 func TestHandler_BuildCache(t *testing.T) {
 	t.Run("new ippool", func(t *testing.T) {
-		givenIPAllocator := newTestIPAllocatorBuilder().
-			Build()
-		givenCacheAllocator := newTestCacheAllocatorBuilder().
-			Build()
+		givenIPAllocator := newTestIPAllocatorBuilder().Build()
+		givenCacheAllocator := newTestCacheAllocatorBuilder().Build()
 		givenIPPool := newTestIPPoolBuilder().
 			CIDR(testCIDR).
 			PoolRange(testStartIP, testEndIP).
-			NetworkName(testNetworkName).
-			Build()
+			NetworkName(testNetworkName).Build()
 
 		expectedIPAllocator := newTestIPAllocatorBuilder().
-			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
-			Build()
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).Build()
 		expectedCacheAllocator := newTestCacheAllocatorBuilder().
-			MACSet(testNetworkName).
-			Build()
+			MACSet(testNetworkName).Build()
 
 		handler := Handler{
 			cacheAllocator: givenCacheAllocator,
@@ -487,8 +526,7 @@ func TestHandler_BuildCache(t *testing.T) {
 
 	t.Run("ippool paused", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
-			Paused().
-			Build()
+			Paused().Build()
 
 		handler := Handler{}
 
@@ -498,12 +536,10 @@ func TestHandler_BuildCache(t *testing.T) {
 
 	t.Run("cache is already ready", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
-			CacheReadyCondition(corev1.ConditionTrue, "", "").
-			Build()
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
 
 		expectedStatus := newTestIPPoolStatusBuilder().
-			CacheReadyCondition(corev1.ConditionTrue, "", "").
-			Build()
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
 
 		handler := Handler{}
 
@@ -513,24 +549,19 @@ func TestHandler_BuildCache(t *testing.T) {
 	})
 
 	t.Run("ippool with excluded ips", func(t *testing.T) {
-		givenIPAllocator := newTestIPAllocatorBuilder().
-			Build()
-		givenCacheAllocator := newTestCacheAllocatorBuilder().
-			Build()
+		givenIPAllocator := newTestIPAllocatorBuilder().Build()
+		givenCacheAllocator := newTestCacheAllocatorBuilder().Build()
 		givenIPPool := newTestIPPoolBuilder().
 			CIDR(testCIDR).
 			PoolRange(testStartIP, testEndIP).
 			Exclude(testExcludedIP1, testExcludedIP2).
-			NetworkName(testNetworkName).
-			Build()
+			NetworkName(testNetworkName).Build()
 
 		expectedIPAllocator := newTestIPAllocatorBuilder().
 			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
-			Revoke(testNetworkName, testExcludedIP1, testExcludedIP2).
-			Build()
+			Revoke(testNetworkName, testExcludedIP1, testExcludedIP2).Build()
 		expectedCacheAllocator := newTestCacheAllocatorBuilder().
-			MACSet(testNetworkName).
-			Build()
+			MACSet(testNetworkName).Build()
 
 		handler := Handler{
 			cacheAllocator: givenCacheAllocator,
@@ -545,29 +576,24 @@ func TestHandler_BuildCache(t *testing.T) {
 	})
 
 	t.Run("rebuild caches", func(t *testing.T) {
-		givenIPAllocator := newTestIPAllocatorBuilder().
-			Build()
-		givenCacheAllocator := newTestCacheAllocatorBuilder().
-			Build()
+		givenIPAllocator := newTestIPAllocatorBuilder().Build()
+		givenCacheAllocator := newTestCacheAllocatorBuilder().Build()
 		givenIPPool := newTestIPPoolBuilder().
 			CIDR(testCIDR).
 			PoolRange(testStartIP, testEndIP).
 			Exclude(testExcludedIP1, testExcludedIP2).
 			NetworkName(testNetworkName).
 			Allocated(testAllocatedIP1, testMAC1).
-			Allocated(testAllocatedIP2, testMAC2).
-			Build()
+			Allocated(testAllocatedIP2, testMAC2).Build()
 
 		expectedIPAllocator := newTestIPAllocatorBuilder().
 			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
 			Revoke(testNetworkName, testExcludedIP1, testExcludedIP2).
-			Allocate(testNetworkName, testAllocatedIP1, testAllocatedIP2).
-			Build()
+			Allocate(testNetworkName, testAllocatedIP1, testAllocatedIP2).Build()
 		expectedCacheAllocator := newTestCacheAllocatorBuilder().
 			MACSet(testNetworkName).
 			Add(testNetworkName, testMAC1, testAllocatedIP1).
-			Add(testNetworkName, testMAC2, testAllocatedIP2).
-			Build()
+			Add(testNetworkName, testMAC2, testAllocatedIP2).Build()
 
 		handler := Handler{
 			cacheAllocator: givenCacheAllocator,
@@ -584,7 +610,7 @@ func TestHandler_BuildCache(t *testing.T) {
 
 func TestHandler_MonitorAgent(t *testing.T) {
 	t.Run("agent pod not found", func(t *testing.T) {
-		givenIPPool := newTestIPPoolBuilder().AgentPodRef(testPodNamespace, testPodName).Build()
+		givenIPPool := newTestIPPoolBuilder().AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
 		givenPod := newPodBuilder("default", "nginx").Build()
 
 		k8sclientset := k8sfake.NewSimpleClientset()
@@ -601,8 +627,9 @@ func TestHandler_MonitorAgent(t *testing.T) {
 	})
 
 	t.Run("agent pod unready", func(t *testing.T) {
-		givenIPPool := newTestIPPoolBuilder().AgentPodRef(testPodNamespace, testPodName).Build()
-		givenPod := newTestPodBuilder().Build()
+		givenIPPool := newTestIPPoolBuilder().AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+		givenPod := newTestPodBuilder().
+			Container(testContainerName, testImageRepository, testImageTag).Build()
 
 		k8sclientset := k8sfake.NewSimpleClientset()
 
@@ -618,8 +645,10 @@ func TestHandler_MonitorAgent(t *testing.T) {
 	})
 
 	t.Run("agent pod ready", func(t *testing.T) {
-		givenIPPool := newTestIPPoolBuilder().AgentPodRef(testPodNamespace, testPodName).Build()
-		givenPod := newTestPodBuilder().PodReady(corev1.ConditionTrue).Build()
+		givenIPPool := newTestIPPoolBuilder().AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+		givenPod := newTestPodBuilder().
+			Container(testContainerName, testImageRepository, testImageTag).
+			PodReady(corev1.ConditionTrue).Build()
 
 		k8sclientset := k8sfake.NewSimpleClientset()
 
@@ -661,5 +690,30 @@ func TestHandler_MonitorAgent(t *testing.T) {
 
 		_, err := handler.MonitorAgent(givenIPPool, givenIPPool.Status)
 		assert.Equal(t, fmt.Sprintf("agent for ippool %s is not deployed", testIPPoolNamespace+"/"+testIPPoolName), err.Error())
+	})
+
+	t.Run("outdated agent pod", func(t *testing.T) {
+		givenIPPool := newTestIPPoolBuilder().
+			AgentPodRef(testPodNamespace, testPodName, testImageNew, "").Build()
+		givenPod := newTestPodBuilder().
+			Container(testContainerName, testImageRepository, testImageTag).
+			PodReady(corev1.ConditionTrue).Build()
+
+		k8sclientset := k8sfake.NewSimpleClientset()
+
+		err := k8sclientset.Tracker().Add(givenPod)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		handler := Handler{
+			podClient: fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+			podCache:  fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+		}
+
+		_, err = handler.MonitorAgent(givenIPPool, givenIPPool.Status)
+		assert.Nil(t, err)
+
+		_, err = handler.podClient.Get(testPodNamespace, testPodName, metav1.GetOptions{})
+		assert.NotNil(t, err)
+		assert.Equal(t, fmt.Sprintf("pods \"%s\" not found", testPodName), err.Error())
 	})
 }
