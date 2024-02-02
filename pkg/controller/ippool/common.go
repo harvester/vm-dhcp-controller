@@ -26,7 +26,7 @@ func prepareAgentPod(
 	clusterNetwork string,
 	agentServiceAccountName string,
 	agentImage *config.Image,
-) *corev1.Pod {
+) (*corev1.Pod, error) {
 	name := util.SafeAgentConcatName(ipPool.Namespace, ipPool.Name)
 
 	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
@@ -37,9 +37,15 @@ func prepareAgentPod(
 			InterfaceName: "eth1",
 		},
 	}
-	networksStr, _ := json.Marshal(networks)
+	networksStr, err := json.Marshal(networks)
+	if err != nil {
+		return nil, err
+	}
 
-	_, ipNet, _ := net.ParseCIDR(ipPool.Spec.IPv4Config.CIDR)
+	_, ipNet, err := net.ParseCIDR(ipPool.Spec.IPv4Config.CIDR)
+	if err != nil {
+		return nil, err
+	}
 	prefixLength, _ := ipNet.Mask.Size()
 
 	args := []string{
@@ -143,7 +149,7 @@ func prepareAgentPod(
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 func setRegisteredCondition(ipPool *networkv1.IPPool, status corev1.ConditionStatus, reason, message string) {

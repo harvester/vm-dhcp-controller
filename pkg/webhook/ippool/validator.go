@@ -36,11 +36,25 @@ func (v *Validator) Create(_ *admission.Request, newObj runtime.Object) error {
 	ipPool := newObj.(*networkv1.IPPool)
 	logrus.Infof("create ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
-	if err := v.checkNAD(ipPool); err != nil {
+	// sanity check
+	poolInfo, err := util.LoadPool(ipPool)
+	if err != nil {
 		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
-	if err := v.checkServerIP(ipPool); err != nil {
+	if err := v.checkNAD(ipPool.Spec.NetworkName); err != nil {
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+	}
+
+	if err := v.checkPoolRange(poolInfo); err != nil {
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+	}
+
+	if err := v.checkServerIP(poolInfo); err != nil {
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+	}
+
+	if err := v.checkRouter(poolInfo); err != nil {
 		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
@@ -56,11 +70,30 @@ func (v *Validator) Update(_ *admission.Request, _, newObj runtime.Object) error
 
 	logrus.Infof("update ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
-	if err := v.checkNAD(ipPool); err != nil {
+	// sanity check
+	poolInfo, err := util.LoadPool(ipPool)
+	if err != nil {
 		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
-	if err := v.checkServerIP(ipPool); err != nil {
+	var allocatedIPAddrList []netip.Addr
+	if ipPool.Status.IPv4 != nil {
+		allocatedIPAddrList = util.LoadAllocated(ipPool.Status.IPv4.Allocated)
+	}
+
+	if err := v.checkNAD(ipPool.Spec.NetworkName); err != nil {
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+	}
+
+	if err := v.checkPoolRange(poolInfo); err != nil {
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+	}
+
+	if err := v.checkServerIP(poolInfo, allocatedIPAddrList...); err != nil {
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+	}
+
+	if err := v.checkRouter(poolInfo); err != nil {
 		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
@@ -93,8 +126,8 @@ func (v *Validator) Resource() admission.Resource {
 	}
 }
 
-func (v *Validator) checkNAD(ipPool *networkv1.IPPool) error {
-	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
+func (v *Validator) checkNAD(namespacedName string) error {
+	nadNamespace, nadName := kv.RSplit(namespacedName, "/")
 	if nadNamespace == "" {
 		nadNamespace = "default"
 	}
@@ -103,44 +136,82 @@ func (v *Validator) checkNAD(ipPool *networkv1.IPPool) error {
 	return err
 }
 
-func (v *Validator) checkServerIP(ipPool *networkv1.IPPool) error {
-	ipNet, networkIPAddr, broadcastIPAddr, err := util.LoadCIDR(ipPool.Spec.IPv4Config.CIDR)
-	if err != nil {
-		return err
-	}
-
-	routerIPAddr, err := netip.ParseAddr(ipPool.Spec.IPv4Config.Router)
-	if err != nil {
-		routerIPAddr = netip.Addr{}
-	}
-
-	serverIPAddr, err := netip.ParseAddr(ipPool.Spec.IPv4Config.ServerIP)
-	if err != nil {
-		return err
-	}
-
-	if !ipNet.Contains(serverIPAddr.AsSlice()) {
-		return fmt.Errorf("server ip %s is not within subnet", serverIPAddr)
-	}
-
-	if serverIPAddr.As4() == networkIPAddr.As4() {
-		return fmt.Errorf("server ip %s cannot be the same as network ip", serverIPAddr)
-	}
-
-	if serverIPAddr.As4() == broadcastIPAddr.As4() {
-		return fmt.Errorf("server ip %s cannot be the same as broadcast ip", serverIPAddr)
-	}
-
-	if routerIPAddr.IsValid() && serverIPAddr.As4() == routerIPAddr.As4() {
-		return fmt.Errorf("server ip %s cannot be the same as router ip", serverIPAddr)
-	}
-
-	if ipPool.Status.IPv4 != nil {
-		for ip, mac := range ipPool.Status.IPv4.Allocated {
-			if serverIPAddr.String() == ip {
-				return fmt.Errorf("server ip %s is already allocated by mac %s", serverIPAddr, mac)
-			}
+func (v *Validator) checkPoolRange(pi util.PoolInfo) error {
+	if pi.StartIPAddr.IsValid() {
+		if !pi.IPNet.Contains(pi.StartIPAddr.AsSlice()) {
+			return fmt.Errorf("start ip %s is not within subnet", pi.StartIPAddr)
 		}
+
+		if pi.StartIPAddr.As4() == pi.NetworkIPAddr.As4() {
+			return fmt.Errorf("start ip %s is the same as network ip", pi.StartIPAddr)
+		}
+
+		if pi.StartIPAddr.As4() == pi.BroadcastIPAddr.As4() {
+			return fmt.Errorf("start ip %s is the same as broadcast ip", pi.StartIPAddr)
+		}
+	}
+
+	if pi.EndIPAddr.IsValid() {
+		if !pi.IPNet.Contains(pi.EndIPAddr.AsSlice()) {
+			return fmt.Errorf("end ip %s is not within subnet", pi.EndIPAddr)
+		}
+
+		if pi.EndIPAddr.As4() == pi.NetworkIPAddr.As4() {
+			return fmt.Errorf("end ip %s is the same as network ip", pi.EndIPAddr)
+		}
+
+		if pi.EndIPAddr.As4() == pi.BroadcastIPAddr.As4() {
+			return fmt.Errorf("end ip %s is the same as broadcast ip", pi.EndIPAddr)
+		}
+	}
+	return nil
+}
+
+func (v *Validator) checkServerIP(pi util.PoolInfo, allocatedIPs ...netip.Addr) error {
+	if !pi.ServerIPAddr.IsValid() {
+		return nil
+	}
+
+	if !pi.IPNet.Contains(pi.ServerIPAddr.AsSlice()) {
+		return fmt.Errorf("server ip %s is not within subnet", pi.ServerIPAddr)
+	}
+
+	if pi.ServerIPAddr.As4() == pi.NetworkIPAddr.As4() {
+		return fmt.Errorf("server ip %s cannot be the same as network ip", pi.ServerIPAddr)
+	}
+
+	if pi.ServerIPAddr.As4() == pi.BroadcastIPAddr.As4() {
+		return fmt.Errorf("server ip %s cannot be the same as broadcast ip", pi.ServerIPAddr)
+	}
+
+	if pi.RouterIPAddr.IsValid() && pi.ServerIPAddr.As4() == pi.RouterIPAddr.As4() {
+		return fmt.Errorf("server ip %s cannot be the same as router ip", pi.ServerIPAddr)
+	}
+
+	for _, ip := range allocatedIPs {
+		if pi.ServerIPAddr == ip {
+			return fmt.Errorf("server ip %s is already allocated", pi.ServerIPAddr)
+		}
+	}
+
+	return nil
+}
+
+func (v *Validator) checkRouter(pi util.PoolInfo) error {
+	if !pi.RouterIPAddr.IsValid() {
+		return nil
+	}
+
+	if !pi.IPNet.Contains(pi.RouterIPAddr.AsSlice()) {
+		return fmt.Errorf("router ip %s is not within subnet", pi.RouterIPAddr)
+	}
+
+	if pi.RouterIPAddr.As4() == pi.NetworkIPAddr.As4() {
+		return fmt.Errorf("router ip %s is the same as network ip", pi.RouterIPAddr)
+	}
+
+	if pi.RouterIPAddr.As4() == pi.BroadcastIPAddr.As4() {
+		return fmt.Errorf("router ip %s is the same as broadcast ip", pi.BroadcastIPAddr)
 	}
 
 	return nil

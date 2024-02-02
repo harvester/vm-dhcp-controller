@@ -297,7 +297,10 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 		}
 	}
 
-	agent := prepareAgentPod(ipPool, h.noDHCP, h.agentNamespace, clusterNetwork, h.agentServiceAccountName, h.agentImage)
+	agent, err := prepareAgentPod(ipPool, h.noDHCP, h.agentNamespace, clusterNetwork, h.agentServiceAccountName, h.agentImage)
+	if err != nil {
+		return status, err
+	}
 
 	if status.AgentPodRef == nil {
 		status.AgentPodRef = new(networkv1.PodReference)
