@@ -21,6 +21,7 @@ type NetworkConfigState string
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:resource:shortName=vmnetcfg;vmnetcfgs,scope=Namespaced
+// +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="VMNAME",type=string,JSONPath=`.spec.vmName`
 // +kubebuilder:printcolumn:name="ALLOCATED",type=string,JSONPath=`.status.conditions[?(@.type=='Allocated')].status`
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=`.metadata.creationTimestamp`
@@ -34,25 +35,42 @@ type VirtualMachineNetworkConfig struct {
 }
 
 type VirtualMachineNetworkConfigSpec struct {
-	VMName        string          `json:"vmName,omitempty"`
-	NetworkConfig []NetworkConfig `json:"networkConfig,omitempty"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="VMName is immutable"
+	// +kubebuilder:validation:MaxLength=64
+	VMName string `json:"vmName"`
 
 	// +optional
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:XValidation:rule="oldSelf.all(x, x in self)",message="NetworkConfig may only be added"
+	// +kubebuilder:validation:MaxItems=4
+	NetworkConfigs []NetworkConfig `json:"networkConfigs,omitempty"`
+
+	// +optional
+	// +kubebuilder:validation:Optional
 	Paused *bool `json:"paused,omitempty"`
 }
 
 type NetworkConfig struct {
-	NetworkName string `json:"networkName,omitempty"`
-	MACAddress  string `json:"macAddress,omitempty"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=64
+	NetworkName string `json:"networkName"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=17
+	MACAddress string `json:"macAddress"`
 
 	// +optional
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Format=ipv4
 	IPAddress *string `json:"ipAddress,omitempty"`
 }
 
 type VirtualMachineNetworkConfigStatus struct {
-	NetworkConfig []NetworkConfigStatus `json:"networkConfig,omitempty"`
+	NetworkConfigs []NetworkConfigStatus `json:"networkConfig,omitempty"`
 
 	// +optional
+	// +kubebuilder:validation:Optional
 	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
 }
 

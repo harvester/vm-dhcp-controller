@@ -66,9 +66,14 @@ spec:
                 properties:
                   cidr:
                     type: string
+                    x-kubernetes-validations:
+                    - message: CIDR is immutable
+                      rule: self == oldSelf
                   dns:
+                    format: ipv4
                     items:
                       type: string
+                    maxItems: 3
                     type: array
                   domainName:
                     type: string
@@ -81,27 +86,67 @@ spec:
                   ntp:
                     items:
                       type: string
+                    maxItems: 4
                     type: array
                   pool:
                     properties:
                       end:
+                        format: ipv4
                         type: string
+                        x-kubernetes-validations:
+                        - message: End is immutable
+                          rule: self == oldSelf
                       exclude:
+                        format: ipv4
                         items:
                           type: string
                         type: array
+                        x-kubernetes-validations:
+                        - message: Exclude is immutable
+                          rule: self == oldSelf
                       start:
+                        format: ipv4
                         type: string
+                        x-kubernetes-validations:
+                        - message: Start is immutable
+                          rule: self == oldSelf
+                    required:
+                    - end
+                    - start
                     type: object
+                    x-kubernetes-validations:
+                    - message: End is required once set
+                      rule: '!has(oldSelf.exclude) || has(self.exclude)'
                   router:
+                    format: ipv4
                     type: string
+                    x-kubernetes-validations:
+                    - message: Router is immutable
+                      rule: self == oldSelf
                   serverIP:
+                    format: ipv4
                     type: string
+                    x-kubernetes-validations:
+                    - message: ServerIP is immutable
+                      rule: self == oldSelf
+                required:
+                - cidr
+                - pool
+                - serverIP
                 type: object
+                x-kubernetes-validations:
+                - message: Router is required once set
+                  rule: '!has(oldSelf.router) || has(self.router)'
               networkName:
+                maxLength: 64
                 type: string
+                x-kubernetes-validations:
+                - message: NetworkName is immutable
+                  rule: self == oldSelf
               paused:
                 type: boolean
+            required:
+            - networkName
             type: object
           status:
             properties:
@@ -161,4 +206,5 @@ spec:
         type: object
     served: true
     storage: true
-    subresources: {}
+    subresources:
+      status: {}

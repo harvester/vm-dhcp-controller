@@ -101,7 +101,7 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 	logrus.Debugf("(vm.OnChange) vmnetcfg for vm %s already exists", key)
 
 	vmNetCfgCpy := oldVmNetCfg.DeepCopy()
-	vmNetCfgCpy.Spec.NetworkConfig = vmNetCfg.Spec.NetworkConfig
+	vmNetCfgCpy.Spec.NetworkConfigs = vmNetCfg.Spec.NetworkConfigs
 
 	if !reflect.DeepEqual(vmNetCfgCpy, oldVmNetCfg) {
 		logrus.Infof("(vm.OnChange) update vmnetcfg %s/%s", vmNetCfgCpy.Namespace, vmNetCfgCpy.Name)
@@ -138,8 +138,8 @@ func prepareVmNetCfg(vm *kubevirtv1.VirtualMachine, ncm map[string]networkv1.Net
 			},
 		},
 		Spec: networkv1.VirtualMachineNetworkConfigSpec{
-			VMName:        vm.Name,
-			NetworkConfig: ncs,
+			VMName:         vm.Name,
+			NetworkConfigs: ncs,
 		},
 	}
 }

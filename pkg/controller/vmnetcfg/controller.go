@@ -70,7 +70,7 @@ func (h *Handler) OnChange(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 		return nil, nil
 	}
 
-	logrus.Debugf("(vmnetcfg.OnChange) vmnetcfg configuration %s has been changed: %+v", key, vmNetCfg.Spec.NetworkConfig)
+	logrus.Debugf("(vmnetcfg.OnChange) vmnetcfg configuration %s has been changed: %+v", key, vmNetCfg.Spec.NetworkConfigs)
 
 	vmNetCfgCpy := vmNetCfg.DeepCopy()
 
@@ -81,7 +81,7 @@ func (h *Handler) OnChange(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 			return vmNetCfg, err
 		}
 		networkv1.Disabled.True(vmNetCfgCpy)
-		updateAllNetworkConfigState(vmNetCfgCpy.Status.NetworkConfig)
+		updateAllNetworkConfigState(vmNetCfgCpy.Status.NetworkConfigs)
 		if !reflect.DeepEqual(vmNetCfgCpy, vmNetCfg) {
 			return h.vmnetcfgClient.UpdateStatus(vmNetCfgCpy)
 		}
@@ -104,7 +104,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 	}
 
 	var ncStatuses []networkv1.NetworkConfigStatus
-	for _, nc := range vmNetCfg.Spec.NetworkConfig {
+	for _, nc := range vmNetCfg.Spec.NetworkConfigs {
 		exists, err := h.cacheAllocator.HasMAC(nc.NetworkName, nc.MACAddress)
 		if err != nil {
 			return status, err
@@ -182,7 +182,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 			dIP = *nc.IPAddress
 		}
 		// Recover IP from status (resume from paused state)
-		if oIP, err := findIPAddressFromNetworkConfigStatusByMACAddress(vmNetCfg.Status.NetworkConfig, nc.MACAddress); err == nil {
+		if oIP, err := findIPAddressFromNetworkConfigStatusByMACAddress(vmNetCfg.Status.NetworkConfigs, nc.MACAddress); err == nil {
 			dIP = oIP
 		}
 
@@ -251,7 +251,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 		}
 	}
 
-	status.NetworkConfig = ncStatuses
+	status.NetworkConfigs = ncStatuses
 
 	return status, nil
 }
@@ -273,7 +273,7 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 func (h *Handler) cleanup(vmNetCfg *networkv1.VirtualMachineNetworkConfig) error {
 	h.metricsAllocator.DeleteVmNetCfgStatus(vmNetCfg.Namespace + "/" + vmNetCfg.Name)
 
-	for _, ncStatus := range vmNetCfg.Status.NetworkConfig {
+	for _, ncStatus := range vmNetCfg.Status.NetworkConfigs {
 		// Deallocate IP address from IPAM
 		isAllocated, err := h.ipAllocator.IsAllocated(ncStatus.NetworkName, ncStatus.AllocatedIPAddress)
 		if err != nil {

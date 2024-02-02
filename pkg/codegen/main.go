@@ -55,14 +55,12 @@ func main() {
 				Types: []interface{}{
 					cniv1.NetworkAttachmentDefinition{},
 				},
-				GenerateTypes:   false,
 				GenerateClients: true,
 			},
 			kubevirtv1.SchemeGroupVersion.Group: {
 				Types: []interface{}{
 					kubevirtv1.VirtualMachine{},
 				},
-				GenerateTypes:   false,
 				GenerateClients: true,
 			},
 		},
