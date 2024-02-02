@@ -1,8 +1,6 @@
 package ippool
 
 import (
-	"fmt"
-
 	"github.com/sirupsen/logrus"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
@@ -10,8 +8,13 @@ import (
 )
 
 func (c *Controller) Update(ipPool *networkv1.IPPool) error {
+	if !networkv1.CacheReady.IsTrue(ipPool) {
+		logrus.Warningf("ippool %s/%s is not ready", ipPool.Namespace, ipPool.Name)
+		return nil
+	}
 	if ipPool.Status.IPv4 == nil {
-		return fmt.Errorf("ippool status has no records")
+		logrus.Warningf("ippool %s/%s status has no records", ipPool.Namespace, ipPool.Name)
+		return nil
 	}
 	allocated := ipPool.Status.IPv4.Allocated
 	filterExcluded(allocated)

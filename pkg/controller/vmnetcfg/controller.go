@@ -105,6 +105,16 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 
 	var ncStatuses []networkv1.NetworkConfigStatus
 	for _, nc := range vmNetCfg.Spec.NetworkConfigs {
+		ipPoolNamespace, ipPoolName := kv.RSplit(nc.NetworkName, "/")
+		ipPool, err := h.ippoolCache.Get(ipPoolNamespace, ipPoolName)
+		if err != nil {
+			return status, err
+		}
+
+		if !networkv1.CacheReady.IsTrue(ipPool) {
+			return status, fmt.Errorf("ippool %s/%s is not ready", ipPoolNamespace, ipPoolName)
+		}
+
 		exists, err := h.cacheAllocator.HasMAC(nc.NetworkName, nc.MACAddress)
 		if err != nil {
 			return status, err
@@ -136,40 +146,29 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 			)
 
 			// Update IPPool status
-			ipPoolNamespace, ipPoolName := kv.RSplit(nc.NetworkName, "/")
-			if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-				ipPool, err := h.ippoolCache.Get(ipPoolNamespace, ipPoolName)
-				if err != nil {
-					return err
+			ipPoolCpy := ipPool.DeepCopy()
+
+			ipv4Status := ipPoolCpy.Status.IPv4
+			if ipv4Status == nil {
+				ipv4Status = new(networkv1.IPv4Status)
+			}
+
+			allocated := ipv4Status.Allocated
+			if allocated == nil {
+				allocated = make(map[string]string)
+			}
+
+			allocated[ip] = nc.MACAddress
+
+			ipv4Status.Allocated = allocated
+			ipPoolCpy.Status.IPv4 = ipv4Status
+
+			if !reflect.DeepEqual(ipPoolCpy, ipPool) {
+				logrus.Infof("(vmnetcfg.Allocate) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+				ipPoolCpy.Status.LastUpdate = metav1.Now()
+				if _, err = h.ippoolClient.UpdateStatus(ipPoolCpy); err != nil {
+					return status, err
 				}
-
-				ipPoolCpy := ipPool.DeepCopy()
-
-				ipv4Status := ipPoolCpy.Status.IPv4
-				if ipv4Status == nil {
-					ipv4Status = new(networkv1.IPv4Status)
-				}
-
-				allocated := ipv4Status.Allocated
-				if allocated == nil {
-					allocated = make(map[string]string)
-				}
-
-				allocated[ip] = nc.MACAddress
-
-				ipv4Status.Allocated = allocated
-				ipPoolCpy.Status.IPv4 = ipv4Status
-
-				if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-					logrus.Infof("(vmnetcfg.Allocate) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
-					ipPoolCpy.Status.LastUpdate = metav1.Now()
-					_, err = h.ippoolClient.UpdateStatus(ipPoolCpy)
-					return err
-				}
-
-				return nil
-			}); err != nil {
-				return status, err
 			}
 
 			continue
@@ -214,40 +213,29 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 		)
 
 		// Update IPPool status
-		ipPoolNamespace, ipPoolName := kv.RSplit(nc.NetworkName, "/")
-		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-			ipPool, err := h.ippoolCache.Get(ipPoolNamespace, ipPoolName)
-			if err != nil {
-				return err
+		ipPoolCpy := ipPool.DeepCopy()
+
+		ipv4Status := ipPoolCpy.Status.IPv4
+		if ipv4Status == nil {
+			ipv4Status = new(networkv1.IPv4Status)
+		}
+
+		allocated := ipv4Status.Allocated
+		if allocated == nil {
+			allocated = make(map[string]string)
+		}
+
+		allocated[ip] = nc.MACAddress
+
+		ipv4Status.Allocated = allocated
+		ipPoolCpy.Status.IPv4 = ipv4Status
+
+		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
+			logrus.Infof("(vmnetcfg.Allocate) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+			ipPoolCpy.Status.LastUpdate = metav1.Now()
+			if _, err = h.ippoolClient.UpdateStatus(ipPoolCpy); err != nil {
+				return status, err
 			}
-
-			ipPoolCpy := ipPool.DeepCopy()
-
-			ipv4Status := ipPoolCpy.Status.IPv4
-			if ipv4Status == nil {
-				ipv4Status = new(networkv1.IPv4Status)
-			}
-
-			allocated := ipv4Status.Allocated
-			if allocated == nil {
-				allocated = make(map[string]string)
-			}
-
-			allocated[ip] = nc.MACAddress
-
-			ipv4Status.Allocated = allocated
-			ipPoolCpy.Status.IPv4 = ipv4Status
-
-			if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-				logrus.Infof("(vmnetcfg.Allocate) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
-				ipPoolCpy.Status.LastUpdate = metav1.Now()
-				_, err = h.ippoolClient.UpdateStatus(ipPoolCpy)
-				return err
-			}
-
-			return nil
-		}); err != nil {
-			return status, err
 		}
 	}
 

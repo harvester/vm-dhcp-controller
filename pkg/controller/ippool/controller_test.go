@@ -7,11 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
-	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/cache"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/fake"
@@ -87,145 +85,184 @@ func newTestNetworkAttachmentDefinitionBuilder() *NetworkAttachmentDefinitionBui
 }
 
 func TestHandler_OnChange(t *testing.T) {
-	type input struct {
-		key         string
-		ipAllocator *ipam.IPAllocator
-		ipPool      *networkv1.IPPool
-		pods        []*corev1.Pod
-	}
+	t.Run("new ippool", func(t *testing.T) {
+		key := testIPPoolNamespace + "/" + testIPPoolName
+		givenIPAllocator := newTestIPAllocatorBuilder().Build()
+		givenIPPool := newTestIPPoolBuilder().Build()
 
-	type output struct {
-		ipPool *networkv1.IPPool
-		pods   []*corev1.Pod
-		err    error
-	}
+		expectedIPPool := newTestIPPoolBuilder().
+			StoppedCondition(corev1.ConditionFalse, "", "").
+			CacheReadyCondition(corev1.ConditionFalse, "NotInitialized", "").Build()
 
-	testCases := []struct {
-		name     string
-		given    input
-		expected output
-	}{
-		{
-			name: "new ippool",
-			given: input{
-				key: testIPPoolNamespace + "/" + testIPPoolName,
-				ipAllocator: newTestIPAllocatorBuilder().
-					Build(),
-				ipPool: newTestIPPoolBuilder().
-					Build(),
-			},
-			expected: output{
-				ipPool: newTestIPPoolBuilder().
-					StoppedCondition(corev1.ConditionFalse, "", "").
-					CacheReadyCondition(corev1.ConditionFalse, "NotInitialized", "").
-					Build(),
-			},
-		},
-		{
-			name: "ippool with ipam initialized",
-			given: input{
-				key: testIPPoolNamespace + "/" + testIPPoolName,
-				ipAllocator: newTestIPAllocatorBuilder().
-					IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
-					Build(),
-				ipPool: newTestIPPoolBuilder().
-					ServerIP(testServerIP).
-					CIDR(testCIDR).
-					PoolRange(testStartIP, testEndIP).
-					NetworkName(testNetworkName).
-					Build(),
-			},
-			expected: output{
-				ipPool: newTestIPPoolBuilder().
-					ServerIP(testServerIP).
-					CIDR(testCIDR).
-					PoolRange(testStartIP, testEndIP).
-					NetworkName(testNetworkName).
-					Available(100).
-					Used(0).
-					StoppedCondition(corev1.ConditionFalse, "", "").
-					Build(),
-			},
-		},
-		{
-			name: "pause ippool",
-			given: input{
-				key: testIPPoolNamespace + "/" + testIPPoolName,
-				ipAllocator: newTestIPAllocatorBuilder().
-					Build(),
-				ipPool: newTestIPPoolBuilder().
-					Paused().
-					AgentPodRef("default", "default-ippool-1-agent", testImage, "").
-					Build(),
-				pods: []*corev1.Pod{
-					newTestPodBuilder().
-						Build(),
-				},
-			},
-			expected: output{
-				ipPool: newTestIPPoolBuilder().
-					Paused().
-					StoppedCondition(corev1.ConditionTrue, "", "").
-					Build(),
-			},
-		},
-		{
-			name: "resume ippool",
-			given: input{
-				key: testIPPoolNamespace + "/" + testIPPoolName,
-				ipAllocator: newTestIPAllocatorBuilder().
-					Build(),
-				ipPool: newTestIPPoolBuilder().
-					UnPaused().
-					Build(),
-			},
-			expected: output{
-				ipPool: newTestIPPoolBuilder().
-					UnPaused().
-					StoppedCondition(corev1.ConditionFalse, "", "").
-					CacheReadyCondition(corev1.ConditionFalse, "NotInitialized", "").
-					Build(),
-			},
-		},
-	}
-
-	for _, tc := range testCases {
 		clientset := fake.NewSimpleClientset()
-		err := clientset.Tracker().Add(tc.given.ipPool)
+		err := clientset.Tracker().Add(givenIPPool)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		var pods []runtime.Object
-		for _, pod := range tc.given.pods {
-			pods = append(pods, pod)
-		}
-		k8sclientset := k8sfake.NewSimpleClientset(pods...)
 		handler := Handler{
 			agentNamespace: "default",
 			agentImage: &config.Image{
 				Repository: "rancher/harvester-vm-dhcp-controller",
 				Tag:        "main",
 			},
+			ipAllocator:  givenIPAllocator,
+			ippoolClient: fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		ipPool, err := handler.OnChange(key, givenIPPool)
+		assert.Nil(t, err)
+
+		SanitizeStatus(&expectedIPPool.Status)
+		SanitizeStatus(&ipPool.Status)
+
+		assert.Equal(t, expectedIPPool, ipPool)
+	})
+
+	t.Run("ippool with ipam initialized", func(t *testing.T) {
+		key := testIPPoolNamespace + "/" + testIPPoolName
+		givenIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Build()
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+
+		expectedIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Available(100).
+			Used(0).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").
+			StoppedCondition(corev1.ConditionFalse, "", "").Build()
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Add(givenIPPool)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		handler := Handler{
+			agentNamespace: "default",
+			agentImage: &config.Image{
+				Repository: "rancher/harvester-vm-dhcp-controller",
+				Tag:        "main",
+			},
+			ipAllocator:      givenIPAllocator,
+			metricsAllocator: metrics.New(),
+			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		ipPool, err := handler.OnChange(key, givenIPPool)
+		assert.Nil(t, err)
+
+		SanitizeStatus(&expectedIPPool.Status)
+		SanitizeStatus(&ipPool.Status)
+
+		assert.Equal(t, expectedIPPool, ipPool)
+	})
+
+	t.Run("pause ippool", func(t *testing.T) {
+		key := testIPPoolNamespace + "/" + testIPPoolName
+		givenIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).Build()
+		givenIPPool := newTestIPPoolBuilder().
+			NetworkName(testNetworkName).
+			Paused().
+			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+		givenPod := newTestPodBuilder().Build()
+
+		expectedIPAllocator := newTestIPAllocatorBuilder().Build()
+		expectedIPPool := newTestIPPoolBuilder().
+			NetworkName(testNetworkName).
+			Paused().
+			StoppedCondition(corev1.ConditionTrue, "", "").Build()
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Add(givenIPPool)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		k8sclientset := k8sfake.NewSimpleClientset()
+		err = k8sclientset.Tracker().Add(givenPod)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		handler := Handler{
+			agentNamespace: "default",
+			agentImage: &config.Image{
+				Repository: "rancher/harvester-vm-dhcp-controller",
+				Tag:        "main",
+			},
+			ipAllocator:      givenIPAllocator,
 			cacheAllocator:   cache.New(),
-			ipAllocator:      tc.given.ipAllocator,
 			metricsAllocator: metrics.New(),
 			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
 			podClient:        fakeclient.PodClient(k8sclientset.CoreV1().Pods),
 		}
 
-		var actual output
+		ipPool, err := handler.OnChange(key, givenIPPool)
+		assert.Nil(t, err)
 
-		actual.ipPool, actual.err = handler.OnChange(tc.given.key, tc.given.ipPool)
-		assert.Nil(t, actual.err)
+		SanitizeStatus(&expectedIPPool.Status)
+		SanitizeStatus(&ipPool.Status)
 
-		SanitizeStatus(&tc.expected.ipPool.Status)
-		SanitizeStatus(&actual.ipPool.Status)
+		assert.Equal(t, expectedIPPool, ipPool)
 
-		assert.Equal(t, tc.expected.ipPool, actual.ipPool, tc.name)
+		assert.Equal(t, expectedIPAllocator, handler.ipAllocator)
 
-		assert.Equal(t, tc.expected.pods, actual.pods)
-	}
+		_, err = handler.podClient.Get(testPodNamespace, testPodName, metav1.GetOptions{})
+		assert.Equal(t, fmt.Sprintf("pods \"%s\" not found", testPodName), err.Error())
+	})
+
+	t.Run("resume ippool", func(t *testing.T) {
+		key := testIPPoolNamespace + "/" + testIPPoolName
+		givenIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Build()
+		givenIPPool := newTestIPPoolBuilder().
+			NetworkName(testNetworkName).
+			UnPaused().
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+
+		expectedIPPool := newTestIPPoolBuilder().
+			NetworkName(testNetworkName).
+			UnPaused().
+			Available(100).
+			Used(0).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").
+			StoppedCondition(corev1.ConditionFalse, "", "").Build()
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Add(givenIPPool)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		handler := Handler{
+			agentNamespace: "default",
+			agentImage: &config.Image{
+				Repository: "rancher/harvester-vm-dhcp-controller",
+				Tag:        "main",
+			},
+			ipAllocator:      givenIPAllocator,
+			metricsAllocator: metrics.New(),
+			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		ipPool, err := handler.OnChange(key, givenIPPool)
+		assert.Nil(t, err)
+
+		SanitizeStatus(&expectedIPPool.Status)
+		SanitizeStatus(&ipPool.Status)
+
+		assert.Equal(t, expectedIPPool, ipPool)
+	})
 }
 
 func TestHandler_DeployAgent(t *testing.T) {
