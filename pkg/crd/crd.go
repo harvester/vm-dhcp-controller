@@ -1,67 +1,44 @@
 package crd
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 
-	"github.com/rancher/wrangler/pkg/crd"
-	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"github.com/harvester/vm-dhcp-controller/pkg/data"
+	"github.com/rancher/wrangler/pkg/apply"
+	"github.com/rancher/wrangler/pkg/yaml"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
-
-	network "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 )
 
-var ageColumn = apiextv1.CustomResourceColumnDefinition{
-	Name:     "AGE",
-	Type:     "date",
-	Priority: 10,
-	JSONPath: ".metadata.creationTimestamp",
-}
-
-func List() []crd.CRD {
-	return []crd.CRD{
-		newCRD("network.harvesterhci.io", &network.IPPool{}, func(c crd.CRD) crd.CRD {
-			return c.
-				WithShortNames("ippl", "ippls").
-				WithColumn("NETWORK", ".spec.networkName").
-				WithColumn("AVAILABLE", ".status.ipv4.available").
-				WithColumn("USED", ".status.ipv4.used").
-				WithColumn("REGISTERED", ".status.conditions[?(@.type=='Registered')].status").
-				WithColumn("CACHEREADY", ".status.conditions[?(@.type=='CacheReady')].status").
-				WithColumn("AGENTREADY", ".status.conditions[?(@.type=='AgentReady')].status").
-				WithCustomColumn(ageColumn)
-		}),
-		newCRD("network.harvesterhci.io", &network.VirtualMachineNetworkConfig{}, func(c crd.CRD) crd.CRD {
-			return c.
-				WithShortNames("vmnetcfg", "vmnetcfgs").
-				WithColumn("VMNAME", ".spec.vmName").
-				WithColumn("ALLOCATED", ".status.conditions[?(@.type=='Allocated')].status").
-				WithCustomColumn(ageColumn)
-		}),
-	}
-}
-
 func Create(ctx context.Context, cfg *rest.Config) error {
-	factory, err := crd.NewFactoryFromClient(cfg)
+	applyClient, err := apply.NewForConfig(cfg)
 	if err != nil {
 		return err
 	}
 
-	return factory.BatchCreateCRDs(ctx, List()...).BatchWait()
+	objs, err := generateObjects()
+	if err != nil {
+		return fmt.Errorf("error generating objects: %v", err)
+	}
+
+	return applyClient.WithDynamicLookup().WithContext(ctx).WithSetID("vm-dhcp-controller-crd").ApplyObjects(objs...)
 }
 
-func newCRD(group string, obj interface{}, customize func(crd.CRD) crd.CRD) crd.CRD {
-	crd := crd.CRD{
-		GVK: schema.GroupVersionKind{
-			Group:   group,
-			Version: "v1alpha1",
-		},
-		Status:       true,
-		NonNamespace: false,
-		SchemaObject: obj,
+func generateObjects() ([]runtime.Object, error) {
+	var objs []runtime.Object
+	for _, v := range data.AssetNames() {
+		content, err := data.Asset(v)
+		if err != nil {
+			return nil, err
+		}
+		obj, err := yaml.ToObjects(bytes.NewReader(content))
+		if err != nil {
+			return nil, err
+		}
+		objs = append(objs, obj...)
 	}
-	if customize != nil {
-		crd = customize(crd)
-	}
-	return crd
+
+	return objs, nil
 }

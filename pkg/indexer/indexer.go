@@ -9,7 +9,7 @@ const (
 )
 
 func VmNetCfgByNetwork(obj *networkv1.VirtualMachineNetworkConfig) ([]string, error) {
-	ncs := obj.Spec.NetworkConfig
+	ncs := obj.Spec.NetworkConfigs
 	networkNames := make([]string, 0, len(ncs))
 	for _, nc := range ncs {
 		networkNames = append(networkNames, nc.NetworkName)

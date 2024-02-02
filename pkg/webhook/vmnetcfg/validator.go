@@ -30,7 +30,7 @@ func (v *Validator) Create(request *admission.Request, newObj runtime.Object) er
 	vmNetCfg := newObj.(*networkv1.VirtualMachineNetworkConfig)
 	logrus.Infof("create vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
 
-	for _, nc := range vmNetCfg.Spec.NetworkConfig {
+	for _, nc := range vmNetCfg.Spec.NetworkConfigs {
 		ipPoolNamespace, ipPoolName := kv.RSplit(nc.NetworkName, "/")
 		if ipPoolNamespace == "" {
 			ipPoolNamespace = "default"

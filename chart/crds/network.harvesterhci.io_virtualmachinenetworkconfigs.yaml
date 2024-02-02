@@ -50,21 +50,37 @@ spec:
             type: object
           spec:
             properties:
-              networkConfig:
+              networkConfigs:
                 items:
                   properties:
                     ipAddress:
+                      format: ipv4
                       type: string
                     macAddress:
+                      maxLength: 17
                       type: string
                     networkName:
+                      maxLength: 64
                       type: string
+                  required:
+                  - macAddress
+                  - networkName
                   type: object
+                maxItems: 4
                 type: array
+                x-kubernetes-validations:
+                - message: NetworkConfig may only be added
+                  rule: oldSelf.all(x, x in self)
               paused:
                 type: boolean
               vmName:
+                maxLength: 64
                 type: string
+                x-kubernetes-validations:
+                - message: VMName is immutable
+                  rule: self == oldSelf
+            required:
+            - vmName
             type: object
           status:
             properties:
@@ -113,4 +129,5 @@ spec:
         type: object
     served: true
     storage: true
-    subresources: {}
+    subresources:
+      status: {}

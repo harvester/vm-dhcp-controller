@@ -54,7 +54,7 @@ func (b *vmNetCfgBuilder) WithNetworkConfig(ipAddress, macAddress, networkName s
 		MACAddress:  macAddress,
 		NetworkName: networkName,
 	}
-	b.vmNetCfg.Spec.NetworkConfig = append(b.vmNetCfg.Spec.NetworkConfig, nc)
+	b.vmNetCfg.Spec.NetworkConfigs = append(b.vmNetCfg.Spec.NetworkConfigs, nc)
 	return b
 }
 
@@ -65,7 +65,7 @@ func (b *vmNetCfgBuilder) WithNetworkConfigStatus(ipAddress, macAddress, network
 		NetworkName:        networkName,
 		State:              state,
 	}
-	b.vmNetCfg.Status.NetworkConfig = append(b.vmNetCfg.Status.NetworkConfig, ncStatus)
+	b.vmNetCfg.Status.NetworkConfigs = append(b.vmNetCfg.Status.NetworkConfigs, ncStatus)
 	return b
 }
 
@@ -100,7 +100,7 @@ func (b *vmNetCfgStatusBuilder) WithNetworkConfigStatus(ipAddress, macAddress, n
 		NetworkName:        networkName,
 		State:              state,
 	}
-	b.vmNetCfgStatus.NetworkConfig = append(b.vmNetCfgStatus.NetworkConfig, ncStatus)
+	b.vmNetCfgStatus.NetworkConfigs = append(b.vmNetCfgStatus.NetworkConfigs, ncStatus)
 	return b
 }
 
