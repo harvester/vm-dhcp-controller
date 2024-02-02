@@ -175,7 +175,8 @@ func TestHandler_Allocate(t *testing.T) {
 			ServerIP(testServerIP).
 			CIDR(testCIDR).
 			PoolRange(testStartIP, testEndIP).
-			NetworkName(testNetworkName).Build()
+			NetworkName(testNetworkName).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
 		givenCacheAllocator := newTestCacheAllocatorBuilder().
 			MACSet(testNetworkName).Build()
 		givenIPAllocator := newTestIPAllocatorBuilder().
@@ -190,7 +191,8 @@ func TestHandler_Allocate(t *testing.T) {
 			PoolRange(testStartIP, testEndIP).
 			NetworkName(testNetworkName).
 			Allocated(testIPAddress1, testMACAddress1).
-			Allocated(testIPAddress2, testMACAddress2).Build()
+			Allocated(testIPAddress2, testMACAddress2).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
 		expectedCacheAllocator := newTestCacheAllocatorBuilder().
 			MACSet(testNetworkName).
 			Add(testNetworkName, testMACAddress1, testIPAddress1).
@@ -239,7 +241,8 @@ func TestHandler_Allocate(t *testing.T) {
 			PoolRange(testStartIP, testEndIP).
 			NetworkName(testNetworkName).
 			Allocated(testIPAddress1, testMACAddress1).
-			Allocated(testIPAddress2, testMACAddress2).Build()
+			Allocated(testIPAddress2, testMACAddress2).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
 		givenCacheAllocator := newTestCacheAllocatorBuilder().
 			MACSet(testNetworkName).Build()
 		givenIPAllocator := newTestIPAllocatorBuilder().
@@ -297,7 +300,8 @@ func TestHandler_Allocate(t *testing.T) {
 			ServerIP(testServerIP).
 			CIDR(testCIDR).
 			PoolRange(testStartIP, testEndIP).
-			NetworkName(testNetworkName).Build()
+			NetworkName(testNetworkName).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
 		givenCacheAllocator := newTestCacheAllocatorBuilder().
 			MACSet(testNetworkName).
 			Add(testNetworkName, testMACAddress1, testIPAddress1).
@@ -312,7 +316,8 @@ func TestHandler_Allocate(t *testing.T) {
 			PoolRange(testStartIP, testEndIP).
 			NetworkName(testNetworkName).
 			Allocated(testIPAddress1, testMACAddress1).
-			Allocated(testIPAddress2, testMACAddress2).Build()
+			Allocated(testIPAddress2, testMACAddress2).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
 
 		clientset := fake.NewSimpleClientset(givenIPPool)
 
@@ -337,5 +342,27 @@ func TestHandler_Allocate(t *testing.T) {
 		ippool.SanitizeStatus(&ipPool.Status)
 
 		assert.Equal(t, expectedIPPool, ipPool)
+	})
+
+	t.Run("ippool cache not ready", func(t *testing.T) {
+		givenVmNetCfg := newTestVmNetCfgBuilder().
+			WithNetworkConfig(testIPAddress1, testMACAddress1, testNetworkName).
+			WithNetworkConfig(testIPAddress2, testMACAddress2, testNetworkName).Build()
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			CacheReadyCondition(corev1.ConditionFalse, "", "").Build()
+
+		clientset := fake.NewSimpleClientset(givenIPPool)
+
+		handler := Handler{
+			ippoolClient: fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			ippoolCache:  fakeclient.IPPoolCache(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		_, err := handler.Allocate(givenVmNetCfg, givenVmNetCfg.Status)
+		assert.NotNil(t, fmt.Sprintf("ippool %s/%s is not ready", testIPPoolNamespace, testIPPoolName), err)
 	})
 }
