@@ -239,7 +239,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 
 		expectedStatus := newTestIPPoolStatusBuilder().
 			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
-		expectedPod := prepareAgentPod(
+		expectedPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP).
 				CIDR(testCIDR).
@@ -336,7 +336,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
-		givenPod := prepareAgentPod(
+		givenPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP).
 				CIDR(testCIDR).
@@ -353,7 +353,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 
 		expectedStatus := newTestIPPoolStatusBuilder().
 			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
-		expectedPod := prepareAgentPod(
+		expectedPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP).
 				CIDR(testCIDR).
@@ -408,12 +408,12 @@ func TestHandler_DeployAgent(t *testing.T) {
 			ServerIP(testServerIP).
 			CIDR(testCIDR).
 			NetworkName(testNetworkNameLong).Build()
-		givenNAD := newNetworkAttachmentDefinitionBuilder(testNADNamespace, testNADNameLong).
+		givenNAD := NewNetworkAttachmentDefinitionBuilder(testNADNamespace, testNADNameLong).
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 
 		expectedStatus := newTestIPPoolStatusBuilder().
 			AgentPodRef(testPodNamespace, testPodNameLong, testImage, "").Build()
-		expectedPod := prepareAgentPod(
+		expectedPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolNameLong).
 				ServerIP(testServerIP).
 				CIDR(testCIDR).
@@ -510,7 +510,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			AgentPodRef(testPodNamespace, testPodName, testImage, testUID).Build()
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
-		givenPod := prepareAgentPod(
+		givenPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP).
 				CIDR(testCIDR).

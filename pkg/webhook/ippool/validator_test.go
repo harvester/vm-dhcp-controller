@@ -20,6 +20,7 @@ const (
 	testNADName            = "net-1"
 	testIPPoolNamespace    = testNADNamespace
 	testIPPoolName         = testNADName
+	testCIDR               = "192.168.0.0/24"
 	testServerIPOutOfRange = "192.168.100.2"
 	testRouter             = "192.168.0.1"
 	testNetworkName        = testNADNamespace + "/" + testNADName
@@ -111,6 +112,174 @@ func TestValidator_Create(t *testing.T) {
 				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s cannot be the same as router ip", testIPPoolNamespace, testIPPoolName, "192.168.0.254"),
 			},
 		},
+		{
+			name: "invalid router ip which is malformed",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					Router("192.168.0.1000").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+			},
+		},
+		{
+			name: "invalid router ip which is out of subnet",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					Router("192.168.1.1").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because router ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.1"),
+			},
+		},
+		{
+			name: "invalid router ip which is the same as network ip",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					Router("192.168.0.0").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because router ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+			},
+		},
+		{
+			name: "invalid router ip which is the same as broadcast ip",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					Router("192.168.0.255").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because router ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+			},
+		},
+		{
+			name: "invalid start ip which is malformed",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					PoolRange("192.168.0.1000", "").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+			},
+		},
+		{
+			name: "invalid start ip which is out of subnet",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					PoolRange("192.168.1.100", "").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because start ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
+			},
+		},
+		{
+			name: "invalid start ip which is the same as network ip",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					PoolRange("192.168.0.0", "").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because start ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+			},
+		},
+		{
+			name: "invalid start ip which is the same as broadcast ip",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					PoolRange("192.168.0.255", "").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because start ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+			},
+		},
+		{
+			name: "invalid end ip which is malformed",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					PoolRange("", "192.168.0.1000").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+			},
+		},
+		{
+			name: "invalid end ip which is out of subnet",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					PoolRange("", "192.168.1.100").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because end ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
+			},
+		},
+		{
+			name: "invalid emd ip which is the same as network ip",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					PoolRange("", "192.168.0.0").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because end ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+			},
+		},
+		{
+			name: "invalid end ip which is the same as broadcast ip",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					PoolRange("", "192.168.0.255").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because end ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+			},
+		},
+		{
+			name: "non-existed network name",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR("192.168.0.0/24").
+					NetworkName("nonexist").Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool default/net-1 because network-attachment-definitions.k8s.cni.cncf.io \"%s\" not found", "nonexist"),
+			},
+		},
 	}
 
 	nadGVR := schema.GroupVersionResource{
@@ -158,11 +327,11 @@ func TestValidator_Update(t *testing.T) {
 			name: "valid server ip",
 			given: input{
 				oldIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.0/24").
+					CIDR(testCIDR).
 					ServerIP("192.168.0.2").
 					NetworkName(testNetworkName).Build(),
 				newIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.0/24").
+					CIDR(testCIDR).
 					ServerIP("192.168.0.254").
 					NetworkName(testNetworkName).Build(),
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
@@ -172,11 +341,11 @@ func TestValidator_Update(t *testing.T) {
 			name: "invalid server ip which is out of range",
 			given: input{
 				oldIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.0/24").
+					CIDR(testCIDR).
 					ServerIP("192.168.0.2").
 					NetworkName(testNetworkName).Build(),
 				newIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.0/24").
+					CIDR(testCIDR).
 					ServerIP("192.168.100.2").
 					NetworkName(testNetworkName).Build(),
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
@@ -189,45 +358,46 @@ func TestValidator_Update(t *testing.T) {
 			name: "invalid server ip which is the same as network ip",
 			given: input{
 				oldIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.0/24").
+					CIDR(testCIDR).
 					ServerIP("192.168.0.2").
 					NetworkName(testNetworkName).Build(),
 				newIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.128/25").
-					ServerIP("192.168.0.128").
+					CIDR(testCIDR).
+					ServerIP("192.168.0.0").
 					NetworkName(testNetworkName).Build(),
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s cannot be the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.128"),
+				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s cannot be the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
 			},
 		},
 		{
 			name: "invalid server ip which is the same as broadcast ip",
 			given: input{
 				oldIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.0/24").
+					CIDR(testCIDR).
 					ServerIP("192.168.0.2").
 					NetworkName(testNetworkName).Build(),
 				newIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.0/25").
-					ServerIP("192.168.0.127").
+					CIDR(testCIDR).
+					ServerIP("192.168.0.255").
 					NetworkName(testNetworkName).Build(),
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s cannot be the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.127"),
+				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s cannot be the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
 			},
 		},
 		{
 			name: "invalid server ip which is the same as router ip",
 			given: input{
 				oldIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.0/24").
+					CIDR(testCIDR).
 					ServerIP("192.168.0.2").
+					Router("192.168.0.254").
 					NetworkName(testNetworkName).Build(),
 				newIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.254/24").
+					CIDR(testCIDR).
 					ServerIP("192.168.0.254").
 					Router("192.168.0.254").
 					NetworkName(testNetworkName).Build(),
@@ -242,19 +412,187 @@ func TestValidator_Update(t *testing.T) {
 			given: input{
 
 				oldIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.254/24").
+					CIDR(testCIDR).
 					ServerIP("192.168.0.2").
 					NetworkName(testNetworkName).
 					Allocated("192.168.0.100", "11:22:33:44:55:66").Build(),
 				newIPPool: newTestIPPoolBuilder().
-					CIDR("192.168.0.254/24").
+					CIDR(testCIDR).
 					ServerIP("192.168.0.100").
 					NetworkName(testNetworkName).
 					Allocated("192.168.0.100", "11:22:33:44:55:66").Build(),
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s is already allocated by mac %s", testIPPoolNamespace, testIPPoolName, "192.168.0.100", "11:22:33:44:55:66"),
+				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s is already allocated", testIPPoolNamespace, testIPPoolName, "192.168.0.100"),
+			},
+		},
+		{
+			name: "invalid router ip which is malformed",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					Router("192.168.0.1000").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+			},
+		},
+		{
+			name: "invalid router ip which is out of subnet",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					Router("192.168.1.1").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because router ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.1"),
+			},
+		},
+		{
+			name: "invalid router ip which is the same as network ip",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					Router("192.168.0.0").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because router ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+			},
+		},
+		{
+			name: "invalid router ip which is the same as broadcast ip",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					Router("192.168.0.255").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because router ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+			},
+		},
+		{
+			name: "invalid start ip which is malformed",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					PoolRange("192.168.0.1000", "").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+			},
+		},
+		{
+			name: "invalid start ip which is out of subnet",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					PoolRange("192.168.1.100", "").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because start ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
+			},
+		},
+		{
+			name: "invalid start ip which is the same as network ip",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					PoolRange("192.168.0.0", "").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because start ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+			},
+		},
+		{
+			name: "invalid start ip which is the same as broadcast ip",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					PoolRange("192.168.0.255", "").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because start ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+			},
+		},
+		{
+			name: "invalid end ip which is malformed",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					PoolRange("", "192.168.0.1000").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+			},
+		},
+		{
+			name: "invalid end ip which is out of subnet",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					PoolRange("", "192.168.1.100").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because end ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
+			},
+		},
+		{
+			name: "invalid emd ip which is the same as network ip",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					PoolRange("", "192.168.0.0").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because end ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+			},
+		},
+		{
+			name: "invalid end ip which is the same as broadcast ip",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					PoolRange("", "192.168.0.255").
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because end ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+			},
+		},
+		{
+			name: "non-existed network name",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					NetworkName("nonexist").Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool default/net-1 because network-attachment-definitions.k8s.cni.cncf.io \"%s\" not found", "nonexist"),
 			},
 		},
 	}
