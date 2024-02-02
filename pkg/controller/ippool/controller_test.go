@@ -17,20 +17,24 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/fake"
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 	"github.com/harvester/vm-dhcp-controller/pkg/util/fakeclient"
 )
 
 const (
 	testNADNamespace       = "default"
 	testNADName            = "net-1"
+	testNADNameLong        = "fi6cx9ca1kt1faq80k3ro9cowyumyjb67qdmg8fb9ydmz27rbk5btlg2m5avv3n"
 	testIPPoolNamespace    = testNADNamespace
 	testIPPoolName         = testNADName
+	testIPPoolNameLong     = testNADNameLong
 	testKey                = testIPPoolNamespace + "/" + testIPPoolName
 	testPodNamespace       = "harvester-system"
 	testPodName            = testNADNamespace + "-" + testNADName + "-agent"
 	testClusterNetwork     = "provider"
 	testServerIP           = "192.168.0.2"
 	testNetworkName        = testNADNamespace + "/" + testNADName
+	testNetworkNameLong    = testNADNamespace + "/" + testNADNameLong
 	testCIDR               = "192.168.0.0/24"
 	testStartIP            = "192.168.0.101"
 	testEndIP              = "192.168.0.200"
@@ -47,6 +51,10 @@ const (
 	testAllocatedIP2 = "192.168.0.177"
 	testMAC1         = "11:22:33:44:55:66"
 	testMAC2         = "22:33:44:55:66:77"
+)
+
+var (
+	testPodNameLong = util.SafeAgentConcatName(testNADNamespace, testNADNameLong)
 )
 
 func newTestCacheAllocatorBuilder() *cache.CacheAllocatorBuilder {
@@ -384,6 +392,63 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Equal(t, expectedStatus, status)
 
 		pod, err := handler.podClient.Get(testPodNamespace, testPodName, metav1.GetOptions{})
+		assert.Nil(t, err)
+		assert.Equal(t, expectedPod, pod)
+	})
+
+	t.Run("very long name ippool created", func(t *testing.T) {
+		givenIPPool := NewIPPoolBuilder(testIPPoolNamespace, testIPPoolNameLong).
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			NetworkName(testNetworkNameLong).Build()
+		givenNAD := newNetworkAttachmentDefinitionBuilder(testNADNamespace, testNADNameLong).
+			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
+
+		expectedStatus := newTestIPPoolStatusBuilder().
+			AgentPodRef(testPodNamespace, testPodNameLong).Build()
+		expectedPod := prepareAgentPod(
+			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolNameLong).
+				ServerIP(testServerIP).
+				CIDR(testCIDR).
+				NetworkName(testNetworkNameLong).Build(),
+			false,
+			testPodNamespace,
+			testClusterNetwork,
+			testServiceAccountName,
+			&config.Image{
+				Repository: testImageRepository,
+				Tag:        testImageTag,
+			},
+		)
+
+		nadGVR := schema.GroupVersionResource{
+			Group:    "k8s.cni.cncf.io",
+			Version:  "v1",
+			Resource: "network-attachment-definitions",
+		}
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Create(nadGVR, givenNAD, givenNAD.Namespace)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		k8sclientset := k8sfake.NewSimpleClientset()
+
+		handler := Handler{
+			agentNamespace: testPodNamespace,
+			agentImage: &config.Image{
+				Repository: testImageRepository,
+				Tag:        testImageTag,
+			},
+			agentServiceAccountName: testServiceAccountName,
+			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
+			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+		}
+
+		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedStatus, status)
+
+		pod, err := handler.podClient.Get(testPodNamespace, testPodNameLong, metav1.GetOptions{})
 		assert.Nil(t, err)
 		assert.Equal(t, expectedPod, pod)
 	})

@@ -15,6 +15,7 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
 func prepareAgentPod(
@@ -25,7 +26,7 @@ func prepareAgentPod(
 	agentServiceAccountName string,
 	agentImage *config.Image,
 ) *corev1.Pod {
-	name := fmt.Sprintf("%s-%s-agent", ipPool.Namespace, ipPool.Name)
+	name := util.SafeAgentConcatName(ipPool.Namespace, ipPool.Name)
 
 	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
 	networks := []Network{
