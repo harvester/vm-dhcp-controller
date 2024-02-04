@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,6 +17,7 @@ const defaultPort = 8080
 
 type HTTPServer struct {
 	*config.HTTPServerOptions
+	srv    *http.Server
 	router *mux.Router
 }
 
@@ -58,10 +60,10 @@ func (s *HTTPServer) RegisterAgentHandlers() {
 	}
 }
 
-func (s *HTTPServer) Run() {
-	logrus.Infof("Starting HTTP server")
+func (s *HTTPServer) Run() error {
+	logrus.Info("Starting HTTP server")
 
-	srv := &http.Server{
+	s.srv = &http.Server{
 		Handler:      s.router,
 		Addr:         fmt.Sprintf(":%d", defaultPort),
 		WriteTimeout: 15 * time.Second,
@@ -70,5 +72,11 @@ func (s *HTTPServer) Run() {
 
 	logrus.Infof("Listening on port: %d", defaultPort)
 
-	logrus.Fatal(srv.ListenAndServe())
+	return s.srv.ListenAndServe()
+}
+
+func (s *HTTPServer) Stop(ctx context.Context) error {
+	logrus.Info("Stopping HTTP server")
+
+	return s.srv.Shutdown(ctx)
 }

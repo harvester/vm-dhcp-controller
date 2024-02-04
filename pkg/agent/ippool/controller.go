@@ -59,17 +59,17 @@ func (c *Controller) processNextItem() bool {
 func (c *Controller) sync(event Event) (err error) {
 	obj, exists, err := c.indexer.GetByKey(event.key)
 	if err != nil {
-		logrus.Errorf("(ippool.sync) fetching object with key %s from store failed with %v", event.key, err)
+		logrus.Errorf("(controller.sync) fetching object with key %s from store failed with %v", event.key, err)
 		return
 	}
 
 	if !exists && event.action != DELETE {
-		logrus.Infof("(ippool.sync) IPPool %s does not exist anymore", event.key)
+		logrus.Infof("(controller.sync) IPPool %s does not exist anymore", event.key)
 		return
 	}
 
 	if event.poolName != c.poolRef.Name {
-		logrus.Debugf("(ippool.sync) IPPool %s is not our target", event.key)
+		logrus.Debugf("(controller.sync) IPPool %s is not our target", event.key)
 		return
 	}
 
@@ -77,11 +77,11 @@ func (c *Controller) sync(event Event) (err error) {
 	case UPDATE:
 		ipPool, ok := obj.(*networkv1.IPPool)
 		if !ok {
-			logrus.Error("(ippool.sync) failed to assert obj during UPDATE")
+			logrus.Error("(controller.sync) failed to assert obj during UPDATE")
 		}
-		logrus.Infof("(ippool.sync) UPDATE %s/%s", ipPool.Namespace, ipPool.Name)
+		logrus.Infof("(controller.sync) UPDATE %s/%s", ipPool.Namespace, ipPool.Name)
 		if err := c.Update(ipPool); err != nil {
-			logrus.Errorf("(ippool.sync) failed to update DHCP lease store: %s", err.Error())
+			logrus.Errorf("(controller.sync) failed to update DHCP lease store: %s", err.Error())
 		}
 	}
 
@@ -96,7 +96,7 @@ func (c *Controller) handleErr(err error, key interface{}) {
 	}
 
 	if c.queue.NumRequeues(key) < 5 {
-		logrus.Errorf("(ippool.handleErr) syncing IPPool %v: %v", key, err)
+		logrus.Errorf("(controller.handleErr) syncing IPPool %v: %v", key, err)
 
 		c.queue.AddRateLimited(key)
 
@@ -105,18 +105,18 @@ func (c *Controller) handleErr(err error, key interface{}) {
 
 	c.queue.Forget(key)
 
-	logrus.Errorf("(ippool.handleErr) dropping IPPool %q out of the queue: %v", key, err)
+	logrus.Errorf("(controller.handleErr) dropping IPPool %q out of the queue: %v", key, err)
 }
 
 func (c *Controller) Run(workers int, stopCh chan struct{}) {
 	defer runtime.HandleCrash()
 
 	defer c.queue.ShutDown()
-	logrus.Infof("(ippool.Run) starting IPPool controller")
+	logrus.Info("(controller.Run) starting IPPool controller")
 
 	go c.informer.Run(stopCh)
 	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced) {
-		logrus.Errorf("(ippool.Run) timed out waiting for caches to sync")
+		logrus.Errorf("(controller.Run) timed out waiting for caches to sync")
 
 		return
 	}
@@ -126,10 +126,16 @@ func (c *Controller) Run(workers int, stopCh chan struct{}) {
 	}
 
 	<-stopCh
-	logrus.Infof("(ippool.Run) stopping IPPool controller")
+
+	logrus.Info("(controller.Run) IPPool controller terminated")
 }
 
 func (c *Controller) runWorker() {
 	for c.processNextItem() {
 	}
+}
+
+func (c *Controller) Stop(stopCh chan struct{}) {
+	logrus.Info("(controller.Stop) stopping IPPool controller")
+	close(stopCh)
 }
