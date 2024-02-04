@@ -281,28 +281,27 @@ func (a *DHCPAllocator) dhcpHandler(conn net.PacketConn, peer net.Addr, m *dhcpv
 	}
 }
 
-func (a *DHCPAllocator) Run(nic string, dryRun bool) (err error) {
+func (a *DHCPAllocator) Run(ctx context.Context, nic string) (err error) {
 	logrus.Infof("(dhcp.Run) starting DHCP service on nic %s", nic)
 
 	var server *server4.Server
-	if !dryRun {
-		// we need to listen on 0.0.0.0 otherwise client discovers will not be answered
-		laddr := net.UDPAddr{
-			IP:   net.ParseIP("0.0.0.0"),
-			Port: 67,
-		}
 
-		server, err = server4.NewServer(nic, &laddr, a.dhcpHandler)
-		if err != nil {
-			return
-		}
-
-		go func() {
-			if err := server.Serve(); err != nil {
-				logrus.Errorf("(dhcp.Run) DHCP server on nic %s exited with error: %v", nic, err)
-			}
-		}()
+	// we need to listen on 0.0.0.0 otherwise client discovers will not be answered
+	laddr := net.UDPAddr{
+		IP:   net.ParseIP("0.0.0.0"),
+		Port: 67,
 	}
+
+	server, err = server4.NewServer(nic, &laddr, a.dhcpHandler)
+	if err != nil {
+		return
+	}
+
+	go func() {
+		if err := server.Serve(); err != nil {
+			logrus.Errorf("(dhcp.Run) DHCP server on nic %s exited with error: %v", nic, err)
+		}
+	}()
 
 	a.servers[nic] = server
 
@@ -312,13 +311,19 @@ func (a *DHCPAllocator) Run(nic string, dryRun bool) (err error) {
 func (a *DHCPAllocator) DryRun(ctx context.Context, nic string) (err error) {
 	logrus.Infof("(dhcp.DryRun) starting DHCP service on nic %s", nic)
 
-	a.servers[nic] = &server4.Server{}
+	var server *server4.Server
+
+	a.servers[nic] = server
 
 	return nil
 }
 
 func (a *DHCPAllocator) Stop(nic string) (err error) {
 	logrus.Infof("(dhcp.Stop) stopping DHCP service on nic %s", nic)
+
+	if a.servers[nic] == nil {
+		return nil
+	}
 
 	return a.servers[nic].Close()
 }

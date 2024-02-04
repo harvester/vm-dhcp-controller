@@ -81,5 +81,7 @@ func run(ctx context.Context, cfg *rest.Config, options *config.Options) error {
 
 	<-ctx.Done()
 
+	logrus.Info("Stopping webhook server")
+
 	return nil
 }

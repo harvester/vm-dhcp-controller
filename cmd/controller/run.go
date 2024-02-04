@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -63,12 +65,34 @@ func run(options *config.ControllerOptions) error {
 	}
 	s := server.NewHTTPServer(&httpServerOptions)
 	s.RegisterControllerHandlers()
-	go s.Run()
 
-	if noLeaderElection {
-		callback(ctx)
-	} else {
-		leader.RunOrDie(ctx, "kube-system", "vm-dhcp-controllers", client, callback)
+	eg, egctx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		return s.Run()
+	})
+
+	eg.Go(func() error {
+		<-egctx.Done()
+		return s.Stop(egctx)
+	})
+
+	eg.Go(func() error {
+		if noLeaderElection {
+			callback(egctx)
+		} else {
+			leader.RunOrDie(egctx, "kube-system", "vm-dhcp-controllers", client, callback)
+		}
+		return nil
+	})
+
+	if err := eg.Wait(); err != nil {
+		if errors.Is(err, context.Canceled) {
+			logrus.Info("context canceled")
+			return nil
+		} else {
+			logrus.Fatalf("received error: %s", err)
+		}
 	}
 
 	return nil

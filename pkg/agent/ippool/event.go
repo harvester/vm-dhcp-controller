@@ -1,8 +1,6 @@
 package ippool
 
 import (
-	"context"
-
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,7 +23,6 @@ const (
 )
 
 type EventHandler struct {
-	ctx            context.Context
 	kubeConfig     string
 	kubeContext    string
 	kubeRestConfig *rest.Config
@@ -44,7 +41,6 @@ type Event struct {
 }
 
 func NewEventHandler(
-	ctx context.Context,
 	kubeConfig string,
 	kubeContext string,
 	kubeRestConfig *rest.Config,
@@ -53,7 +49,6 @@ func NewEventHandler(
 	poolCache map[string]string,
 ) *EventHandler {
 	return &EventHandler{
-		ctx:            ctx,
 		kubeConfig:     kubeConfig,
 		kubeContext:    kubeContext,
 		kubeRestConfig: kubeRestConfig,
@@ -93,8 +88,8 @@ func (e *EventHandler) getKubeConfig() (config *rest.Config, err error) {
 	).ClientConfig()
 }
 
-func (e *EventHandler) EventListener() (err error) {
-	logrus.Infof("(ippool.EventListener) starting IPPool event listener")
+func (e *EventHandler) EventListener(stopCh chan struct{}) {
+	logrus.Info("(eventhandler.EventListener) starting IPPool event listener")
 
 	// TODO: could be more specific on what namespaces we want to watch and what fields we need
 	watcher := cache.NewListWatchFromClient(e.k8sClientset.NetworkV1alpha1().RESTClient(), "ippools", e.poolRef.Namespace, fields.Everything())
@@ -117,8 +112,16 @@ func (e *EventHandler) EventListener() (err error) {
 
 	controller := NewController(queue, indexer, informer, e.poolRef, e.dhcpAllocator, e.poolCache)
 	stop := make(chan struct{})
-	defer close(stop)
+
 	go controller.Run(1, stop)
 
-	select {}
+	<-stopCh
+	controller.Stop(stop)
+
+	logrus.Info("(eventhandler.Run) IPPool event listener terminated")
+}
+
+func (e *EventHandler) Stop(stopCh chan struct{}) {
+	logrus.Info("(eventhandler.Stop) stopping IPPool event listener")
+	close(stopCh)
 }
