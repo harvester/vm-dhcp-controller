@@ -1,8 +1,10 @@
 package main
 
 import (
-	"context"
+	"errors"
+	"net/http"
 
+	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
@@ -11,8 +13,10 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/server"
 )
 
-func run(ctx context.Context, options *config.AgentOptions) error {
+func run(options *config.AgentOptions) error {
 	logrus.Infof("Starting VM DHCP Agent: %s", name)
+
+	ctx := signals.SetupSignalContext()
 
 	agent := agent.NewAgent(options)
 
@@ -33,10 +37,18 @@ func run(ctx context.Context, options *config.AgentOptions) error {
 		return agent.Run(egctx)
 	})
 
-	eg.Go(func() error {
-		<-egctx.Done()
-		return s.Stop(egctx)
-	})
+	errCh := server.Cleanup(egctx, s)
 
-	return eg.Wait()
+	if err := eg.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+
+	// Return cleanup error message if any
+	if err := <-errCh; err != nil {
+		return err
+	}
+
+	logrus.Info("finished clean")
+
+	return nil
 }

@@ -15,6 +15,7 @@ import (
 )
 
 type Controller struct {
+	stopCh   chan struct{}
 	indexer  cache.Indexer
 	queue    workqueue.RateLimitingInterface
 	informer cache.Controller
@@ -33,6 +34,7 @@ func NewController(
 	poolCache map[string]string,
 ) *Controller {
 	return &Controller{
+		stopCh:        make(chan struct{}),
 		informer:      informer,
 		indexer:       indexer,
 		queue:         queue,
@@ -108,24 +110,24 @@ func (c *Controller) handleErr(err error, key interface{}) {
 	logrus.Errorf("(controller.handleErr) dropping IPPool %q out of the queue: %v", key, err)
 }
 
-func (c *Controller) Run(workers int, stopCh chan struct{}) {
+func (c *Controller) Run(workers int) {
 	defer runtime.HandleCrash()
 
 	defer c.queue.ShutDown()
 	logrus.Info("(controller.Run) starting IPPool controller")
 
-	go c.informer.Run(stopCh)
-	if !cache.WaitForCacheSync(stopCh, c.informer.HasSynced) {
+	go c.informer.Run(c.stopCh)
+	if !cache.WaitForCacheSync(c.stopCh, c.informer.HasSynced) {
 		logrus.Errorf("(controller.Run) timed out waiting for caches to sync")
 
 		return
 	}
 
 	for i := 0; i < workers; i++ {
-		go wait.Until(c.runWorker, time.Second, stopCh)
+		go wait.Until(c.runWorker, time.Second, c.stopCh)
 	}
 
-	<-stopCh
+	<-c.stopCh
 
 	logrus.Info("(controller.Run) IPPool controller terminated")
 }
@@ -135,7 +137,7 @@ func (c *Controller) runWorker() {
 	}
 }
 
-func (c *Controller) Stop(stopCh chan struct{}) {
+func (c *Controller) Stop() {
 	logrus.Info("(controller.Stop) stopping IPPool controller")
-	close(stopCh)
+	close(c.stopCh)
 }
