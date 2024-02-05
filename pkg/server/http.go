@@ -75,8 +75,21 @@ func (s *HTTPServer) Run() error {
 	return s.srv.ListenAndServe()
 }
 
-func (s *HTTPServer) Stop(ctx context.Context) error {
+func (s *HTTPServer) stop(ctx context.Context) error {
 	logrus.Info("Stopping HTTP server")
 
 	return s.srv.Shutdown(ctx)
+}
+
+func Cleanup(ctx context.Context, srv *HTTPServer) <-chan error {
+	errCh := make(chan error)
+
+	go func() {
+		<-ctx.Done()
+		defer close(errCh)
+
+		errCh <- srv.stop(ctx)
+	}()
+
+	return errCh
 }

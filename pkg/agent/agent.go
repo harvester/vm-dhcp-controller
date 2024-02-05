@@ -49,8 +49,6 @@ func NewAgent(options *config.AgentOptions) *Agent {
 func (a *Agent) Run(ctx context.Context) error {
 	logrus.Infof("monitor ippool %s", a.poolRef.String())
 
-	stop := make(chan struct{})
-
 	eg, egctx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
@@ -64,20 +62,20 @@ func (a *Agent) Run(ctx context.Context) error {
 		if err := a.ippoolEventHandler.Init(); err != nil {
 			return err
 		}
-		a.ippoolEventHandler.EventListener(stop)
+		a.ippoolEventHandler.EventListener(egctx)
 		return nil
 	})
 
-	eg.Go(func() error {
-		<-egctx.Done()
-		return a.DHCPAllocator.Stop(a.nic)
-	})
+	errCh := dhcp.Cleanup(egctx, a.DHCPAllocator, a.nic)
 
-	eg.Go(func() error {
-		<-egctx.Done()
-		a.ippoolEventHandler.Stop(stop)
-		return nil
-	})
+	if err := eg.Wait(); err != nil {
+		return err
+	}
 
-	return eg.Wait()
+	// Return cleanup error message if any
+	if err := <-errCh; err != nil {
+		return err
+	}
+
+	return nil
 }

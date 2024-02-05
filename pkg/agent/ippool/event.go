@@ -1,6 +1,8 @@
 package ippool
 
 import (
+	"context"
+
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
@@ -88,7 +90,7 @@ func (e *EventHandler) getKubeConfig() (config *rest.Config, err error) {
 	).ClientConfig()
 }
 
-func (e *EventHandler) EventListener(stopCh chan struct{}) {
+func (e *EventHandler) EventListener(ctx context.Context) {
 	logrus.Info("(eventhandler.EventListener) starting IPPool event listener")
 
 	// TODO: could be more specific on what namespaces we want to watch and what fields we need
@@ -111,17 +113,11 @@ func (e *EventHandler) EventListener(stopCh chan struct{}) {
 	}, cache.Indexers{})
 
 	controller := NewController(queue, indexer, informer, e.poolRef, e.dhcpAllocator, e.poolCache)
-	stop := make(chan struct{})
 
-	go controller.Run(1, stop)
+	go controller.Run(1)
 
-	<-stopCh
-	controller.Stop(stop)
+	<-ctx.Done()
+	controller.Stop()
 
 	logrus.Info("(eventhandler.Run) IPPool event listener terminated")
-}
-
-func (e *EventHandler) Stop(stopCh chan struct{}) {
-	logrus.Info("(eventhandler.Stop) stopping IPPool event listener")
-	close(stopCh)
 }

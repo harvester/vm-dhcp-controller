@@ -318,7 +318,7 @@ func (a *DHCPAllocator) DryRun(ctx context.Context, nic string) (err error) {
 	return nil
 }
 
-func (a *DHCPAllocator) Stop(nic string) (err error) {
+func (a *DHCPAllocator) stop(nic string) (err error) {
 	logrus.Infof("(dhcp.Stop) stopping DHCP service on nic %s", nic)
 
 	if a.servers[nic] == nil {
@@ -338,4 +338,17 @@ func (a *DHCPAllocator) ListAll(name string) (map[string]string, error) {
 	}
 
 	return leases, nil
+}
+
+func Cleanup(ctx context.Context, a *DHCPAllocator, nic string) <-chan error {
+	errCh := make(chan error)
+
+	go func() {
+		<-ctx.Done()
+		defer close(errCh)
+
+		errCh <- a.stop(nic)
+	}()
+
+	return errCh
 }

@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net/http"
 
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/rancher/wrangler/pkg/signals"
@@ -72,11 +74,6 @@ func run(options *config.ControllerOptions) error {
 	})
 
 	eg.Go(func() error {
-		<-egctx.Done()
-		return s.Stop(egctx)
-	})
-
-	eg.Go(func() error {
 		if noLeaderElection {
 			callback(egctx)
 		} else {
@@ -85,5 +82,18 @@ func run(options *config.ControllerOptions) error {
 		return nil
 	})
 
-	return eg.Wait()
+	errCh := server.Cleanup(egctx, s)
+
+	if err := eg.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+
+	// Return cleanup error message if any
+	if err := <-errCh; err != nil {
+		return err
+	}
+
+	logrus.Info("finished clean")
+
+	return nil
 }
