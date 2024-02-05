@@ -1,11 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
 	"github.com/rancher/wrangler/pkg/kv"
+	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/types"
@@ -44,7 +44,7 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := context.Background()
+		ctx := signals.SetupSignalContext()
 		ipPoolNamespace, ipPoolName := kv.RSplit(ippoolRef, "/")
 		options := &config.AgentOptions{
 			DryRun:         dryRun,
