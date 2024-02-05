@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
 
 	"github.com/rancher/wrangler/pkg/leader"
@@ -86,14 +85,5 @@ func run(options *config.ControllerOptions) error {
 		return nil
 	})
 
-	if err := eg.Wait(); err != nil {
-		if errors.Is(err, context.Canceled) {
-			logrus.Info("context canceled")
-			return nil
-		} else {
-			logrus.Fatalf("received error: %s", err)
-		}
-	}
-
-	return nil
+	return eg.Wait()
 }
