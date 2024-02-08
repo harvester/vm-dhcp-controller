@@ -31,6 +31,7 @@ const (
 	testKey                = testIPPoolNamespace + "/" + testIPPoolName
 	testPodNamespace       = "harvester-system"
 	testPodName            = testNADNamespace + "-" + testNADName + "-agent"
+	testUID                = "3a955369-9eaa-43db-94f3-9153289d7dc2"
 	testClusterNetwork     = "provider"
 	testServerIP           = "192.168.0.2"
 	testNetworkName        = testNADNamespace + "/" + testNADName
@@ -274,6 +275,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			agentServiceAccountName: testServiceAccountName,
 			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
 			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
 		}
 
 		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
@@ -389,6 +391,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			agentServiceAccountName: testServiceAccountName,
 			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
 			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
 		}
 
 		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
@@ -446,6 +449,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			agentServiceAccountName: testServiceAccountName,
 			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
 			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
 		}
 
 		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
@@ -490,11 +494,65 @@ func TestHandler_DeployAgent(t *testing.T) {
 			agentServiceAccountName: testServiceAccountName,
 			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
 			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
 		}
 
 		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedStatus, status)
+	})
+
+	t.Run("existing agent pod uid mismatch", func(t *testing.T) {
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			NetworkName(testNetworkName).
+			AgentPodRef(testPodNamespace, testPodName, testImage, testUID).Build()
+		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
+			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
+		givenPod := prepareAgentPod(
+			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
+				ServerIP(testServerIP).
+				CIDR(testCIDR).
+				NetworkName(testNetworkName).Build(),
+			false,
+			testPodNamespace,
+			testClusterNetwork,
+			testServiceAccountName,
+			&config.Image{
+				Repository: testImageRepository,
+				Tag:        testImageTag,
+			},
+		)
+
+		nadGVR := schema.GroupVersionResource{
+			Group:    "k8s.cni.cncf.io",
+			Version:  "v1",
+			Resource: "network-attachment-definitions",
+		}
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Create(nadGVR, givenNAD, givenNAD.Namespace)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		k8sclientset := k8sfake.NewSimpleClientset()
+		err = k8sclientset.Tracker().Add(givenPod)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		handler := Handler{
+			agentNamespace: testPodNamespace,
+			agentImage: &config.Image{
+				Repository: testImageRepository,
+				Tag:        testImageTagNew,
+			},
+			agentServiceAccountName: testServiceAccountName,
+			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
+			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+		}
+
+		_, err = handler.DeployAgent(givenIPPool, givenIPPool.Status)
+		assert.Equal(t, fmt.Sprintf("agent pod %s uid mismatch, waiting for removal then redeploy", testPodName), err.Error())
 	})
 }
 
@@ -641,7 +699,7 @@ func TestHandler_MonitorAgent(t *testing.T) {
 		}
 
 		_, err = handler.MonitorAgent(givenIPPool, givenIPPool.Status)
-		assert.Equal(t, fmt.Sprintf("agent for ippool %s is not ready", testPodNamespace+"/"+testPodName), err.Error())
+		assert.Equal(t, fmt.Sprintf("agent %s for ippool %s/%s is not ready", testPodName, testIPPoolNamespace, testIPPoolName), err.Error())
 	})
 
 	t.Run("agent pod ready", func(t *testing.T) {

@@ -280,6 +280,23 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 		return status, fmt.Errorf("could not find clusternetwork for nad %s", ipPool.Spec.NetworkName)
 	}
 
+	if ipPool.Status.AgentPodRef != nil {
+		pod, err := h.podCache.Get(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name)
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				return status, err
+			}
+
+			logrus.Warningf("(ippool.DeployAgent) agent pod %s missing, redeploying", ipPool.Status.AgentPodRef.Name)
+		} else {
+			if pod.GetUID() == ipPool.Status.AgentPodRef.UID {
+				return status, nil
+			}
+
+			return status, fmt.Errorf("agent pod %s uid mismatch, waiting for removal then redeploy", ipPool.Status.AgentPodRef.Name)
+		}
+	}
+
 	agent := prepareAgentPod(ipPool, h.noDHCP, h.agentNamespace, clusterNetwork, h.agentServiceAccountName, h.agentImage)
 
 	if status.AgentPodRef == nil {
@@ -385,7 +402,7 @@ func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPool
 	}
 
 	if !isPodReady(agentPod) {
-		return status, fmt.Errorf("agent for ippool %s/%s is not ready", agentPod.Namespace, agentPod.Name)
+		return status, fmt.Errorf("agent %s for ippool %s/%s is not ready", agentPod.Name, ipPool.Namespace, ipPool.Name)
 	}
 
 	return status, nil
