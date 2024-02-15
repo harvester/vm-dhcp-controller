@@ -119,79 +119,35 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 		if err != nil {
 			return status, err
 		}
+
+		var ip string
+
 		if exists {
 			// Recover IP from cache
+			ip, err = h.cacheAllocator.GetIPByMAC(nc.NetworkName, nc.MACAddress)
+			if err != nil {
+				return status, err
+			}
+		} else {
+			dIP := net.IPv4zero.String()
+			if nc.IPAddress != nil {
+				dIP = *nc.IPAddress
+			}
 
-			ip, err := h.cacheAllocator.GetIPByMAC(nc.NetworkName, nc.MACAddress)
+			// Recover IP from status (resume from paused state)
+			if oIP, err := findIPAddressFromNetworkConfigStatusByMACAddress(vmNetCfg.Status.NetworkConfigs, nc.MACAddress); err == nil {
+				dIP = oIP
+			}
+
+			// Allocate new IP
+			ip, err = h.ipAllocator.AllocateIP(nc.NetworkName, dIP)
 			if err != nil {
 				return status, err
 			}
 
-			// Prepare VirtualMachineNetworkConfig status
-			ncStatus := networkv1.NetworkConfigStatus{
-				AllocatedIPAddress: ip,
-				MACAddress:         nc.MACAddress,
-				NetworkName:        nc.NetworkName,
-				State:              networkv1.AllocatedState,
+			if err := h.cacheAllocator.AddMAC(nc.NetworkName, nc.MACAddress, ip); err != nil {
+				return status, err
 			}
-			ncStatuses = append(ncStatuses, ncStatus)
-
-			// Update VirtualMachineNetworkConfig metrics
-			h.metricsAllocator.UpdateVmNetCfgStatus(
-				fmt.Sprintf("%s/%s", vmNetCfg.Namespace, vmNetCfg.Name),
-				ncStatus.NetworkName,
-				ncStatus.MACAddress,
-				ncStatus.AllocatedIPAddress,
-				string(ncStatus.State),
-			)
-
-			// Update IPPool status
-			ipPoolCpy := ipPool.DeepCopy()
-
-			ipv4Status := ipPoolCpy.Status.IPv4
-			if ipv4Status == nil {
-				ipv4Status = new(networkv1.IPv4Status)
-			}
-
-			allocated := ipv4Status.Allocated
-			if allocated == nil {
-				allocated = make(map[string]string)
-			}
-
-			allocated[ip] = nc.MACAddress
-
-			ipv4Status.Allocated = allocated
-			ipPoolCpy.Status.IPv4 = ipv4Status
-
-			if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-				logrus.Infof("(vmnetcfg.Allocate) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
-				ipPoolCpy.Status.LastUpdate = metav1.Now()
-				if _, err = h.ippoolClient.UpdateStatus(ipPoolCpy); err != nil {
-					return status, err
-				}
-			}
-
-			continue
-		}
-
-		// Allocate new IP
-
-		dIP := net.IPv4zero.String()
-		if nc.IPAddress != nil {
-			dIP = *nc.IPAddress
-		}
-		// Recover IP from status (resume from paused state)
-		if oIP, err := findIPAddressFromNetworkConfigStatusByMACAddress(vmNetCfg.Status.NetworkConfigs, nc.MACAddress); err == nil {
-			dIP = oIP
-		}
-
-		ip, err := h.ipAllocator.AllocateIP(nc.NetworkName, dIP)
-		if err != nil {
-			return status, err
-		}
-
-		if err := h.cacheAllocator.AddMAC(nc.NetworkName, nc.MACAddress, ip); err != nil {
-			return status, err
 		}
 
 		// Prepare VirtualMachineNetworkConfig status
@@ -201,6 +157,7 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 			NetworkName:        nc.NetworkName,
 			State:              networkv1.AllocatedState,
 		}
+
 		ncStatuses = append(ncStatuses, ncStatus)
 
 		// Update VirtualMachineNetworkConfig metrics
