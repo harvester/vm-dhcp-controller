@@ -67,7 +67,7 @@ type NetworkConfig struct {
 }
 
 type VirtualMachineNetworkConfigStatus struct {
-	NetworkConfigs []NetworkConfigStatus `json:"networkConfig,omitempty"`
+	NetworkConfigs []NetworkConfigStatus `json:"networkConfigs,omitempty"`
 
 	// +optional
 	// +kubebuilder:validation:Optional

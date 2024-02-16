@@ -112,7 +112,7 @@ spec:
                   - type
                   type: object
                 type: array
-              networkConfig:
+              networkConfigs:
                 items:
                   properties:
                     allocatedIPAddress:
