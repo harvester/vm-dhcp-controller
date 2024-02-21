@@ -506,6 +506,20 @@ func TestHandler_DeployAgent(t *testing.T) {
 			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
+		givenPod, _ := prepareAgentPod(
+			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
+				ServerIP(testServerIP).
+				CIDR(testCIDR).
+				NetworkName(testNetworkName).Build(),
+			false,
+			testPodNamespace,
+			testClusterNetwork,
+			testServiceAccountName,
+			&config.Image{
+				Repository: testImageRepository,
+				Tag:        testImageTag,
+			},
+		)
 
 		expectedStatus := newTestIPPoolStatusBuilder().
 			AgentPodRef(testPodNamespace, testPodName, testImageNew, "").Build()
@@ -521,6 +535,8 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		k8sclientset := k8sfake.NewSimpleClientset()
+		err = k8sclientset.Tracker().Add(givenPod)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		handler := Handler{
 			agentNamespace: testPodNamespace,

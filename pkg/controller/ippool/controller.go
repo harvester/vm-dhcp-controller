@@ -281,6 +281,8 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 	}
 
 	if ipPool.Status.AgentPodRef != nil {
+		status.AgentPodRef.Image = h.agentImage.String()
+
 		pod, err := h.podCache.Get(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name)
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
