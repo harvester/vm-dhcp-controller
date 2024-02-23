@@ -291,11 +291,15 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 
 			logrus.Warningf("(ippool.DeployAgent) agent pod %s missing, redeploying", ipPool.Status.AgentPodRef.Name)
 		} else {
-			if pod.GetUID() == ipPool.Status.AgentPodRef.UID {
-				return status, nil
+			if pod.DeletionTimestamp != nil {
+				return status, fmt.Errorf("agent pod %s marked for deletion", ipPool.Status.AgentPodRef.Name)
 			}
 
-			return status, fmt.Errorf("agent pod %s uid mismatch, waiting for removal then redeploy", ipPool.Status.AgentPodRef.Name)
+			if pod.GetUID() != ipPool.Status.AgentPodRef.UID {
+				return status, fmt.Errorf("agent pod %s uid mismatch", ipPool.Status.AgentPodRef.Name)
+			}
+
+			return status, nil
 		}
 	}
 
@@ -403,11 +407,19 @@ func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPool
 	}
 
 	if agentPod.GetUID() != ipPool.Status.AgentPodRef.UID || agentPod.Spec.Containers[0].Image != ipPool.Status.AgentPodRef.Image {
-		return status, h.podClient.Delete(agentPod.Namespace, agentPod.Name, &metav1.DeleteOptions{})
+		if agentPod.DeletionTimestamp != nil {
+			return status, fmt.Errorf("agent pod %s marked for deletion", agentPod.Name)
+		}
+
+		if err := h.podClient.Delete(agentPod.Namespace, agentPod.Name, &metav1.DeleteOptions{}); err != nil {
+			return status, err
+		}
+
+		return status, fmt.Errorf("agent pod %s obsolete and purged", agentPod.Name)
 	}
 
 	if !isPodReady(agentPod) {
-		return status, fmt.Errorf("agent %s for ippool %s/%s is not ready", agentPod.Name, ipPool.Namespace, ipPool.Name)
+		return status, fmt.Errorf("agent pod %s not ready", agentPod.Name)
 	}
 
 	return status, nil
