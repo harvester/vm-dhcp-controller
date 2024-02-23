@@ -555,6 +555,64 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Equal(t, expectedStatus, status)
 	})
 
+	t.Run("agent pod upgrade held back", func(t *testing.T) {
+		givenIPPool := newTestIPPoolBuilder().
+			Annotation(holdIPPoolAgentUpgradeAnnotationKey, "true").
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			NetworkName(testNetworkName).
+			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
+			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
+		givenPod, _ := prepareAgentPod(
+			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
+				ServerIP(testServerIP).
+				CIDR(testCIDR).
+				NetworkName(testNetworkName).Build(),
+			false,
+			testPodNamespace,
+			testClusterNetwork,
+			testServiceAccountName,
+			&config.Image{
+				Repository: testImageRepository,
+				Tag:        testImageTag,
+			},
+		)
+
+		expectedStatus := newTestIPPoolStatusBuilder().
+			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+
+		nadGVR := schema.GroupVersionResource{
+			Group:    "k8s.cni.cncf.io",
+			Version:  "v1",
+			Resource: "network-attachment-definitions",
+		}
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Create(nadGVR, givenNAD, givenNAD.Namespace)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		k8sclientset := k8sfake.NewSimpleClientset()
+		err = k8sclientset.Tracker().Add(givenPod)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		handler := Handler{
+			agentNamespace: testPodNamespace,
+			agentImage: &config.Image{
+				Repository: testImageRepository,
+				Tag:        testImageTagNew,
+			},
+			agentServiceAccountName: testServiceAccountName,
+			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
+			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+		}
+
+		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedStatus, status)
+	})
+
 	t.Run("existing agent pod uid mismatch", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
 			ServerIP(testServerIP).
