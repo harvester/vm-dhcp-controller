@@ -191,6 +191,14 @@ func NewIPPoolBuilder(namespace, name string) *IPPoolBuilder {
 	}
 }
 
+func (b *IPPoolBuilder) Annotation(key, value string) *IPPoolBuilder {
+	if b.ipPool.Annotations == nil {
+		b.ipPool.Annotations = make(map[string]string)
+	}
+	b.ipPool.Annotations[key] = value
+	return b
+}
+
 func (b *IPPoolBuilder) NetworkName(networkName string) *IPPoolBuilder {
 	b.ipPool.Spec.NetworkName = networkName
 	return b

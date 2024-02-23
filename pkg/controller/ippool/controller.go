@@ -29,7 +29,8 @@ import (
 const (
 	controllerName = "vm-dhcp-ippool-controller"
 
-	multusNetworksAnnotationKey = "k8s.v1.cni.cncf.io/networks"
+	multusNetworksAnnotationKey         = "k8s.v1.cni.cncf.io/networks"
+	holdIPPoolAgentUpgradeAnnotationKey = "network.harvesterhci.io/hold-ippool-agent-upgrade"
 
 	ipPoolNamespaceLabelKey  = network.GroupName + "/ippool-namespace"
 	ipPoolNameLabelKey       = network.GroupName + "/ippool-name"
@@ -281,8 +282,7 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 	}
 
 	if ipPool.Status.AgentPodRef != nil {
-		status.AgentPodRef.Image = h.agentImage.String()
-
+		status.AgentPodRef.Image = h.getAgentImage(ipPool)
 		pod, err := h.podCache.Get(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name)
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
@@ -432,6 +432,14 @@ func isPodReady(pod *corev1.Pod) bool {
 		}
 	}
 	return false
+}
+
+func (h *Handler) getAgentImage(ipPool *networkv1.IPPool) string {
+	_, ok := ipPool.Annotations[holdIPPoolAgentUpgradeAnnotationKey]
+	if ok {
+		return ipPool.Status.AgentPodRef.Image
+	}
+	return h.agentImage.String()
 }
 
 func (h *Handler) cleanup(ipPool *networkv1.IPPool) error {
