@@ -605,7 +605,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 		}
 
 		_, err = handler.DeployAgent(givenIPPool, givenIPPool.Status)
-		assert.Equal(t, fmt.Sprintf("agent pod %s uid mismatch, waiting for removal then redeploy", testPodName), err.Error())
+		assert.Equal(t, fmt.Sprintf("agent pod %s uid mismatch", testPodName), err.Error())
 	})
 }
 
@@ -752,7 +752,7 @@ func TestHandler_MonitorAgent(t *testing.T) {
 		}
 
 		_, err = handler.MonitorAgent(givenIPPool, givenIPPool.Status)
-		assert.Equal(t, fmt.Sprintf("agent %s for ippool %s/%s is not ready", testPodName, testIPPoolNamespace, testIPPoolName), err.Error())
+		assert.Equal(t, fmt.Sprintf("agent pod %s not ready", testPodName), err.Error())
 	})
 
 	t.Run("agent pod ready", func(t *testing.T) {
@@ -821,10 +821,9 @@ func TestHandler_MonitorAgent(t *testing.T) {
 		}
 
 		_, err = handler.MonitorAgent(givenIPPool, givenIPPool.Status)
-		assert.Nil(t, err)
+		assert.Equal(t, fmt.Sprintf("agent pod %s obsolete and purged", testPodName), err.Error())
 
 		_, err = handler.podClient.Get(testPodNamespace, testPodName, metav1.GetOptions{})
-		assert.NotNil(t, err)
 		assert.Equal(t, fmt.Sprintf("pods \"%s\" not found", testPodName), err.Error())
 	})
 }
