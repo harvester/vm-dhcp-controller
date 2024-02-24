@@ -255,6 +255,8 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 	return ipPool, nil
 }
 
+// DeployAgent reconciles ipPool and ensures there's an agent pod for it. The
+// returned status reports whether an agent pod is registered.
 func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
 	logrus.Debugf("(ippool.DeployAgent) deploy agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
@@ -331,6 +333,11 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 	return status, nil
 }
 
+// BuildCache reconciles ipPool and initializes the IPAM and MAC caches for it.
+// The source information comes from both ipPool's spec and status. Since
+// IPPool objects are deemed source of truths, BuildCache honors the state and
+// use it to load up internal caches. The returned status reports whether both
+// caches are fully initialized.
 func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
 	logrus.Debugf("(ippool.BuildCache) build ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
@@ -386,6 +393,10 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 	return status, nil
 }
 
+// MonitorAgent reconciles ipPool and keeps an eye on the agent pod. If the
+// running agent pod does not match to the one record in ipPool's status,
+// MonitorAgent tries to delete it. The returned status reports whether the
+// agent pod is ready.
 func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
 	logrus.Debugf("(ippool.MonitorAgent) monitor agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
