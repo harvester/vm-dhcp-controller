@@ -10,7 +10,9 @@ const (
 	ExcludedMark = "EXCLUDED"
 	ReservedMark = "RESERVED"
 
-	AgentSuffixName = "agent"
+	AgentSuffixName       = "agent"
+	NodeArgsAnnotationKey = "rke2.io/node-args"
+	ServiceCIDRFlag       = "--service-cidr"
 )
 
 func agentConcatName(name ...string) string {

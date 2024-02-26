@@ -30,6 +30,7 @@ func init() {
 }
 
 type Interface interface {
+	Node() NodeController
 	Pod() PodController
 }
 
@@ -43,6 +44,9 @@ type version struct {
 	controllerFactory controller.SharedControllerFactory
 }
 
+func (c *version) Node() NodeController {
+	return NewNodeController(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Node"}, "nodes", false, c.controllerFactory)
+}
 func (c *version) Pod() PodController {
 	return NewPodController(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"}, "pods", true, c.controllerFactory)
 }

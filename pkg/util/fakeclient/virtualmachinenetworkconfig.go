@@ -52,7 +52,8 @@ func (c VirtualMachineNetworkConfigCache) List(namespace string, selector labels
 	}
 	result := make([]*networkv1.VirtualMachineNetworkConfig, 0, len(list.Items))
 	for _, vmNetCfg := range list.Items {
-		result = append(result, &vmNetCfg)
+		v := vmNetCfg
+		result = append(result, &v)
 	}
 	return result, err
 }

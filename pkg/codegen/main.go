@@ -45,6 +45,7 @@ func main() {
 			},
 			corev1.GroupName: {
 				Types: []interface{}{
+					corev1.Node{},
 					corev1.Pod{},
 				},
 				InformersPackage: "k8s.io/client-go/informers",

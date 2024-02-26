@@ -9,9 +9,11 @@ import (
 	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/sirupsen/logrus"
 	admissionregv1 "k8s.io/api/admissionregistration/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	ctlcorev1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core/v1"
 	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
@@ -22,12 +24,18 @@ type Validator struct {
 	admission.DefaultValidator
 
 	nadCache      ctlcniv1.NetworkAttachmentDefinitionCache
+	nodeCache     ctlcorev1.NodeCache
 	vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache
 }
 
-func NewValidator(nadCache ctlcniv1.NetworkAttachmentDefinitionCache, vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache) *Validator {
+func NewValidator(
+	nadCache ctlcniv1.NetworkAttachmentDefinitionCache,
+	nodeCache ctlcorev1.NodeCache,
+	vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache,
+) *Validator {
 	return &Validator{
 		nadCache:      nadCache,
+		nodeCache:     nodeCache,
 		vmnetcfgCache: vmnetcfgCache,
 	}
 }
@@ -43,6 +51,10 @@ func (v *Validator) Create(_ *admission.Request, newObj runtime.Object) error {
 	}
 
 	if err := v.checkNAD(ipPool.Spec.NetworkName); err != nil {
+		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+	}
+
+	if err := v.checkCIDR(ipPool.Spec.IPv4Config.CIDR); err != nil {
 		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
@@ -73,7 +85,7 @@ func (v *Validator) Update(_ *admission.Request, _, newObj runtime.Object) error
 	// sanity check
 	poolInfo, err := util.LoadPool(ipPool)
 	if err != nil {
-		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+		return fmt.Errorf(webhook.UpdateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
 	var allocatedIPAddrList []netip.Addr
@@ -82,19 +94,23 @@ func (v *Validator) Update(_ *admission.Request, _, newObj runtime.Object) error
 	}
 
 	if err := v.checkNAD(ipPool.Spec.NetworkName); err != nil {
-		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+		return fmt.Errorf(webhook.UpdateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+	}
+
+	if err := v.checkCIDR(ipPool.Spec.IPv4Config.CIDR); err != nil {
+		return fmt.Errorf(webhook.UpdateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
 	if err := v.checkPoolRange(poolInfo); err != nil {
-		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+		return fmt.Errorf(webhook.UpdateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
 	if err := v.checkServerIP(poolInfo, allocatedIPAddrList...); err != nil {
-		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+		return fmt.Errorf(webhook.UpdateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
 	if err := v.checkRouter(poolInfo); err != nil {
-		return fmt.Errorf(webhook.CreateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
+		return fmt.Errorf(webhook.UpdateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
 	return nil
@@ -134,6 +150,36 @@ func (v *Validator) checkNAD(namespacedName string) error {
 
 	_, err := v.nadCache.Get(nadNamespace, nadName)
 	return err
+}
+
+func (v *Validator) checkCIDR(cidr string) error {
+	ipNet, _, _, err := util.LoadCIDR(cidr)
+	if err != nil {
+		return nil
+	}
+
+	nodes, err := v.nodeCache.List(labels.Everything())
+	if err != nil {
+		return err
+	}
+
+	for _, node := range nodes {
+		serviceCIDR, err := util.GetServiceCIDRFromNode(node)
+		if err != nil {
+			return err
+		}
+
+		svcIPNet, _, _, err := util.LoadCIDR(serviceCIDR)
+		if err != nil {
+			return err
+		}
+
+		if ipNet.Contains(svcIPNet.IP) || svcIPNet.Contains(ipNet.IP) {
+			return fmt.Errorf("cidr %s overlaps service cidr %s", cidr, serviceCIDR)
+		}
+	}
+
+	return nil
 }
 
 func (v *Validator) checkPoolRange(pi util.PoolInfo) error {
