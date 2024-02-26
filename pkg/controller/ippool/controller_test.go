@@ -511,7 +511,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 		givenPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
-				ServerIP(testServerIP).
+				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
@@ -561,7 +561,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 	t.Run("agent pod upgrade held back", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
 			Annotation(holdIPPoolAgentUpgradeAnnotationKey, "true").
-			ServerIP(testServerIP).
+			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			NetworkName(testNetworkName).
 			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
@@ -569,7 +569,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 		givenPod, _ := prepareAgentPod(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
-				ServerIP(testServerIP).
+				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
