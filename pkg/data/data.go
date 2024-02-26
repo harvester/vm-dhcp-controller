@@ -94,7 +94,7 @@ func chartCrdsNetworkHarvesterhciIo_ippoolsYaml() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "chart/crds/network.harvesterhci.io_ippools.yaml", size: 7603, mode: os.FileMode(420), modTime: time.Unix(1708057982, 0)}
+	info := bindataFileInfo{name: "chart/crds/network.harvesterhci.io_ippools.yaml", size: 7603, mode: os.FileMode(420), modTime: time.Unix(1708939633, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -114,7 +114,7 @@ func chartCrdsNetworkHarvesterhciIo_virtualmachinenetworkconfigsYaml() (*asset, 
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "chart/crds/network.harvesterhci.io_virtualmachinenetworkconfigs.yaml", size: 4544, mode: os.FileMode(420), modTime: time.Unix(1708057982, 0)}
+	info := bindataFileInfo{name: "chart/crds/network.harvesterhci.io_virtualmachinenetworkconfigs.yaml", size: 4544, mode: os.FileMode(420), modTime: time.Unix(1708939633, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }

@@ -9,6 +9,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 
+	ctlcore "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core"
+	ctlcorev1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core/v1"
 	ctlcni "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io"
 	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	ctlkubevirt "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/kubevirt.io"
@@ -24,12 +26,16 @@ type caches struct {
 	ippoolCache   ctlnetworkv1.IPPoolCache
 	vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache
 
-	nadCache ctlcniv1.NetworkAttachmentDefinitionCache
-	vmCache  ctlkubevirtv1.VirtualMachineCache
+	nadCache  ctlcniv1.NetworkAttachmentDefinitionCache
+	nodeCache ctlcorev1.NodeCache
+	vmCache   ctlkubevirtv1.VirtualMachineCache
 }
 
 func newCaches(ctx context.Context, cfg *rest.Config, threadiness int) (*caches, error) {
 	var starters []start.Starter
+
+	coreFactory := ctlcore.NewFactoryFromConfigOrDie(cfg)
+	starters = append(starters, coreFactory)
 
 	kubevirtFactory := ctlkubevirt.NewFactoryFromConfigOrDie(cfg)
 	starters = append(starters, kubevirtFactory)
@@ -45,6 +51,7 @@ func newCaches(ctx context.Context, cfg *rest.Config, threadiness int) (*caches,
 		ippoolCache:   networkFactory.Network().V1alpha1().IPPool().Cache(),
 		vmnetcfgCache: networkFactory.Network().V1alpha1().VirtualMachineNetworkConfig().Cache(),
 		nadCache:      cniFactory.K8s().V1().NetworkAttachmentDefinition().Cache(),
+		nodeCache:     coreFactory.Core().V1().Node().Cache(),
 		vmCache:       kubevirtFactory.Kubevirt().V1().VirtualMachine().Cache(),
 	}
 
@@ -69,7 +76,7 @@ func run(ctx context.Context, cfg *rest.Config, options *config.Options) error {
 	webhookServer := server.NewWebhookServer(ctx, cfg, name, options)
 
 	if err := webhookServer.RegisterValidators(
-		ippool.NewValidator(c.nadCache, c.vmnetcfgCache),
+		ippool.NewValidator(c.nadCache, c.nodeCache, c.vmnetcfgCache),
 		vmnetcfg.NewValidator(c.ippoolCache),
 	); err != nil {
 		return err

@@ -49,7 +49,8 @@ func (c NetworkAttachmentDefinitionCache) List(namespace string, selector labels
 	}
 	result := make([]*cniv1.NetworkAttachmentDefinition, 0, len(list.Items))
 	for _, nad := range list.Items {
-		result = append(result, &nad)
+		n := nad
+		result = append(result, &n)
 	}
 	return result, err
 }

@@ -52,7 +52,8 @@ func (c PodCache) List(namespace string, selector labels.Selector) ([]*corev1.Po
 	}
 	result := make([]*corev1.Pod, 0, len(list.Items))
 	for _, pod := range list.Items {
-		result = append(result, &pod)
+		p := pod
+		result = append(result, &p)
 	}
 	return result, err
 }

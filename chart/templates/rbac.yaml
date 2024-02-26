@@ -52,7 +52,7 @@ rules:
   resources: [ "ippools", "virtualmachinenetworkconfigs" ]
   verbs: [ "*" ]
 - apiGroups: [ "" ]
-  resources: [ "secrets" ]
+  resources: [ "nodes", "secrets" ]
   verbs: [ "watch", "list" ]
 - apiGroups: [ "k8s.cni.cncf.io" ]
   resources: [ "network-attachment-definitions" ]

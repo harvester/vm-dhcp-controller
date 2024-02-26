@@ -52,7 +52,8 @@ func (c IPPoolCache) List(namespace string, selector labels.Selector) ([]*networ
 	}
 	result := make([]*networkv1.IPPool, 0, len(list.Items))
 	for _, ipPool := range list.Items {
-		result = append(result, &ipPool)
+		i := ipPool
+		result = append(result, &i)
 	}
 	return result, err
 }

@@ -1,9 +1,12 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/netip"
+
+	corev1 "k8s.io/api/core/v1"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 )
@@ -16,6 +19,40 @@ type PoolInfo struct {
 	EndIPAddr       netip.Addr
 	ServerIPAddr    netip.Addr
 	RouterIPAddr    netip.Addr
+}
+
+func GetServiceCIDRFromNode(node *corev1.Node) (string, error) {
+	if node.Annotations == nil {
+		return "", fmt.Errorf("service CIDR not found for node %s", node.Name)
+	}
+
+	nodeArgs, ok := node.Annotations[NodeArgsAnnotationKey]
+	if !ok {
+		return "", fmt.Errorf("annotation %s not found for node %s", NodeArgsAnnotationKey, node.Name)
+	}
+
+	var argList []string
+	if err := json.Unmarshal([]byte(nodeArgs), &argList); err != nil {
+		return "", err
+	}
+
+	var serviceCIDRIndex int
+	for i, val := range argList {
+		if val == ServiceCIDRFlag {
+			// The "rke2.io/node-args" annotation in node objects contains various node arguments.
+			// For example, '[...,"--cluster-cidr","10.52.0.0/16","--service-cidr","10.53.0.0/16", ...]'
+			// What we need here is the value of the "--service-cidr" flag.
+			// It could be accessed by accumulating the flag index by one.
+			serviceCIDRIndex = i + 1
+			break
+		}
+	}
+
+	if serviceCIDRIndex == 0 || serviceCIDRIndex >= len(argList) {
+		return "", fmt.Errorf("serviceCIDR not found for node %s", node.Name)
+	}
+
+	return argList[serviceCIDRIndex], nil
 }
 
 func LoadCIDR(cidr string) (ipNet *net.IPNet, networkIPAddr netip.Addr, broadcastIPAddr netip.Addr, err error) {
