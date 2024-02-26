@@ -1,5 +1,8 @@
 # vm-dhcp-controller
 
+[![Build Status](https://drone-publish.rancher.io/api/badges/harvester/vm-dhcp-controller/status.svg)](https://drone-publish.rancher.io/harvester/vm-dhcp-controller)
+[![Releases](https://img.shields.io/github/release/harvester/vm-dhcp-controller.svg)](https://github.com/harvester/vm-dhcp-controller/releases)
+
 A managed DHCP service for virtual machines running on Harvester, ported from [joeyloman/kubevirt-ip-helper](https://github.com/joeyloman/kubevirt-ip-helper) and its subsidiary projects.
 
 ## Features
@@ -38,7 +41,7 @@ How the controller and agents collaborate to provide DHCP services for virtual m
 
 ## Develop
 
-To generate the controllers/clientsets:
+To generate the crds/controllers/clientsets:
 
 ```
 go generate
