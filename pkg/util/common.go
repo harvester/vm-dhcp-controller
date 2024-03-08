@@ -10,9 +10,10 @@ const (
 	ExcludedMark = "EXCLUDED"
 	ReservedMark = "RESERVED"
 
-	AgentSuffixName       = "agent"
-	NodeArgsAnnotationKey = "rke2.io/node-args"
-	ServiceCIDRFlag       = "--service-cidr"
+	AgentSuffixName        = "agent"
+	NodeArgsAnnotationKey  = "rke2.io/node-args"
+	ServiceCIDRFlag        = "--service-cidr"
+	ManagementNodeLabelKey = "node-role.kubernetes.io/control-plane"
 )
 
 func agentConcatName(name ...string) string {
