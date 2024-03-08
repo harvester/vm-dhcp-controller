@@ -118,13 +118,23 @@ func LoadPool(ipPool *networkv1.IPPool) (pi PoolInfo, err error) {
 	return
 }
 
-func LoadAllocated(allocated map[string]string) (ipAddrList []netip.Addr) {
-	for ip := range allocated {
+// LoadAllocated returns the un-allocatable IP addresses in three types of IP
+// address lists, allocatedList, excludedList, and reservedList.
+func LoadAllocated(allocated map[string]string) (allocatedList, excludedList, reservedList []netip.Addr) {
+	for ip, val := range allocated {
 		ipAddr, err := netip.ParseAddr(ip)
 		if err != nil {
 			continue
 		}
-		ipAddrList = append(ipAddrList, ipAddr)
+
+		switch val {
+		case ExcludedMark:
+			excludedList = append(excludedList, ipAddr)
+		case ReservedMark:
+			reservedList = append(reservedList, ipAddr)
+		default:
+			allocatedList = append(allocatedList, ipAddr)
+		}
 	}
 	return
 }

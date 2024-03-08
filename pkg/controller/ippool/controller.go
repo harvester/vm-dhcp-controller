@@ -393,7 +393,7 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 	// (Re)build caches from IPPool status
 	if ipPool.Status.IPv4 != nil {
 		for ip, mac := range ipPool.Status.IPv4.Allocated {
-			if mac == util.ExcludedMark {
+			if mac == util.ExcludedMark || mac == util.ReservedMark {
 				continue
 			}
 			if _, err := h.ipAllocator.AllocateIP(ipPool.Spec.NetworkName, ip); err != nil {

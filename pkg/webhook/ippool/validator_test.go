@@ -20,16 +20,18 @@ import (
 )
 
 const (
-	testNADNamespace       = "default"
-	testNADName            = "net-1"
-	testIPPoolNamespace    = testNADNamespace
-	testIPPoolName         = testNADName
-	testCIDR               = "192.168.0.0/24"
-	testCIDROverlap        = "10.53.0.0/24"
-	testServiceCIDR        = "10.53.0.0/16"
-	testServerIPOutOfRange = "192.168.100.2"
-	testRouter             = "192.168.0.1"
-	testNetworkName        = testNADNamespace + "/" + testNADName
+	testNADNamespace        = "default"
+	testNADName             = "net-1"
+	testIPPoolNamespace     = testNADNamespace
+	testIPPoolName          = testNADName
+	testCIDR                = "192.168.0.0/24"
+	testCIDROverlap         = "10.53.0.0/24"
+	testServiceCIDR         = "10.53.0.0/16"
+	testServerIPWithinRange = "192.168.0.2"
+	testServerIPOutOfRange  = "192.168.100.2"
+	testRouter              = "192.168.0.1"
+	testExcludedIP          = "192.168.0.100"
+	testNetworkName         = testNADNamespace + "/" + testNADName
 )
 
 func newTestIPPoolBuilder() *ippool.IPPoolBuilder {
@@ -459,7 +461,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because server ip %s is already allocated", testIPPoolNamespace, testIPPoolName, "192.168.0.100"),
+				err: fmt.Errorf("could not update IPPool %s/%s because server ip %s is already occupied", testIPPoolNamespace, testIPPoolName, "192.168.0.100"),
 			},
 		},
 		{
@@ -648,6 +650,31 @@ func TestValidator_Update(t *testing.T) {
 			},
 			expected: output{
 				err: fmt.Errorf("could not update IPPool %s/%s because cidr %s overlaps service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
+			},
+		},
+		{
+			name: "server ip collides with excluded ip",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					ServerIP(testExcludedIP).
+					NetworkName(testNetworkName).
+					Allocated(testExcludedIP, util.ExcludedMark).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("could not update IPPool %s/%s because server ip %s is already occupied", testIPPoolNamespace, testIPPoolName, testExcludedIP),
+			},
+		},
+		{
+			name: "server ip within the pool range",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					ServerIP(testServerIPWithinRange).
+					NetworkName(testNetworkName).
+					Allocated(testServerIPWithinRange, util.ReservedMark).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 		},
 	}

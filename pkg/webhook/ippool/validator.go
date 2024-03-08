@@ -88,9 +88,12 @@ func (v *Validator) Update(_ *admission.Request, _, newObj runtime.Object) error
 		return fmt.Errorf(webhook.UpdateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
-	var allocatedIPAddrList []netip.Addr
+	var (
+		allocatedIPAddrList []netip.Addr
+		excludedIPAddrList  []netip.Addr
+	)
 	if ipPool.Status.IPv4 != nil {
-		allocatedIPAddrList = util.LoadAllocated(ipPool.Status.IPv4.Allocated)
+		allocatedIPAddrList, excludedIPAddrList, _ = util.LoadAllocated(ipPool.Status.IPv4.Allocated)
 	}
 
 	if err := v.checkNAD(ipPool.Spec.NetworkName); err != nil {
@@ -105,7 +108,7 @@ func (v *Validator) Update(_ *admission.Request, _, newObj runtime.Object) error
 		return fmt.Errorf(webhook.UpdateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
-	if err := v.checkServerIP(poolInfo, allocatedIPAddrList...); err != nil {
+	if err := v.checkServerIP(poolInfo, append(allocatedIPAddrList, excludedIPAddrList...)...); err != nil {
 		return fmt.Errorf(webhook.UpdateErr, "IPPool", ipPool.Namespace, ipPool.Name, err)
 	}
 
@@ -213,7 +216,18 @@ func (v *Validator) checkPoolRange(pi util.PoolInfo) error {
 	return nil
 }
 
-func (v *Validator) checkServerIP(pi util.PoolInfo, allocatedIPs ...netip.Addr) error {
+// checkServerIP checks whether the server IP address:
+//   - is WITHIN the CIDR
+//   - is NOT the network IP address
+//   - is NOT the broadcast IP address
+//   - is NOT the same as the router IP address (if there is one)
+//   - does NOT collide with any allocated or excluded IP addresses
+//
+// It does not compare the server IP address with any reserved ones, as
+// currently, the reserved IP addresses could only be the server or router IP
+// address. So the unallocatables slice only consists of the allocated and
+// excluded IP addresses.
+func (v *Validator) checkServerIP(pi util.PoolInfo, unallocatables ...netip.Addr) error {
 	if !pi.ServerIPAddr.IsValid() {
 		return nil
 	}
@@ -234,9 +248,9 @@ func (v *Validator) checkServerIP(pi util.PoolInfo, allocatedIPs ...netip.Addr) 
 		return fmt.Errorf("server ip %s cannot be the same as router ip", pi.ServerIPAddr)
 	}
 
-	for _, ip := range allocatedIPs {
+	for _, ip := range unallocatables {
 		if pi.ServerIPAddr == ip {
-			return fmt.Errorf("server ip %s is already allocated", pi.ServerIPAddr)
+			return fmt.Errorf("server ip %s is already occupied", pi.ServerIPAddr)
 		}
 	}
 
