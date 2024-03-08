@@ -2,6 +2,7 @@ package ippool
 
 import (
 	"fmt"
+	"net"
 	"net/netip"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/sirupsen/logrus"
 	admissionregv1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -23,17 +25,21 @@ import (
 type Validator struct {
 	admission.DefaultValidator
 
+	serviceCIDR string
+
 	nadCache      ctlcniv1.NetworkAttachmentDefinitionCache
 	nodeCache     ctlcorev1.NodeCache
 	vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache
 }
 
 func NewValidator(
+	serviceCIDR string,
 	nadCache ctlcniv1.NetworkAttachmentDefinitionCache,
 	nodeCache ctlcorev1.NodeCache,
 	vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache,
 ) *Validator {
 	return &Validator{
+		serviceCIDR:   serviceCIDR,
 		nadCache:      nadCache,
 		nodeCache:     nodeCache,
 		vmnetcfgCache: vmnetcfgCache,
@@ -161,25 +167,21 @@ func (v *Validator) checkCIDR(cidr string) error {
 		return nil
 	}
 
-	nodes, err := v.nodeCache.List(labels.Everything())
+	sets := labels.Set{
+		util.ManagementNodeLabelKey: "true",
+	}
+	mgmtNodes, err := v.nodeCache.List(sets.AsSelector())
 	if err != nil {
 		return err
 	}
 
-	for _, node := range nodes {
-		serviceCIDR, err := util.GetServiceCIDRFromNode(node)
-		if err != nil {
-			return err
-		}
+	svcIPNet, err := consolidateServiceCIDRs(mgmtNodes, v.serviceCIDR)
+	if err != nil {
+		return err
+	}
 
-		svcIPNet, _, _, err := util.LoadCIDR(serviceCIDR)
-		if err != nil {
-			return err
-		}
-
-		if ipNet.Contains(svcIPNet.IP) || svcIPNet.Contains(ipNet.IP) {
-			return fmt.Errorf("cidr %s overlaps service cidr %s", cidr, serviceCIDR)
-		}
+	if ipNet.Contains(svcIPNet.IP) || svcIPNet.Contains(ipNet.IP) {
+		return fmt.Errorf("cidr %s overlaps cluster service cidr %s", cidr, svcIPNet)
 	}
 
 	return nil
@@ -296,4 +298,29 @@ func (v *Validator) checkVmNetCfgs(ipPool *networkv1.IPPool) error {
 		return fmt.Errorf("it's still used by VirtualMachineNetworkConfig(s) %s, which must be removed at first", strings.Join(vmNetCfgNames, ", "))
 	}
 	return nil
+}
+
+func consolidateServiceCIDRs(nodes []*corev1.Node, cidr string) (svcIPNet *net.IPNet, err error) {
+	for _, node := range nodes {
+		var serviceCIDR string
+		serviceCIDR, err = util.GetServiceCIDRFromNode(node)
+		if err != nil {
+			logrus.Warningf("could not find service cidr from node annoatation")
+			continue
+		}
+
+		svcIPNet, _, _, err = util.LoadCIDR(serviceCIDR)
+		if err != nil {
+			return
+		}
+	}
+
+	if svcIPNet == nil {
+		svcIPNet, _, _, err = util.LoadCIDR(cidr)
+		if err != nil {
+			return
+		}
+	}
+
+	return
 }

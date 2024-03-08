@@ -13,12 +13,15 @@ import (
 	"github.com/harvester/webhook/pkg/config"
 )
 
+const defaultServiceCIDR = "10.53.0.0/16"
+
 var (
 	logDebug bool
 	logTrace bool
 
-	name    string
-	options config.Options
+	name        string
+	serviceCIDR string
+	options     config.Options
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -58,11 +61,14 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&logTrace, "trace", trace, "set logging level to trace")
 
 	rootCmd.Flags().StringVar(&name, "name", os.Getenv("VM_DHCP_AGENT_NAME"), "The name of the vm-dhcp-webhook instance")
+	rootCmd.Flags().StringVar(&serviceCIDR, "service-cidr", defaultServiceCIDR, "")
+
 	rootCmd.Flags().StringVar(&options.ControllerUsername, "controller-user", "harvester-vm-dhcp-controller", "The harvester controller username")
 	rootCmd.Flags().StringVar(&options.GarbageCollectionUsername, "gc-user", "system:serviceaccount:kube-system:generic-garbage-collector", "The system username that performs garbage collection")
 	rootCmd.Flags().StringVar(&options.Namespace, "namespace", os.Getenv("NAMESPACE"), "The harvester namespace")
 	rootCmd.Flags().IntVar(&options.HTTPSListenPort, "https-port", 8443, "HTTPS listen port")
 	rootCmd.Flags().IntVar(&options.Threadiness, "threadiness", 5, "Specify controller threads")
+
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

@@ -290,7 +290,7 @@ func TestValidator_Create(t *testing.T) {
 			},
 		},
 		{
-			name: "cidr overlaps cluster's service cidr",
+			name: "cidr overlaps cluster's service cidr (retrieved from the node-args annotation)",
 			given: input{
 				ipPool: newTestIPPoolBuilder().
 					CIDR(testCIDROverlap).
@@ -301,12 +301,35 @@ func TestValidator_Create(t *testing.T) {
 						Annotations: map[string]string{
 							util.NodeArgsAnnotationKey: fmt.Sprintf("[\"%s\", \"%s\"]", util.ServiceCIDRFlag, testServiceCIDR),
 						},
+						Labels: map[string]string{
+							util.ManagementNodeLabelKey: "true",
+						},
 						Name: "node-0",
 					},
 				},
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because cidr %s overlaps service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
+				err: fmt.Errorf("could not create IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
+			},
+		},
+		{
+			name: "cidr overlaps cluster's service cidr (default service cidr)",
+			given: input{
+				ipPool: newTestIPPoolBuilder().
+					CIDR(testCIDROverlap).
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+				node: &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							util.ManagementNodeLabelKey: "true",
+						},
+						Name: "node-0",
+					},
+				},
+			},
+			expected: output{
+				err: fmt.Errorf("could not create IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
 			},
 		},
 	}
@@ -331,7 +354,7 @@ func TestValidator_Create(t *testing.T) {
 		nadCache := fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions)
 		nodeCache := fakeclient.NodeCache(k8sclientset.CoreV1().Nodes)
 		vmnetCache := fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs)
-		validator := NewValidator(nadCache, nodeCache, vmnetCache)
+		validator := NewValidator(testServiceCIDR, nadCache, nodeCache, vmnetCache)
 
 		err = validator.Create(&admission.Request{}, tc.given.ipPool)
 
@@ -633,7 +656,7 @@ func TestValidator_Update(t *testing.T) {
 			},
 		},
 		{
-			name: "cidr overlaps cluster's service cidr",
+			name: "cidr overlaps cluster's service cidr (retrieved from the node-args annotation)",
 			given: input{
 				newIPPool: newTestIPPoolBuilder().
 					CIDR(testCIDROverlap).
@@ -644,12 +667,35 @@ func TestValidator_Update(t *testing.T) {
 						Annotations: map[string]string{
 							util.NodeArgsAnnotationKey: fmt.Sprintf("[\"%s\", \"%s\"]", util.ServiceCIDRFlag, testServiceCIDR),
 						},
+						Labels: map[string]string{
+							util.ManagementNodeLabelKey: "true",
+						},
 						Name: "node-0",
 					},
 				},
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because cidr %s overlaps service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
+				err: fmt.Errorf("could not update IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
+			},
+		},
+		{
+			name: "cidr overlaps cluster's service cidr (default service cidr)",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDROverlap).
+					NetworkName(testNetworkName).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+				node: &corev1.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							util.ManagementNodeLabelKey: "true",
+						},
+						Name: "node-0",
+					},
+				},
+			},
+			expected: output{
+				err: fmt.Errorf("could not update IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
 			},
 		},
 		{
@@ -699,7 +745,7 @@ func TestValidator_Update(t *testing.T) {
 		nadCache := fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions)
 		nodeCache := fakeclient.NodeCache(k8sclientset.CoreV1().Nodes)
 		vmnetCache := fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs)
-		validator := NewValidator(nadCache, nodeCache, vmnetCache)
+		validator := NewValidator(testServiceCIDR, nadCache, nodeCache, vmnetCache)
 
 		err = validator.Update(&admission.Request{}, tc.given.oldIPPool, tc.given.newIPPool)
 
