@@ -2,7 +2,6 @@ package ippool
 
 import (
 	"fmt"
-	"net"
 	"net/netip"
 	"strings"
 
@@ -10,12 +9,9 @@ import (
 	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/sirupsen/logrus"
 	admissionregv1 "k8s.io/api/admissionregistration/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
-	ctlcorev1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core/v1"
 	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
@@ -28,20 +24,17 @@ type Validator struct {
 	serviceCIDR string
 
 	nadCache      ctlcniv1.NetworkAttachmentDefinitionCache
-	nodeCache     ctlcorev1.NodeCache
 	vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache
 }
 
 func NewValidator(
 	serviceCIDR string,
 	nadCache ctlcniv1.NetworkAttachmentDefinitionCache,
-	nodeCache ctlcorev1.NodeCache,
 	vmnetcfgCache ctlnetworkv1.VirtualMachineNetworkConfigCache,
 ) *Validator {
 	return &Validator{
 		serviceCIDR:   serviceCIDR,
 		nadCache:      nadCache,
-		nodeCache:     nodeCache,
 		vmnetcfgCache: vmnetcfgCache,
 	}
 }
@@ -167,15 +160,7 @@ func (v *Validator) checkCIDR(cidr string) error {
 		return nil
 	}
 
-	sets := labels.Set{
-		util.ManagementNodeLabelKey: "true",
-	}
-	mgmtNodes, err := v.nodeCache.List(sets.AsSelector())
-	if err != nil {
-		return err
-	}
-
-	svcIPNet, err := consolidateServiceCIDRs(mgmtNodes, v.serviceCIDR)
+	svcIPNet, _, _, err := util.LoadCIDR(v.serviceCIDR)
 	if err != nil {
 		return err
 	}
@@ -239,15 +224,15 @@ func (v *Validator) checkServerIP(pi util.PoolInfo, unallocatables ...netip.Addr
 	}
 
 	if pi.ServerIPAddr.As4() == pi.NetworkIPAddr.As4() {
-		return fmt.Errorf("server ip %s cannot be the same as network ip", pi.ServerIPAddr)
+		return fmt.Errorf("server ip %s is the same as network ip", pi.ServerIPAddr)
 	}
 
 	if pi.ServerIPAddr.As4() == pi.BroadcastIPAddr.As4() {
-		return fmt.Errorf("server ip %s cannot be the same as broadcast ip", pi.ServerIPAddr)
+		return fmt.Errorf("server ip %s is the same as broadcast ip", pi.ServerIPAddr)
 	}
 
 	if pi.RouterIPAddr.IsValid() && pi.ServerIPAddr.As4() == pi.RouterIPAddr.As4() {
-		return fmt.Errorf("server ip %s cannot be the same as router ip", pi.ServerIPAddr)
+		return fmt.Errorf("server ip %s is the same as router ip", pi.ServerIPAddr)
 	}
 
 	for _, ip := range unallocatables {
@@ -298,29 +283,4 @@ func (v *Validator) checkVmNetCfgs(ipPool *networkv1.IPPool) error {
 		return fmt.Errorf("it's still used by VirtualMachineNetworkConfig(s) %s, which must be removed at first", strings.Join(vmNetCfgNames, ", "))
 	}
 	return nil
-}
-
-func consolidateServiceCIDRs(nodes []*corev1.Node, cidr string) (svcIPNet *net.IPNet, err error) {
-	for _, node := range nodes {
-		var serviceCIDR string
-		serviceCIDR, err = util.GetServiceCIDRFromNode(node)
-		if err != nil {
-			logrus.Warningf("could not find service cidr from node annoatation")
-			continue
-		}
-
-		svcIPNet, _, _, err = util.LoadCIDR(serviceCIDR)
-		if err != nil {
-			return
-		}
-	}
-
-	if svcIPNet == nil {
-		svcIPNet, _, _, err = util.LoadCIDR(cidr)
-		if err != nil {
-			return
-		}
-	}
-
-	return
 }
