@@ -1,7 +1,7 @@
 package webhook
 
 const (
-	CreateErr = "could not create %s %s/%s because %w"
-	UpdateErr = "could not update %s %s/%s because %w"
-	DeleteErr = "could not delete %s %s/%s because %w"
+	CreateErr = "cannot create %s %s/%s because %w"
+	UpdateErr = "cannot update %s %s/%s because %w"
+	DeleteErr = "cannot delete %s %s/%s because %w"
 )

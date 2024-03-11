@@ -78,7 +78,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, testServerIPOutOfRange),
+				err: fmt.Errorf("cannot create IPPool %s/%s because server ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, testServerIPOutOfRange),
 			},
 		},
 		{
@@ -91,7 +91,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s cannot be the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.128"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because server ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.128"),
 			},
 		},
 		{
@@ -104,7 +104,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s cannot be the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.127"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because server ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.127"),
 			},
 		},
 		{
@@ -118,7 +118,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because server ip %s cannot be the same as router ip", testIPPoolNamespace, testIPPoolName, "192.168.0.254"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because server ip %s is the same as router ip", testIPPoolNamespace, testIPPoolName, "192.168.0.254"),
 			},
 		},
 		{
@@ -131,7 +131,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
 			},
 		},
 		{
@@ -144,7 +144,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because router ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.1"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because router ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.1"),
 			},
 		},
 		{
@@ -157,7 +157,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because router ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because router ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
 			},
 		},
 		{
@@ -170,7 +170,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because router ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because router ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
 			},
 		},
 		{
@@ -183,7 +183,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
 			},
 		},
 		{
@@ -196,7 +196,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because start ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because start ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
 			},
 		},
 		{
@@ -209,7 +209,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because start ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because start ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
 			},
 		},
 		{
@@ -222,7 +222,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because start ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because start ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
 			},
 		},
 		{
@@ -235,7 +235,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
 			},
 		},
 		{
@@ -248,7 +248,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because end ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because end ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
 			},
 		},
 		{
@@ -261,7 +261,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because end ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because end ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
 			},
 		},
 		{
@@ -274,7 +274,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because end ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+				err: fmt.Errorf("cannot create IPPool %s/%s because end ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
 			},
 		},
 		{
@@ -286,7 +286,7 @@ func TestValidator_Create(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool default/net-1 because network-attachment-definitions.k8s.cni.cncf.io \"%s\" not found", "nonexist"),
+				err: fmt.Errorf("cannot create IPPool default/net-1 because network-attachment-definitions.k8s.cni.cncf.io \"%s\" not found", "nonexist"),
 			},
 		},
 		{
@@ -309,7 +309,7 @@ func TestValidator_Create(t *testing.T) {
 				},
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
+				err: fmt.Errorf("cannot create IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
 			},
 		},
 		{
@@ -329,7 +329,7 @@ func TestValidator_Create(t *testing.T) {
 				},
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
+				err: fmt.Errorf("cannot create IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
 			},
 		},
 	}
@@ -352,9 +352,8 @@ func TestValidator_Create(t *testing.T) {
 		}
 
 		nadCache := fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions)
-		nodeCache := fakeclient.NodeCache(k8sclientset.CoreV1().Nodes)
 		vmnetCache := fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs)
-		validator := NewValidator(testServiceCIDR, nadCache, nodeCache, vmnetCache)
+		validator := NewValidator(testServiceCIDR, nadCache, vmnetCache)
 
 		err = validator.Create(&admission.Request{}, tc.given.ipPool)
 
@@ -411,7 +410,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because server ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, testServerIPOutOfRange),
+				err: fmt.Errorf("cannot update IPPool %s/%s because server ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, testServerIPOutOfRange),
 			},
 		},
 		{
@@ -428,7 +427,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because server ip %s cannot be the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because server ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
 			},
 		},
 		{
@@ -445,7 +444,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because server ip %s cannot be the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because server ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
 			},
 		},
 		{
@@ -464,7 +463,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because server ip %s cannot be the same as router ip", testIPPoolNamespace, testIPPoolName, "192.168.0.254"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because server ip %s is the same as router ip", testIPPoolNamespace, testIPPoolName, "192.168.0.254"),
 			},
 		},
 		{
@@ -484,7 +483,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because server ip %s is already occupied", testIPPoolNamespace, testIPPoolName, "192.168.0.100"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because server ip %s is already occupied", testIPPoolNamespace, testIPPoolName, "192.168.0.100"),
 			},
 		},
 		{
@@ -497,7 +496,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
 			},
 		},
 		{
@@ -510,7 +509,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because router ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.1"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because router ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.1"),
 			},
 		},
 		{
@@ -523,7 +522,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because router ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because router ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
 			},
 		},
 		{
@@ -536,7 +535,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because router ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because router ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
 			},
 		},
 		{
@@ -549,7 +548,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
 			},
 		},
 		{
@@ -562,7 +561,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because start ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because start ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
 			},
 		},
 		{
@@ -575,7 +574,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because start ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because start ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
 			},
 		},
 		{
@@ -588,7 +587,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because start ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because start ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
 			},
 		},
 		{
@@ -601,7 +600,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because ParseAddr(\"%s\"): IPv4 field has value >255", testIPPoolNamespace, testIPPoolName, "192.168.0.1000"),
 			},
 		},
 		{
@@ -614,7 +613,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because end ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because end ip %s is not within subnet", testIPPoolNamespace, testIPPoolName, "192.168.1.100"),
 			},
 		},
 		{
@@ -627,7 +626,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because end ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because end ip %s is the same as network ip", testIPPoolNamespace, testIPPoolName, "192.168.0.0"),
 			},
 		},
 		{
@@ -640,7 +639,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because end ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
+				err: fmt.Errorf("cannot update IPPool %s/%s because end ip %s is the same as broadcast ip", testIPPoolNamespace, testIPPoolName, "192.168.0.255"),
 			},
 		},
 		{
@@ -652,7 +651,7 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool default/net-1 because network-attachment-definitions.k8s.cni.cncf.io \"%s\" not found", "nonexist"),
+				err: fmt.Errorf("cannot update IPPool default/net-1 because network-attachment-definitions.k8s.cni.cncf.io \"%s\" not found", "nonexist"),
 			},
 		},
 		{
@@ -675,7 +674,7 @@ func TestValidator_Update(t *testing.T) {
 				},
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
+				err: fmt.Errorf("cannot update IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
 			},
 		},
 		{
@@ -695,7 +694,7 @@ func TestValidator_Update(t *testing.T) {
 				},
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
+				err: fmt.Errorf("cannot update IPPool %s/%s because cidr %s overlaps cluster service cidr %s", testIPPoolNamespace, testIPPoolName, testCIDROverlap, testServiceCIDR),
 			},
 		},
 		{
@@ -709,7 +708,32 @@ func TestValidator_Update(t *testing.T) {
 				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not update IPPool %s/%s because server ip %s is already occupied", testIPPoolNamespace, testIPPoolName, testExcludedIP),
+				err: fmt.Errorf("cannot update IPPool %s/%s because server ip %s is already occupied", testIPPoolNamespace, testIPPoolName, testExcludedIP),
+			},
+		},
+		{
+			name: "server ip within the pool range",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					ServerIP(testServerIPWithinRange).
+					NetworkName(testNetworkName).
+					Allocated(testServerIPWithinRange, util.ReservedMark).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+		},
+		{
+			name: "server ip collides with excluded ip",
+			given: input{
+				newIPPool: newTestIPPoolBuilder().
+					CIDR(testCIDR).
+					ServerIP(testExcludedIP).
+					NetworkName(testNetworkName).
+					Allocated(testExcludedIP, util.ExcludedMark).Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().Build(),
+			},
+			expected: output{
+				err: fmt.Errorf("cannot update IPPool %s/%s because server ip %s is already occupied", testIPPoolNamespace, testIPPoolName, testExcludedIP),
 			},
 		},
 		{
@@ -743,9 +767,8 @@ func TestValidator_Update(t *testing.T) {
 		}
 
 		nadCache := fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions)
-		nodeCache := fakeclient.NodeCache(k8sclientset.CoreV1().Nodes)
 		vmnetCache := fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs)
-		validator := NewValidator(testServiceCIDR, nadCache, nodeCache, vmnetCache)
+		validator := NewValidator(testServiceCIDR, nadCache, vmnetCache)
 
 		err = validator.Update(&admission.Request{}, tc.given.oldIPPool, tc.given.newIPPool)
 

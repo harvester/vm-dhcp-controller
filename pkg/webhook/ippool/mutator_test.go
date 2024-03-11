@@ -194,7 +194,7 @@ func TestMutator_Create(t *testing.T) {
 					Exclude("172.19.64.129", "172.19.64.131", "172.19.64.132", "172.19.64.133", "172.19.64.134").Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because fail to assign ip for dhcp server", testIPPoolNamespace, testIPPoolName),
+				err: fmt.Errorf("cannot create IPPool %s/%s because fail to assign ip for dhcp server", testIPPoolNamespace, testIPPoolName),
 			},
 		},
 		{
@@ -204,7 +204,7 @@ func TestMutator_Create(t *testing.T) {
 					CIDR("172.19.64.128/32").Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because fail to assign ip for dhcp server", testIPPoolNamespace, testIPPoolName),
+				err: fmt.Errorf("cannot create IPPool %s/%s because fail to assign ip for dhcp server", testIPPoolNamespace, testIPPoolName),
 			},
 		},
 		{
@@ -214,7 +214,7 @@ func TestMutator_Create(t *testing.T) {
 					CIDR("172.19.64.128/31").Build(),
 			},
 			expected: output{
-				err: fmt.Errorf("could not create IPPool %s/%s because fail to assign ip for dhcp server", testIPPoolNamespace, testIPPoolName),
+				err: fmt.Errorf("cannot create IPPool %s/%s because fail to assign ip for dhcp server", testIPPoolNamespace, testIPPoolName),
 			},
 		},
 		{
