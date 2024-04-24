@@ -5,17 +5,14 @@ source $(dirname $0)/version
 
 cd $(dirname $0)/..
 
-echo "Packaging..."
-
-# Copy out artifacts
-mkdir -p dist/artifacts
-cp bin/vm-dhcp-controller dist/artifacts/vm-dhcp-controller${SUFFIX}
+echo "Packaging controller..."
 
 # Build container images
 IMAGE=${REPO}/vm-dhcp-controller:${TAG}
 DOCKERFILE=package/Dockerfile
 
-docker build -f ${DOCKERFILE} -t ${IMAGE} .
+buildx build --load \
+  -f ${DOCKERFILE} -t ${IMAGE} .
 echo Built ${IMAGE}
 
 # Image push (if specified)

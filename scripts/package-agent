@@ -7,15 +7,12 @@ cd $(dirname $0)/..
 
 echo "Packaging agent..."
 
-# Copy out artifacts
-mkdir -p dist/artifacts
-cp bin/vm-dhcp-agent dist/artifacts/vm-dhcp-agent${SUFFIX}
-
 # Build container images
 IMAGE=${REPO}/vm-dhcp-agent:${TAG}
 DOCKERFILE=package/Dockerfile.agent
 
-docker build -f ${DOCKERFILE} -t ${IMAGE} .
+buildx build --load \
+  -f ${DOCKERFILE} -t ${IMAGE} .
 echo Built ${IMAGE}
 
 # Image push (if specified)

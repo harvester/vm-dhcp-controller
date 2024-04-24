@@ -12,6 +12,8 @@ mkdir -p bin
 LINKFLAGS="-X main.AppVersion=$VERSION
            -X main.GitCommit=$COMMIT"
 
-CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-controller ./cmd/controller
-CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-agent ./cmd/agent
-CGO_ENABLED=0 GOARCH="$ARCH" go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-webhook ./cmd/webhook
+for arch in "amd64" "arm64"; do
+    GOARCH="$arch" CGO_ENABLED=0 go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-controller-"$arch" ./cmd/controller
+    GOARCH="$arch" CGO_ENABLED=0 go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-agent-"$arch" ./cmd/agent
+    GOARCH="$arch" CGO_ENABLED=0 go build -ldflags "-s -w $LINKFLAGS" -o bin/vm-dhcp-webhook-"$arch" ./cmd/webhook
+done
