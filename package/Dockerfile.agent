@@ -1,8 +1,19 @@
+# syntax=docker/dockerfile:1.7.0
+
 FROM registry.suse.com/bci/bci-base:15.5
 
 RUN zypper -n rm container-suseconnect && \
     zypper -n in curl dhcp-tools jq
 
-COPY bin/vm-dhcp-agent /usr/bin/vm-dhcp-agent
+ARG TARGETPLATFORM
+
+RUN if [ "$TARGETPLATFORM" != "linux/amd64" ] && [ "$TARGETPLATFORM" != "linux/arm64" ]; then \
+    echo "Error: Unsupported TARGETPLATFORM: $TARGETPLATFORM" && \
+    exit 1; \
+    fi
+
+ENV ARCH=${TARGETPLATFORM#linux/}
+
+COPY bin/vm-dhcp-agent-${ARCH} /usr/bin/vm-dhcp-agent
 
 ENTRYPOINT [ "vm-dhcp-agent" ]

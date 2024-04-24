@@ -7,15 +7,12 @@ cd $(dirname $0)/..
 
 echo "Packaging webhook..."
 
-# Copy out artifacts
-mkdir -p dist/artifacts
-cp bin/vm-dhcp-webhook dist/artifacts/vm-dhcp-webhook${SUFFIX}
-
 # Build container images
 IMAGE=${REPO}/vm-dhcp-webhook:${TAG}
 DOCKERFILE=package/Dockerfile.webhook
 
-docker build -f ${DOCKERFILE} -t ${IMAGE} .
+buildx build --load \
+  -f ${DOCKERFILE} -t ${IMAGE} .
 echo Built ${IMAGE}
 
 # Image push (if specified)
