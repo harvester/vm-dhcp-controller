@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+
+source $(dirname $0)/version
+
+cd $(dirname $0)/..
+
+echo "Packaging controller..."
+
+# Build container images
+IMAGE=${REPO}/vm-dhcp-controller:${TAG}
+DOCKERFILE=package/Dockerfile
+
+buildx build --load \
+  -f ${DOCKERFILE} -t ${IMAGE} .
+echo Built ${IMAGE}
+
+# Image push (if specified)
+IMAGE_PUSH=${REPO}/harvester-vm-dhcp-controller:${IMAGE_PUSH_TAG}
+docker tag "${IMAGE}" "${IMAGE_PUSH}"
+echo Tagged "${IMAGE_PUSH}"
+
+DOCKER_CONFIG=".docker"
+if [[ -n ${PUSH} ]];then
+  docker --config=${DOCKER_CONFIG} push "${IMAGE_PUSH}"
+  echo Pushed "${IMAGE_PUSH}"
+fi

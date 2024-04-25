@@ -5,5 +5,3 @@ cd $(dirname $0)
 
 ./build
 ./package
-./package-agent
-./package-webhook
