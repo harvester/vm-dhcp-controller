@@ -1,6 +1,6 @@
 # vm-dhcp-controller
 
-[![Build Status](https://drone-publish.rancher.io/api/badges/harvester/vm-dhcp-controller/status.svg)](https://drone-publish.rancher.io/harvester/vm-dhcp-controller)
+[![Build Status](https://github.com/harvester/vm-dhcp-controller/actions/workflows/main.yml/badge.svg)](https://github.com/harvester/vm-dhcp-controller/actions/workflows/main.yml)
 [![Releases](https://img.shields.io/github/release/harvester/vm-dhcp-controller.svg)](https://github.com/harvester/vm-dhcp-controller/releases)
 
 A managed DHCP service for virtual machines running on Harvester, ported from [joeyloman/kubevirt-ip-helper](https://github.com/joeyloman/kubevirt-ip-helper) and its subsidiary projects.
