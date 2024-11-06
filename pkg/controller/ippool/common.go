@@ -92,9 +92,9 @@ func prepareAgentPod(
 			ServiceAccountName: agentServiceAccountName,
 			InitContainers: []corev1.Container{
 				{
-					Name:  "ip-setter",
-					Image: "busybox",
-					ImagePullPolicy: "IfNotPresent",
+					Name:            "ip-setter",
+					Image:           agentImage.String(),
+					ImagePullPolicy: corev1.PullIfNotPresent,
 					Command: []string{
 						"/bin/sh",
 						"-c",
