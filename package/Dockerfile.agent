@@ -3,7 +3,7 @@
 FROM registry.suse.com/bci/bci-base:15.6
 
 RUN zypper -n rm container-suseconnect && \
-    zypper -n in curl dhcp-tools jq
+    zypper -n in curl dhcp-tools iproute2 jq
 
 ARG TARGETPLATFORM
 
