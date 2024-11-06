@@ -94,6 +94,7 @@ func prepareAgentPod(
 				{
 					Name:  "ip-setter",
 					Image: "busybox",
+					ImagePullPolicy: "IfNotPresent",
 					Command: []string{
 						"/bin/sh",
 						"-c",
