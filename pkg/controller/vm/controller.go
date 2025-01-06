@@ -103,7 +103,7 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 	vmNetCfgCpy := oldVmNetCfg.DeepCopy()
 	vmNetCfgCpy.Spec.NetworkConfigs = vmNetCfg.Spec.NetworkConfigs
 
-	if !reflect.DeepEqual(vmNetCfgCpy, oldVmNetCfg) {
+	if !reflect.DeepEqual(vmNetCfgCpy.Spec.NetworkConfigs, oldVmNetCfg.Spec.NetworkConfigs) {
 		logrus.Infof("(vm.OnChange) update vmnetcfg %s/%s", vmNetCfgCpy.Namespace, vmNetCfgCpy.Name)
 		if _, err := h.vmnetcfgClient.Update(vmNetCfgCpy); err != nil {
 			return vm, err
