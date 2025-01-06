@@ -42,7 +42,6 @@ type VirtualMachineNetworkConfigSpec struct {
 
 	// +optional
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:XValidation:rule="oldSelf.all(x, x in self)",message="NetworkConfig may only be added"
 	// +kubebuilder:validation:MaxItems=4
 	NetworkConfigs []NetworkConfig `json:"networkConfigs,omitempty"`
 
