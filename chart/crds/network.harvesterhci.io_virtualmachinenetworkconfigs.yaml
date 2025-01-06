@@ -68,9 +68,6 @@ spec:
                   type: object
                 maxItems: 4
                 type: array
-                x-kubernetes-validations:
-                - message: NetworkConfig may only be added
-                  rule: oldSelf.all(x, x in self)
               paused:
                 type: boolean
               vmName:
