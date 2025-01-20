@@ -141,7 +141,7 @@ apiVersion: network.harvesterhci.io/v1alpha1
 kind: VirtualMachineNetworkConfig
 metadata:
   name: test-vm
-  namespace: default 
+  namespace: default
 spec:
   vmName: test-vm
   networkConfig:
@@ -242,3 +242,9 @@ $ curl -sfL localhost:8080/leases | jq .
   "fa:e7:60:2e:37:dd": "{\"ServerIP\":\"192.168.48.77\",\"ClientIP\":\"192.168.48.87\",\"SubnetMask\":\"////AA==\",\"Router\":\"192.168.48.1\",\"DNS\":[\"1.1.1.1\"],\"DomainName\":\"aibao.moe\",\"DomainSearch\":[\"aibao.moe\"],\"NTP\":[\"114.35.131.27\",\"122.117.253.246\",\"103.147.22.149\",\"17.253.116.253\"],\"LeaseTime\":300}"
 }
 ```
+
+## License
+
+Copyright 2023-2025 [SUSE, LLC.](https://www.suse.com/)
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](./LICENSE) file for details.
