@@ -47,16 +47,10 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		var image *config.Image
-		imageTokens := strings.Split(agentImage, ":")
-		if len(imageTokens) == 2 {
-			image = config.NewImage(imageTokens[0], imageTokens[1])
-		} else {
-			fmt.Fprintf(os.Stderr, "Error parse agent image name\n")
-			if err := cmd.Help(); err != nil {
-				os.Exit(1)
-			}
-			os.Exit(0)
+		image, err := parseImageNameAndTag(agentImage)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
 		}
 
 		options := &config.ControllerOptions{
@@ -95,4 +89,27 @@ func init() {
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func execute() {
 	cobra.CheckErr(rootCmd.Execute())
+}
+
+func parseImageNameAndTag(image string) (*config.Image, error) {
+	idx := strings.LastIndex(image, ":")
+
+	if idx == -1 {
+		return config.NewImage(image, "latest"), nil
+	}
+
+	// If the last colon is immediately followed by the end of the string, it's invalid (no tag).
+	if idx == len(image)-1 {
+		return nil, fmt.Errorf("invalid image name: colon without tag")
+	}
+
+	if strings.Count(image, ":") > 2 {
+		return nil, fmt.Errorf("invalid image name: multiple colons found")
+	}
+
+	if idx <= strings.LastIndex(image, "/") {
+		return config.NewImage(image, "latest"), nil
+	}
+
+	return config.NewImage(image[:idx], image[idx+1:]), nil
 }
