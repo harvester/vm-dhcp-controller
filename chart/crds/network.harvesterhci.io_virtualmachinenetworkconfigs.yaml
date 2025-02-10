@@ -24,6 +24,12 @@ spec:
     - jsonPath: .status.conditions[?(@.type=='Allocated')].status
       name: ALLOCATED
       type: string
+    - jsonPath: .status.conditions[?(@.type=='Disabled')].status
+      name: DISABLED
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='InSynced')].status
+      name: INSYNCED
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: AGE
       type: date

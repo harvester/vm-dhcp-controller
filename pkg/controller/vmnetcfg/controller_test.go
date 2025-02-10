@@ -36,8 +36,10 @@ const (
 
 	testIPAddress1  = "192.168.0.111"
 	testIPAddress2  = "192.168.0.177"
+	testIPAddress3  = "192.168.0.189"
 	testMACAddress1 = "11:22:33:44:55:66"
 	testMACAddress2 = "22:33:44:55:66:77"
+	testMACAddress3 = "33:44:55:66:77:88"
 )
 
 func newTestVmNetCfgBuilder() *vmNetCfgBuilder {
@@ -523,5 +525,443 @@ func TestHandler_Allocate(t *testing.T) {
 
 		_, err = handler.Allocate(givenVmNetCfg, givenVmNetCfg.Status)
 		assert.NotNil(t, fmt.Errorf("network attachment definition %s/%s has no labels", testNADNamespace, testNADName), err)
+	})
+}
+
+func TestHandler_Sync(t *testing.T) {
+	t.Run("sync a vmnetcfg with an in-synced condition should succeed but should not alter anything", func(t *testing.T) {
+		givenVmNetCfg := newTestVmNetCfgBuilder().
+			WithNetworkConfig(testIPAddress1, testMACAddress1, testNetworkName).
+			WithNetworkConfigStatus(testIPAddress1, testMACAddress1, testNetworkName, networkv1.AllocatedState).
+			InSyncedCondition(corev1.ConditionTrue, "", "").Build()
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Allocated(testIPAddress1, testMACAddress1).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		givenCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).
+			Add(testNetworkName, testMACAddress1, testIPAddress1).Build()
+		givenIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Allocate(testNetworkName, testIPAddress1).Build()
+
+		expectedStatus := newTestVmNetCfgStatusBuilder().
+			WithNetworkConfigStatus(testIPAddress1, testMACAddress1, testNetworkName, networkv1.AllocatedState).
+			InSyncedCondition(corev1.ConditionTrue, "", "").Build()
+		expectedIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Allocated(testIPAddress1, testMACAddress1).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		expectedCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).
+			Add(testNetworkName, testMACAddress1, testIPAddress1).Build()
+		expectedIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Allocate(testNetworkName, testIPAddress1).Build()
+
+		clientset := fake.NewSimpleClientset(givenVmNetCfg, givenIPPool)
+
+		handler := Handler{
+			cacheAllocator:   givenCacheAllocator,
+			ipAllocator:      givenIPAllocator,
+			metricsAllocator: metrics.New(),
+			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			ippoolCache:      fakeclient.IPPoolCache(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		status, err := handler.Sync(givenVmNetCfg, givenVmNetCfg.Status)
+		assert.Nil(t, err)
+
+		SanitizeStatus(&expectedStatus)
+		SanitizeStatus(&status)
+		assert.Equal(t, expectedStatus, status)
+
+		ipPool, err := handler.ippoolClient.Get(testIPPoolNamespace, testIPPoolName, metav1.GetOptions{})
+		assert.Nil(t, err)
+
+		ippool.SanitizeStatus(&expectedIPPool.Status)
+		ippool.SanitizeStatus(&ipPool.Status)
+		assert.Equal(t, expectedIPPool, ipPool)
+
+		assert.Equal(t, expectedIPAllocator, handler.ipAllocator)
+		assert.Equal(t, expectedCacheAllocator, handler.cacheAllocator)
+	})
+
+	t.Run("sync an essentially already-in-sync vmnetcfg should not alter anything", func(t *testing.T) {
+		givenVmNetCfg := newTestVmNetCfgBuilder().
+			WithNetworkConfig(testIPAddress1, testMACAddress1, testNetworkName).
+			WithNetworkConfigStatus(testIPAddress1, testMACAddress1, testNetworkName, networkv1.AllocatedState).Build()
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Allocated(testIPAddress1, testMACAddress1).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		givenCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).
+			Add(testNetworkName, testMACAddress1, testIPAddress1).Build()
+		givenIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Allocate(testNetworkName, testIPAddress1).Build()
+
+		expectedStatus := newTestVmNetCfgStatusBuilder().
+			WithNetworkConfigStatus(testIPAddress1, testMACAddress1, testNetworkName, networkv1.AllocatedState).Build()
+		expectedIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Allocated(testIPAddress1, testMACAddress1).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		expectedCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).
+			Add(testNetworkName, testMACAddress1, testIPAddress1).Build()
+		expectedIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Allocate(testNetworkName, testIPAddress1).Build()
+
+		clientset := fake.NewSimpleClientset(givenVmNetCfg, givenIPPool)
+
+		handler := Handler{
+			cacheAllocator:   givenCacheAllocator,
+			ipAllocator:      givenIPAllocator,
+			metricsAllocator: metrics.New(),
+			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			ippoolCache:      fakeclient.IPPoolCache(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		status, err := handler.Sync(givenVmNetCfg, givenVmNetCfg.Status)
+		assert.Nil(t, err)
+
+		SanitizeStatus(&expectedStatus)
+		SanitizeStatus(&status)
+		assert.Equal(t, expectedStatus, status)
+
+		ipPool, err := handler.ippoolClient.Get(testIPPoolNamespace, testIPPoolName, metav1.GetOptions{})
+		assert.Nil(t, err)
+
+		ippool.SanitizeStatus(&expectedIPPool.Status)
+		ippool.SanitizeStatus(&ipPool.Status)
+		assert.Equal(t, expectedIPPool, ipPool)
+
+		assert.Equal(t, expectedIPAllocator, handler.ipAllocator)
+		assert.Equal(t, expectedCacheAllocator, handler.cacheAllocator)
+	})
+
+	t.Run("sync new vmnetcfg with empty network config should error", func(t *testing.T) {
+		givenVmNetCfg := newTestVmNetCfgBuilder().Build()
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		givenCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).Build()
+		givenIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).Build()
+
+		expectedStatus := newTestVmNetCfgStatusBuilder().Build()
+		expectedIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		expectedCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).Build()
+		expectedIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).Build()
+
+		clientset := fake.NewSimpleClientset(givenVmNetCfg, givenIPPool)
+
+		handler := Handler{
+			cacheAllocator:   givenCacheAllocator,
+			ipAllocator:      givenIPAllocator,
+			metricsAllocator: metrics.New(),
+			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			ippoolCache:      fakeclient.IPPoolCache(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		status, err := handler.Sync(givenVmNetCfg, givenVmNetCfg.Status)
+		assert.Equal(t, fmt.Sprintf("vmnetcfg %s/%s has no network configs", testVmNetCfgNamespace, testVmNetCfgName), err.Error())
+
+		SanitizeStatus(&expectedStatus)
+		SanitizeStatus(&status)
+		assert.Equal(t, expectedStatus, status)
+
+		ipPool, err := handler.ippoolClient.Get(testIPPoolNamespace, testIPPoolName, metav1.GetOptions{})
+		assert.Nil(t, err)
+
+		ippool.SanitizeStatus(&expectedIPPool.Status)
+		ippool.SanitizeStatus(&ipPool.Status)
+		assert.Equal(t, expectedIPPool, ipPool)
+
+		assert.Equal(t, expectedIPAllocator, handler.ipAllocator)
+		assert.Equal(t, expectedCacheAllocator, handler.cacheAllocator)
+	})
+
+	t.Run("sync new vmnetcfg with network configs should succeed but does not remove any records", func(t *testing.T) {
+		givenVmNetCfg := newTestVmNetCfgBuilder().
+			WithNetworkConfig(testIPAddress1, testMACAddress1, testNetworkName).
+			WithNetworkConfig(testIPAddress2, testMACAddress2, testNetworkName).Build()
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		givenCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).Build()
+		givenIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).Build()
+
+		expectedStatus := newTestVmNetCfgStatusBuilder().Build()
+		expectedIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		expectedCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).Build()
+		expectedIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).Build()
+
+		clientset := fake.NewSimpleClientset(givenVmNetCfg, givenIPPool)
+
+		handler := Handler{
+			cacheAllocator:   givenCacheAllocator,
+			ipAllocator:      givenIPAllocator,
+			metricsAllocator: metrics.New(),
+			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			ippoolCache:      fakeclient.IPPoolCache(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		status, err := handler.Sync(givenVmNetCfg, givenVmNetCfg.Status)
+		assert.Nil(t, err)
+
+		SanitizeStatus(&expectedStatus)
+		SanitizeStatus(&status)
+		assert.Equal(t, expectedStatus, status)
+
+		ipPool, err := handler.ippoolClient.Get(testIPPoolNamespace, testIPPoolName, metav1.GetOptions{})
+		assert.Nil(t, err)
+
+		ippool.SanitizeStatus(&expectedIPPool.Status)
+		ippool.SanitizeStatus(&ipPool.Status)
+		assert.Equal(t, expectedIPPool, ipPool)
+
+		assert.Equal(t, expectedIPAllocator, handler.ipAllocator)
+		assert.Equal(t, expectedCacheAllocator, handler.cacheAllocator)
+	})
+
+	t.Run("sync out-of-sync vmnetcfg with updated mac address should succeed and stale records should be removed", func(t *testing.T) {
+		givenVmNetCfg := newTestVmNetCfgBuilder().
+			WithNetworkConfig(testIPAddress1, testMACAddress1, testNetworkName).
+			WithNetworkConfig(testIPAddress3, testMACAddress3, testNetworkName).
+			WithNetworkConfigStatus(testIPAddress1, testMACAddress1, testNetworkName, networkv1.AllocatedState).
+			WithNetworkConfigStatus(testIPAddress2, testMACAddress2, testNetworkName, networkv1.AllocatedState).Build()
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Allocated(testIPAddress1, testMACAddress1).
+			Allocated(testIPAddress2, testMACAddress2).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		givenCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).
+			Add(testNetworkName, testMACAddress1, testIPAddress1).
+			Add(testNetworkName, testMACAddress2, testIPAddress2).Build()
+		givenIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Allocate(testNetworkName, testIPAddress1, testIPAddress2).Build()
+
+		expectedStatus := newTestVmNetCfgStatusBuilder().
+			WithNetworkConfigStatus(testIPAddress1, testMACAddress1, testNetworkName, networkv1.AllocatedState).Build()
+		expectedIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Allocated(testIPAddress1, testMACAddress1).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		expectedCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).
+			Add(testNetworkName, testMACAddress1, testIPAddress1).Build()
+		expectedIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Allocate(testNetworkName, testIPAddress1).Build()
+
+		clientset := fake.NewSimpleClientset(givenVmNetCfg, givenIPPool)
+
+		handler := Handler{
+			cacheAllocator:   givenCacheAllocator,
+			ipAllocator:      givenIPAllocator,
+			metricsAllocator: metrics.New(),
+			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			ippoolCache:      fakeclient.IPPoolCache(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		status, err := handler.Sync(givenVmNetCfg, givenVmNetCfg.Status)
+		assert.Nil(t, err)
+
+		SanitizeStatus(&expectedStatus)
+		SanitizeStatus(&status)
+		assert.Equal(t, expectedStatus, status)
+
+		ipPool, err := handler.ippoolClient.Get(testIPPoolNamespace, testIPPoolName, metav1.GetOptions{})
+		assert.Nil(t, err)
+
+		ippool.SanitizeStatus(&expectedIPPool.Status)
+		ippool.SanitizeStatus(&ipPool.Status)
+		assert.Equal(t, expectedIPPool, ipPool)
+
+		assert.Equal(t, expectedIPAllocator, handler.ipAllocator)
+		assert.Equal(t, expectedCacheAllocator, handler.cacheAllocator)
+	})
+
+	t.Run("sync out-of-sync vmnetcfg with additional network config should succeed but no records should be removed", func(t *testing.T) {
+		givenVmNetCfg := newTestVmNetCfgBuilder().
+			WithNetworkConfig(testIPAddress1, testMACAddress1, testNetworkName).
+			WithNetworkConfig(testIPAddress2, testMACAddress2, testNetworkName).
+			WithNetworkConfig(testIPAddress3, testMACAddress3, testNetworkName).
+			WithNetworkConfigStatus(testIPAddress1, testMACAddress1, testNetworkName, networkv1.AllocatedState).
+			WithNetworkConfigStatus(testIPAddress2, testMACAddress2, testNetworkName, networkv1.AllocatedState).Build()
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Allocated(testIPAddress1, testMACAddress1).
+			Allocated(testIPAddress2, testMACAddress2).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		givenCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).
+			Add(testNetworkName, testMACAddress1, testIPAddress1).
+			Add(testNetworkName, testMACAddress2, testIPAddress2).Build()
+		givenIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Allocate(testNetworkName, testIPAddress1, testIPAddress2).Build()
+
+		expectedStatus := newTestVmNetCfgStatusBuilder().
+			WithNetworkConfigStatus(testIPAddress1, testMACAddress1, testNetworkName, networkv1.AllocatedState).
+			WithNetworkConfigStatus(testIPAddress2, testMACAddress2, testNetworkName, networkv1.AllocatedState).Build()
+		expectedIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Allocated(testIPAddress1, testMACAddress1).
+			Allocated(testIPAddress2, testMACAddress2).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		expectedCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).
+			Add(testNetworkName, testMACAddress1, testIPAddress1).
+			Add(testNetworkName, testMACAddress2, testIPAddress2).Build()
+		expectedIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Allocate(testNetworkName, testIPAddress1).
+			Allocate(testNetworkName, testIPAddress2).Build()
+
+		clientset := fake.NewSimpleClientset(givenVmNetCfg, givenIPPool)
+
+		handler := Handler{
+			cacheAllocator:   givenCacheAllocator,
+			ipAllocator:      givenIPAllocator,
+			metricsAllocator: metrics.New(),
+			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			ippoolCache:      fakeclient.IPPoolCache(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		status, err := handler.Sync(givenVmNetCfg, givenVmNetCfg.Status)
+		assert.Nil(t, err)
+
+		SanitizeStatus(&expectedStatus)
+		SanitizeStatus(&status)
+		assert.Equal(t, expectedStatus, status)
+
+		ipPool, err := handler.ippoolClient.Get(testIPPoolNamespace, testIPPoolName, metav1.GetOptions{})
+		assert.Nil(t, err)
+
+		ippool.SanitizeStatus(&expectedIPPool.Status)
+		ippool.SanitizeStatus(&ipPool.Status)
+		assert.Equal(t, expectedIPPool, ipPool)
+
+		assert.Equal(t, expectedIPAllocator, handler.ipAllocator)
+		assert.Equal(t, expectedCacheAllocator, handler.cacheAllocator)
+	})
+
+	t.Run("sync out-of-sync vmnetcfg with missing network config should succeed and stale record should be removed", func(t *testing.T) {
+		givenVmNetCfg := newTestVmNetCfgBuilder().
+			WithNetworkConfig(testIPAddress2, testMACAddress2, testNetworkName).
+			WithNetworkConfigStatus(testIPAddress1, testMACAddress1, testNetworkName, networkv1.AllocatedState).
+			WithNetworkConfigStatus(testIPAddress2, testMACAddress2, testNetworkName, networkv1.AllocatedState).Build()
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Allocated(testIPAddress1, testMACAddress1).
+			Allocated(testIPAddress2, testMACAddress2).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		givenCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).
+			Add(testNetworkName, testMACAddress1, testIPAddress1).
+			Add(testNetworkName, testMACAddress2, testIPAddress2).Build()
+		givenIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Allocate(testNetworkName, testIPAddress1, testIPAddress2).Build()
+
+		expectedStatus := newTestVmNetCfgStatusBuilder().
+			WithNetworkConfigStatus(testIPAddress2, testMACAddress2, testNetworkName, networkv1.AllocatedState).Build()
+		expectedIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP).
+			CIDR(testCIDR).
+			PoolRange(testStartIP, testEndIP).
+			NetworkName(testNetworkName).
+			Allocated(testIPAddress2, testMACAddress2).
+			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		expectedCacheAllocator := newTestCacheAllocatorBuilder().
+			MACSet(testNetworkName).
+			Add(testNetworkName, testMACAddress2, testIPAddress2).Build()
+		expectedIPAllocator := newTestIPAllocatorBuilder().
+			IPSubnet(testNetworkName, testCIDR, testStartIP, testEndIP).
+			Allocate(testNetworkName, testIPAddress2).Build()
+
+		clientset := fake.NewSimpleClientset(givenVmNetCfg, givenIPPool)
+
+		handler := Handler{
+			cacheAllocator:   givenCacheAllocator,
+			ipAllocator:      givenIPAllocator,
+			metricsAllocator: metrics.New(),
+			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			ippoolCache:      fakeclient.IPPoolCache(clientset.NetworkV1alpha1().IPPools),
+		}
+
+		status, err := handler.Sync(givenVmNetCfg, givenVmNetCfg.Status)
+		assert.Nil(t, err)
+
+		SanitizeStatus(&expectedStatus)
+		SanitizeStatus(&status)
+		assert.Equal(t, expectedStatus, status)
+
+		ipPool, err := handler.ippoolClient.Get(testIPPoolNamespace, testIPPoolName, metav1.GetOptions{})
+		assert.Nil(t, err)
+
+		ippool.SanitizeStatus(&expectedIPPool.Status)
+		ippool.SanitizeStatus(&ipPool.Status)
+		assert.Equal(t, expectedIPPool, ipPool)
+
+		assert.Equal(t, expectedIPAllocator, handler.ipAllocator)
+		assert.Equal(t, expectedCacheAllocator, handler.cacheAllocator)
 	})
 }

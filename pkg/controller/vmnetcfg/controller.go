@@ -64,6 +64,14 @@ func Register(ctx context.Context, management *config.Management) error {
 		handler.Allocate,
 	)
 
+	ctlnetworkv1.RegisterVirtualMachineNetworkConfigStatusHandler(
+		ctx,
+		vmnetcfgs,
+		networkv1.InSynced,
+		"vmnetcfg-sync",
+		handler.Sync,
+	)
+
 	vmnetcfgs.OnChange(ctx, controllerName, handler.OnChange)
 	vmnetcfgs.OnRemove(ctx, controllerName, handler.OnRemove)
 
@@ -82,11 +90,11 @@ func (h *Handler) OnChange(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 	// Check if the VirtualMachineNetworkConfig is administratively disabled
 	if vmNetCfg.Spec.Paused != nil && *vmNetCfg.Spec.Paused {
 		logrus.Infof("(vmnetcfg.OnChange) try to cleanup ipam and cache, and update ippool status for vmnetcfg %s", key)
-		if err := h.cleanup(vmNetCfg); err != nil {
+		if err := h.cleanup(vmNetCfg, false); err != nil {
 			return vmNetCfg, err
 		}
 		networkv1.Disabled.True(vmNetCfgCpy)
-		updateAllNetworkConfigState(vmNetCfgCpy.Status.NetworkConfigs)
+		updateAllNetworkConfigState(vmNetCfgCpy.Status.NetworkConfigs, networkv1.PendingState)
 		if !reflect.DeepEqual(vmNetCfgCpy, vmNetCfg) {
 			return h.vmnetcfgClient.UpdateStatus(vmNetCfgCpy)
 		}
@@ -101,11 +109,18 @@ func (h *Handler) OnChange(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 	return vmNetCfg, nil
 }
 
+// Allocate allocates IP addresses for the VirtualMachineNetworkConfig only
+// when it is in-synced.
 func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status networkv1.VirtualMachineNetworkConfigStatus) (networkv1.VirtualMachineNetworkConfigStatus, error) {
 	logrus.Debugf("(vmnetcfg.Allocate) allocate ip for vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
 
 	if vmNetCfg.Spec.Paused != nil && *vmNetCfg.Spec.Paused {
 		return status, fmt.Errorf("vmnetcfg %s/%s was administratively disabled", vmNetCfg.Namespace, vmNetCfg.Name)
+	}
+
+	// Only start the allocation process if the VirtualMachineNetworkConfig is in-synced
+	if networkv1.InSynced.IsFalse(vmNetCfg) {
+		return status, fmt.Errorf("vmnetcfg %s/%s is out-of-sync; waiting for reconcile", vmNetCfg.Namespace, vmNetCfg.Name)
 	}
 
 	var ncStatuses []networkv1.NetworkConfigStatus
@@ -204,6 +219,57 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 	return status, nil
 }
 
+// Sync ensures that the VirtualMachineNetworkConfig is in-sync by
+// comparing the Spec and Status and cleaning up stale records.
+func (h *Handler) Sync(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status networkv1.VirtualMachineNetworkConfigStatus) (networkv1.VirtualMachineNetworkConfigStatus, error) {
+	logrus.Debugf("(vmnetcfg.InSynced) syncing vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
+
+	if vmNetCfg.Spec.Paused != nil && *vmNetCfg.Spec.Paused {
+		return status, fmt.Errorf("vmnetcfg %s/%s was administratively disabled", vmNetCfg.Namespace, vmNetCfg.Name)
+	}
+
+	if len(vmNetCfg.Spec.NetworkConfigs) == 0 {
+		return status, fmt.Errorf("vmnetcfg %s/%s has no network configs", vmNetCfg.Namespace, vmNetCfg.Name)
+	}
+
+	// Nothing to do if the VirtualMachineNetworkConfig is already in-sync
+	if networkv1.InSynced.IsTrue(vmNetCfg) {
+		logrus.Debugf("(vmnetcfg.InSynced) vmnetcfg %s/%s is in-sync", vmNetCfg.Namespace, vmNetCfg.Name)
+		return status, nil
+	}
+
+	logrus.Infof("(vmnetcfg.InSynced) vmnetcfg %s/%s is out-of-sync; start reconciling", vmNetCfg.Namespace, vmNetCfg.Name)
+
+	// Build a set of MAC addresses from the Spec
+	var macAddressSet = make(map[string]struct{})
+	for _, nc := range vmNetCfg.Spec.NetworkConfigs {
+		macAddressSet[nc.MACAddress] = struct{}{}
+	}
+
+	// Mark the NetworkConfigStatus as stale if the MAC address is not in the Spec
+	for i, ncStatus := range status.NetworkConfigs {
+		if _, ok := macAddressSet[ncStatus.MACAddress]; !ok {
+			status.NetworkConfigs[i].State = networkv1.StaleState
+		}
+	}
+
+	// Cleanup the stale records
+	if err := h.cleanup(vmNetCfg, true); err != nil {
+		return status, err
+	}
+
+	// Remove the stale NetworkConfigStatus from the status
+	var nonStaleNetworkConfigs []networkv1.NetworkConfigStatus
+	for _, ncStatus := range status.NetworkConfigs {
+		if ncStatus.State != networkv1.StaleState {
+			nonStaleNetworkConfigs = append(nonStaleNetworkConfigs, ncStatus)
+		}
+	}
+	status.NetworkConfigs = nonStaleNetworkConfigs
+
+	return status, nil
+}
+
 func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetworkConfig) (*networkv1.VirtualMachineNetworkConfig, error) {
 	if vmNetCfg == nil {
 		return nil, nil
@@ -211,60 +277,64 @@ func (h *Handler) OnRemove(key string, vmNetCfg *networkv1.VirtualMachineNetwork
 
 	logrus.Debugf("(vmnetcfg.OnRemove) vmnetcfg configuration %s/%s has been removed", vmNetCfg.Namespace, vmNetCfg.Name)
 
-	if err := h.cleanup(vmNetCfg); err != nil {
+	if err := h.cleanup(vmNetCfg, false); err != nil {
 		return vmNetCfg, err
 	}
 
 	return vmNetCfg, nil
 }
 
-func (h *Handler) cleanup(vmNetCfg *networkv1.VirtualMachineNetworkConfig) error {
-	h.metricsAllocator.DeleteVmNetCfgStatus(vmNetCfg.Namespace + "/" + vmNetCfg.Name)
+func (h *Handler) cleanup(vmNetCfg *networkv1.VirtualMachineNetworkConfig, cleanupStaleOnly bool) error {
+	if !cleanupStaleOnly {
+		h.metricsAllocator.DeleteVmNetCfgStatus(vmNetCfg.Namespace + "/" + vmNetCfg.Name)
+	}
 
 	for _, ncStatus := range vmNetCfg.Status.NetworkConfigs {
-		// Deallocate IP address from IPAM
-		isAllocated, err := h.ipAllocator.IsAllocated(ncStatus.NetworkName, ncStatus.AllocatedIPAddress)
-		if err != nil {
-			return err
-		}
-		if isAllocated {
-			if err := h.ipAllocator.DeallocateIP(ncStatus.NetworkName, ncStatus.AllocatedIPAddress); err != nil {
-				return err
-			}
-		}
-
-		// Remove entry from cache
-		exists, err := h.cacheAllocator.HasMAC(ncStatus.NetworkName, ncStatus.MACAddress)
-		if err != nil {
-			return err
-		}
-		if exists {
-			if err := h.cacheAllocator.DeleteMAC(ncStatus.NetworkName, ncStatus.MACAddress); err != nil {
-				return err
-			}
-		}
-
-		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-			ipPool, err := h.getIPPoolFromNetworkConfigStatus(ncStatus)
+		if !cleanupStaleOnly || ncStatus.State == networkv1.StaleState {
+			// Deallocate IP address from IPAM
+			isAllocated, err := h.ipAllocator.IsAllocated(ncStatus.NetworkName, ncStatus.AllocatedIPAddress)
 			if err != nil {
 				return err
 			}
-
-			ipPoolCpy := ipPool.DeepCopy()
-
-			// Remove record in IPPool status
-			delete(ipPoolCpy.Status.IPv4.Allocated, ncStatus.AllocatedIPAddress)
-
-			if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-				logrus.Infof("(vmnetcfg.cleanup) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
-				ipPoolCpy.Status.LastUpdate = metav1.Now()
-				_, err := h.ippoolClient.UpdateStatus(ipPoolCpy)
-				return err
+			if isAllocated {
+				if err := h.ipAllocator.DeallocateIP(ncStatus.NetworkName, ncStatus.AllocatedIPAddress); err != nil {
+					return err
+				}
 			}
 
-			return nil
-		}); err != nil {
-			return err
+			// Remove entry from cache
+			exists, err := h.cacheAllocator.HasMAC(ncStatus.NetworkName, ncStatus.MACAddress)
+			if err != nil {
+				return err
+			}
+			if exists {
+				if err := h.cacheAllocator.DeleteMAC(ncStatus.NetworkName, ncStatus.MACAddress); err != nil {
+					return err
+				}
+			}
+
+			if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+				ipPool, err := h.getIPPoolFromNetworkConfigStatus(ncStatus)
+				if err != nil {
+					return err
+				}
+
+				ipPoolCpy := ipPool.DeepCopy()
+
+				// Remove record in IPPool status
+				delete(ipPoolCpy.Status.IPv4.Allocated, ncStatus.AllocatedIPAddress)
+
+				if !reflect.DeepEqual(ipPoolCpy, ipPool) {
+					logrus.Infof("(vmnetcfg.cleanup) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+					ipPoolCpy.Status.LastUpdate = metav1.Now()
+					_, err := h.ippoolClient.UpdateStatus(ipPoolCpy)
+					return err
+				}
+
+				return nil
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -277,12 +347,6 @@ func findIPAddressFromNetworkConfigStatusByMACAddress(ncStatuses []networkv1.Net
 		}
 	}
 	return net.IPv4zero.String(), fmt.Errorf("could not find allocated ip for mac %s", macAddress)
-}
-
-func updateAllNetworkConfigState(ncStatuses []networkv1.NetworkConfigStatus) {
-	for i := range ncStatuses {
-		ncStatuses[i].State = networkv1.PendingState
-	}
 }
 
 func (h *Handler) getIPPoolFromNetworkName(networkName string) (*networkv1.IPPool, error) {
