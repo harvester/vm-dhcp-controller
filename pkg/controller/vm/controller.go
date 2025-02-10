@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -23,6 +24,7 @@ const (
 )
 
 type Handler struct {
+	vmController   ctlkubevirtv1.VirtualMachineController
 	vmClient       ctlkubevirtv1.VirtualMachineClient
 	vmCache        ctlkubevirtv1.VirtualMachineCache
 	vmnetcfgClient ctlnetworkv1.VirtualMachineNetworkConfigClient
@@ -34,6 +36,7 @@ func Register(ctx context.Context, management *config.Management) error {
 	vmnetcfgs := management.HarvesterNetworkFactory.Network().V1alpha1().VirtualMachineNetworkConfig()
 
 	handler := &Handler{
+		vmController:   vms,
 		vmClient:       vms,
 		vmCache:        vms.Cache(),
 		vmnetcfgClient: vmnetcfgs,
@@ -104,10 +107,27 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 	vmNetCfgCpy.Spec.NetworkConfigs = vmNetCfg.Spec.NetworkConfigs
 
 	if !reflect.DeepEqual(vmNetCfgCpy.Spec.NetworkConfigs, oldVmNetCfg.Spec.NetworkConfigs) {
-		logrus.Infof("(vm.OnChange) update vmnetcfg %s/%s", vmNetCfgCpy.Namespace, vmNetCfgCpy.Name)
-		if _, err := h.vmnetcfgClient.Update(vmNetCfgCpy); err != nil {
+		if networkv1.InSynced.IsFalse(oldVmNetCfg) {
+			logrus.Infof("(vm.OnChange) vmnetcfg %s/%s is deemed out-of-sync, updating it", vmNetCfgCpy.Namespace, vmNetCfgCpy.Name)
+			if _, err := h.vmnetcfgClient.Update(vmNetCfgCpy); err != nil {
+				return vm, err
+			}
+			return vm, nil
+		}
+
+		logrus.Infof("(vm.OnChange) update vmnetcfg %s/%s status as out-of-sync due to network config changes", vmNetCfgCpy.Namespace, vmNetCfgCpy.Name)
+
+		// Mark the VirtualMachineNetworkConfig as out-of-sync so that the vmnetcfg-controller can handle it accordingly
+		networkv1.InSynced.SetStatus(vmNetCfgCpy, string(corev1.ConditionFalse))
+		networkv1.InSynced.Reason(vmNetCfgCpy, "NetworkConfigChanged")
+		networkv1.InSynced.Message(vmNetCfgCpy, "Network configuration of the upstrem virtual machine has been changed")
+
+		if _, err := h.vmnetcfgClient.UpdateStatus(vmNetCfgCpy); err != nil {
 			return vm, err
 		}
+
+		// Enqueue the VirtualMachine in order to update the network config of its corresponding VirtualMachineNetworkConfig
+		h.vmController.Enqueue(vm.Namespace, vm.Name)
 	}
 
 	return vm, nil

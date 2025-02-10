@@ -7,6 +7,12 @@ import (
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 )
 
+func updateAllNetworkConfigState(ncStatuses []networkv1.NetworkConfigStatus, state networkv1.NetworkConfigState) {
+	for i := range ncStatuses {
+		ncStatuses[i].State = state
+	}
+}
+
 func setAllocatedCondition(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status corev1.ConditionStatus, reason, message string) {
 	networkv1.Allocated.SetStatus(vmNetCfg, string(status))
 	networkv1.Allocated.Reason(vmNetCfg, reason)
@@ -17,6 +23,12 @@ func setDisabledCondition(vmNetCfg *networkv1.VirtualMachineNetworkConfig, statu
 	networkv1.Disabled.SetStatus(vmNetCfg, string(status))
 	networkv1.Disabled.Reason(vmNetCfg, reason)
 	networkv1.Disabled.Message(vmNetCfg, message)
+}
+
+func setInSyncedCondition(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status corev1.ConditionStatus, reason, message string) {
+	networkv1.InSynced.SetStatus(vmNetCfg, string(status))
+	networkv1.InSynced.Reason(vmNetCfg, reason)
+	networkv1.InSynced.Message(vmNetCfg, message)
 }
 
 type vmNetCfgBuilder struct {
@@ -79,6 +91,11 @@ func (b *vmNetCfgBuilder) DisabledCondition(status corev1.ConditionStatus, reaso
 	return b
 }
 
+func (b *vmNetCfgBuilder) InSyncedCondition(status corev1.ConditionStatus, reason, message string) *vmNetCfgBuilder {
+	setInSyncedCondition(b.vmNetCfg, status, reason, message)
+	return b
+}
+
 func (b *vmNetCfgBuilder) Build() *networkv1.VirtualMachineNetworkConfig {
 	return b.vmNetCfg
 }
@@ -101,6 +118,13 @@ func (b *vmNetCfgStatusBuilder) WithNetworkConfigStatus(ipAddress, macAddress, n
 		State:              state,
 	}
 	b.vmNetCfgStatus.NetworkConfigs = append(b.vmNetCfgStatus.NetworkConfigs, ncStatus)
+	return b
+}
+
+func (b *vmNetCfgStatusBuilder) InSyncedCondition(status corev1.ConditionStatus, reason, message string) *vmNetCfgStatusBuilder {
+	networkv1.InSynced.SetStatus(&b.vmNetCfgStatus, string(status))
+	networkv1.InSynced.Reason(&b.vmNetCfgStatus, reason)
+	networkv1.InSynced.Message(&b.vmNetCfgStatus, message)
 	return b
 }
 
