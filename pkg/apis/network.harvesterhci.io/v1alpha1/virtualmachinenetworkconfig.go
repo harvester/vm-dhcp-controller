@@ -9,11 +9,13 @@ import (
 const (
 	AllocatedState NetworkConfigState = "Allocated"
 	PendingState   NetworkConfigState = "Pending"
+	StaleState     NetworkConfigState = "Stale"
 )
 
 var (
 	Allocated condition.Cond = "Allocated"
 	Disabled  condition.Cond = "Disabled"
+	InSynced  condition.Cond = "InSynced"
 )
 
 type NetworkConfigState string
@@ -24,6 +26,8 @@ type NetworkConfigState string
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="VMNAME",type=string,JSONPath=`.spec.vmName`
 // +kubebuilder:printcolumn:name="ALLOCATED",type=string,JSONPath=`.status.conditions[?(@.type=='Allocated')].status`
+// +kubebuilder:printcolumn:name="DISABLED",type=string,JSONPath=`.status.conditions[?(@.type=='Disabled')].status`
+// +kubebuilder:printcolumn:name="INSYNCED",type=string,JSONPath=`.status.conditions[?(@.type=='InSynced')].status`
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=`.metadata.creationTimestamp`
 
 type VirtualMachineNetworkConfig struct {
