@@ -62,9 +62,9 @@ func prepareAgentPod(
 				multusNetworksAnnotationKey: string(networksStr),
 			},
 			Labels: map[string]string{
-				vmDHCPControllerLabelKey: "agent",
-				ipPoolNamespaceLabelKey:  ipPool.Namespace,
-				ipPoolNameLabelKey:       ipPool.Name,
+				vmDHCPControllerLabelKey:     "agent",
+				util.IPPoolNamespaceLabelKey: ipPool.Namespace,
+				util.IPPoolNameLabelKey:      ipPool.Name,
 			},
 			Name:      name,
 			Namespace: agentNamespace,
