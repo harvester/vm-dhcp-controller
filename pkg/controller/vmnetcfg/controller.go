@@ -14,9 +14,11 @@ import (
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/cache"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
+	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
 const controllerName = "vm-dhcp-vmnetcfg-controller"
@@ -32,11 +34,13 @@ type Handler struct {
 	ippoolController   ctlnetworkv1.IPPoolController
 	ippoolClient       ctlnetworkv1.IPPoolClient
 	ippoolCache        ctlnetworkv1.IPPoolCache
+	nadCache           ctlcniv1.NetworkAttachmentDefinitionCache
 }
 
 func Register(ctx context.Context, management *config.Management) error {
 	vmnetcfgs := management.HarvesterNetworkFactory.Network().V1alpha1().VirtualMachineNetworkConfig()
 	ippools := management.HarvesterNetworkFactory.Network().V1alpha1().IPPool()
+	nads := management.CniFactory.K8s().V1().NetworkAttachmentDefinition()
 
 	handler := &Handler{
 		cacheAllocator:   management.CacheAllocator,
@@ -49,6 +53,7 @@ func Register(ctx context.Context, management *config.Management) error {
 		ippoolController:   ippools,
 		ippoolClient:       ippools,
 		ippoolCache:        ippools.Cache(),
+		nadCache:           nads.Cache(),
 	}
 
 	ctlnetworkv1.RegisterVirtualMachineNetworkConfigStatusHandler(
@@ -105,14 +110,12 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 
 	var ncStatuses []networkv1.NetworkConfigStatus
 	for _, nc := range vmNetCfg.Spec.NetworkConfigs {
-		ipPoolNamespace, ipPoolName := kv.RSplit(nc.NetworkName, "/")
-		ipPool, err := h.ippoolCache.Get(ipPoolNamespace, ipPoolName)
+		ipPool, err := h.getIPPoolFromNetworkConfig(nc)
 		if err != nil {
 			return status, err
 		}
-
 		if !networkv1.CacheReady.IsTrue(ipPool) {
-			return status, fmt.Errorf("ippool %s/%s is not ready", ipPoolNamespace, ipPoolName)
+			return status, fmt.Errorf("ippool %s/%s is not ready", ipPool.Namespace, ipPool.Name)
 		}
 
 		exists, err := h.cacheAllocator.HasMAC(nc.NetworkName, nc.MACAddress)
@@ -241,9 +244,8 @@ func (h *Handler) cleanup(vmNetCfg *networkv1.VirtualMachineNetworkConfig) error
 			}
 		}
 
-		ipPoolNamespace, ipPoolName := kv.RSplit(ncStatus.NetworkName, "/")
 		if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-			ipPool, err := h.ippoolCache.Get(ipPoolNamespace, ipPoolName)
+			ipPool, err := h.getIPPoolFromNetworkConfigStatus(ncStatus)
 			if err != nil {
 				return err
 			}
@@ -281,4 +283,32 @@ func updateAllNetworkConfigState(ncStatuses []networkv1.NetworkConfigStatus) {
 	for i := range ncStatuses {
 		ncStatuses[i].State = networkv1.PendingState
 	}
+}
+
+func (h *Handler) getIPPoolFromNetworkName(networkName string) (*networkv1.IPPool, error) {
+	nadNamespace, nadName := kv.RSplit(networkName, "/")
+	nad, err := h.nadCache.Get(nadNamespace, nadName)
+	if err != nil {
+		return nil, err
+	}
+	if nad.Labels == nil {
+		return nil, fmt.Errorf("network attachment definition %s/%s has no labels", nadNamespace, nadName)
+	}
+	ipPoolNamespace, ok := nad.Labels[util.IPPoolNamespaceLabelKey]
+	if !ok {
+		return nil, fmt.Errorf("network attachment definition %s/%s has no label %s", nadNamespace, nadName, util.IPPoolNamespaceLabelKey)
+	}
+	ipPoolName, ok := nad.Labels[util.IPPoolNameLabelKey]
+	if !ok {
+		return nil, fmt.Errorf("network attachment definition %s/%s has no label %s", nadNamespace, nadName, util.IPPoolNameLabelKey)
+	}
+	return h.ippoolCache.Get(ipPoolNamespace, ipPoolName)
+}
+
+func (h *Handler) getIPPoolFromNetworkConfig(nc networkv1.NetworkConfig) (*networkv1.IPPool, error) {
+	return h.getIPPoolFromNetworkName(nc.NetworkName)
+}
+
+func (h *Handler) getIPPoolFromNetworkConfigStatus(ncStatus networkv1.NetworkConfigStatus) (*networkv1.IPPool, error) {
+	return h.getIPPoolFromNetworkName(ncStatus.NetworkName)
 }
