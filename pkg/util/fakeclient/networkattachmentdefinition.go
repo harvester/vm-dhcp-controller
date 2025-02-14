@@ -19,7 +19,7 @@ func (c NetworkAttachmentDefinitionClient) Update(nad *cniv1.NetworkAttachmentDe
 	return c(nad.Namespace).Update(context.TODO(), nad, metav1.UpdateOptions{})
 }
 func (c NetworkAttachmentDefinitionClient) Get(namespace, name string, options metav1.GetOptions) (*cniv1.NetworkAttachmentDefinition, error) {
-	panic("implement me")
+	return c(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 func (c NetworkAttachmentDefinitionClient) Create(nad *cniv1.NetworkAttachmentDefinition) (*cniv1.NetworkAttachmentDefinition, error) {
 	return c(nad.Namespace).Create(context.TODO(), nad, metav1.CreateOptions{})

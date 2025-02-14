@@ -32,8 +32,6 @@ const (
 	multusNetworksAnnotationKey         = "k8s.v1.cni.cncf.io/networks"
 	holdIPPoolAgentUpgradeAnnotationKey = "network.harvesterhci.io/hold-ippool-agent-upgrade"
 
-	ipPoolNamespaceLabelKey  = network.GroupName + "/ippool-namespace"
-	ipPoolNameLabelKey       = network.GroupName + "/ippool-name"
 	vmDHCPControllerLabelKey = network.GroupName + "/vm-dhcp-controller"
 	clusterNetworkLabelKey   = network.GroupName + "/clusternetwork"
 
@@ -73,6 +71,7 @@ type Handler struct {
 	ippoolCache      ctlnetworkv1.IPPoolCache
 	podClient        ctlcorev1.PodClient
 	podCache         ctlcorev1.PodCache
+	nadClient        ctlcniv1.NetworkAttachmentDefinitionClient
 	nadCache         ctlcniv1.NetworkAttachmentDefinitionCache
 }
 
@@ -97,6 +96,7 @@ func Register(ctx context.Context, management *config.Management) error {
 		ippoolCache:      ippools.Cache(),
 		podClient:        pods,
 		podCache:         pods.Cache(),
+		nadClient:        nads,
 		nadCache:         nads.Cache(),
 	}
 
@@ -133,8 +133,8 @@ func Register(ctx context.Context, management *config.Management) error {
 		}
 		for _, pod := range pods {
 			key := relatedresource.Key{
-				Namespace: pod.Labels[ipPoolNamespaceLabelKey],
-				Name:      pod.Labels[ipPoolNameLabelKey],
+				Namespace: pod.Labels[util.IPPoolNamespaceLabelKey],
+				Name:      pod.Labels[util.IPPoolNameLabelKey],
 			}
 			keys = append(keys, key)
 		}
@@ -153,6 +153,11 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 	}
 
 	logrus.Debugf("(ippool.OnChange) ippool configuration %s has been changed: %+v", key, ipPool.Spec.IPv4Config)
+
+	// Build the relationship between IPPool and NetworkAttachmentDefinition for VirtualMachineNetworkConfig to reference
+	if err := h.ensureNADLabels(ipPool); err != nil {
+		return ipPool, err
+	}
 
 	ipPoolCpy := ipPool.DeepCopy()
 
@@ -484,10 +489,34 @@ func (h *Handler) cleanup(ipPool *networkv1.IPPool) error {
 	h.ipAllocator.DeleteIPSubnet(ipPool.Spec.NetworkName)
 	h.cacheAllocator.DeleteMACSet(ipPool.Spec.NetworkName)
 	h.metricsAllocator.DeleteIPPool(
-		ipPool.Namespace+"/"+ipPool.Name,
+		ipPool.Spec.NetworkName,
 		ipPool.Spec.IPv4Config.CIDR,
 		ipPool.Spec.NetworkName,
 	)
+
+	return nil
+}
+
+func (h *Handler) ensureNADLabels(ipPool *networkv1.IPPool) error {
+	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
+	nad, err := h.nadCache.Get(nadNamespace, nadName)
+	if err != nil {
+		return err
+	}
+
+	nadCpy := nad.DeepCopy()
+	if nadCpy.Labels == nil {
+		nadCpy.Labels = make(map[string]string)
+	}
+	nadCpy.Labels[util.IPPoolNamespaceLabelKey] = ipPool.Namespace
+	nadCpy.Labels[util.IPPoolNameLabelKey] = ipPool.Name
+
+	if !reflect.DeepEqual(nadCpy, nad) {
+		logrus.Infof("(ippool.ensureNADLabels) update nad %s/%s", nad.Namespace, nad.Name)
+		if _, err := h.nadClient.Update(nadCpy); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }

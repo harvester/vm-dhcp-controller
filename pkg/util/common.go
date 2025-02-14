@@ -4,16 +4,20 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
+
+	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 )
 
 const (
 	ExcludedMark = "EXCLUDED"
 	ReservedMark = "RESERVED"
 
-	AgentSuffixName        = "agent"
-	NodeArgsAnnotationKey  = "rke2.io/node-args"
-	ServiceCIDRFlag        = "--service-cidr"
-	ManagementNodeLabelKey = "node-role.kubernetes.io/control-plane"
+	AgentSuffixName         = "agent"
+	NodeArgsAnnotationKey   = "rke2.io/node-args"
+	ServiceCIDRFlag         = "--service-cidr"
+	ManagementNodeLabelKey  = "node-role.kubernetes.io/control-plane"
+	IPPoolNamespaceLabelKey = network.GroupName + "/ippool-namespace"
+	IPPoolNameLabelKey      = network.GroupName + "/ippool-name"
 )
 
 func agentConcatName(name ...string) string {
