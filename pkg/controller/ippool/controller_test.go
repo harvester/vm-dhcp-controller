@@ -91,14 +91,29 @@ func TestHandler_OnChange(t *testing.T) {
 	t.Run("new ippool", func(t *testing.T) {
 		key := testIPPoolNamespace + "/" + testIPPoolName
 		givenIPAllocator := newTestIPAllocatorBuilder().Build()
-		givenIPPool := newTestIPPoolBuilder().Build()
+		givenIPPool := newTestIPPoolBuilder().
+			NetworkName(testNetworkName).Build()
+		givenNAD := newTestNetworkAttachmentDefinitionBuilder().Build()
 
 		expectedIPPool := newTestIPPoolBuilder().
+			NetworkName(testNetworkName).
 			StoppedCondition(corev1.ConditionFalse, "", "").
 			CacheReadyCondition(corev1.ConditionFalse, "NotInitialized", "").Build()
+		expectedNAD := newTestNetworkAttachmentDefinitionBuilder().
+			Label(util.IPPoolNamespaceLabelKey, testIPPoolNamespace).
+			Label(util.IPPoolNameLabelKey, testIPPoolName).Build()
+
+		nadGVR := schema.GroupVersionResource{
+			Group:    "k8s.cni.cncf.io",
+			Version:  "v1",
+			Resource: "network-attachment-definitions",
+		}
 
 		clientset := fake.NewSimpleClientset()
-		err := clientset.Tracker().Add(givenIPPool)
+		err := clientset.Tracker().Create(nadGVR, givenNAD, givenNAD.Namespace)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		err = clientset.Tracker().Add(givenIPPool)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -111,6 +126,8 @@ func TestHandler_OnChange(t *testing.T) {
 			},
 			ipAllocator:  givenIPAllocator,
 			ippoolClient: fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			nadClient:    fakeclient.NetworkAttachmentDefinitionClient(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
+			nadCache:     fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
 		}
 
 		ipPool, err := handler.OnChange(key, givenIPPool)
@@ -120,6 +137,10 @@ func TestHandler_OnChange(t *testing.T) {
 		SanitizeStatus(&ipPool.Status)
 
 		assert.Equal(t, expectedIPPool, ipPool)
+
+		nad, err := handler.nadClient.Get(testNADNamespace, testNADName, metav1.GetOptions{})
+		assert.Nil(t, err)
+		assert.Equal(t, expectedNAD, nad)
 	})
 
 	t.Run("ippool with ipam initialized", func(t *testing.T) {
@@ -133,6 +154,7 @@ func TestHandler_OnChange(t *testing.T) {
 			PoolRange(testStartIP, testEndIP).
 			NetworkName(testNetworkName).
 			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		givenNAD := newTestNetworkAttachmentDefinitionBuilder().Build()
 
 		expectedIPPool := newTestIPPoolBuilder().
 			ServerIP(testServerIP1).
@@ -144,8 +166,17 @@ func TestHandler_OnChange(t *testing.T) {
 			CacheReadyCondition(corev1.ConditionTrue, "", "").
 			StoppedCondition(corev1.ConditionFalse, "", "").Build()
 
+		nadGVR := schema.GroupVersionResource{
+			Group:    "k8s.cni.cncf.io",
+			Version:  "v1",
+			Resource: "network-attachment-definitions",
+		}
+
 		clientset := fake.NewSimpleClientset()
-		err := clientset.Tracker().Add(givenIPPool)
+		err := clientset.Tracker().Create(nadGVR, givenNAD, givenNAD.Namespace)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		err = clientset.Tracker().Add(givenIPPool)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,6 +190,8 @@ func TestHandler_OnChange(t *testing.T) {
 			ipAllocator:      givenIPAllocator,
 			metricsAllocator: metrics.New(),
 			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			nadClient:        fakeclient.NetworkAttachmentDefinitionClient(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
+			nadCache:         fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
 		}
 
 		ipPool, err := handler.OnChange(key, givenIPPool)
@@ -179,6 +212,7 @@ func TestHandler_OnChange(t *testing.T) {
 			Paused().
 			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
 		givenPod := newTestPodBuilder().Build()
+		givenNAD := newTestNetworkAttachmentDefinitionBuilder().Build()
 
 		expectedIPAllocator := newTestIPAllocatorBuilder().Build()
 		expectedIPPool := newTestIPPoolBuilder().
@@ -186,8 +220,17 @@ func TestHandler_OnChange(t *testing.T) {
 			Paused().
 			StoppedCondition(corev1.ConditionTrue, "", "").Build()
 
+		nadGVR := schema.GroupVersionResource{
+			Group:    "k8s.cni.cncf.io",
+			Version:  "v1",
+			Resource: "network-attachment-definitions",
+		}
+
 		clientset := fake.NewSimpleClientset()
-		err := clientset.Tracker().Add(givenIPPool)
+		err := clientset.Tracker().Create(nadGVR, givenNAD, givenNAD.Namespace)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		err = clientset.Tracker().Add(givenIPPool)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -207,6 +250,8 @@ func TestHandler_OnChange(t *testing.T) {
 			metricsAllocator: metrics.New(),
 			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
 			podClient:        fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+			nadClient:        fakeclient.NetworkAttachmentDefinitionClient(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
+			nadCache:         fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
 		}
 
 		ipPool, err := handler.OnChange(key, givenIPPool)
@@ -232,6 +277,7 @@ func TestHandler_OnChange(t *testing.T) {
 			NetworkName(testNetworkName).
 			UnPaused().
 			CacheReadyCondition(corev1.ConditionTrue, "", "").Build()
+		givenNAD := newTestNetworkAttachmentDefinitionBuilder().Build()
 
 		expectedIPPool := newTestIPPoolBuilder().
 			NetworkName(testNetworkName).
@@ -241,8 +287,17 @@ func TestHandler_OnChange(t *testing.T) {
 			CacheReadyCondition(corev1.ConditionTrue, "", "").
 			StoppedCondition(corev1.ConditionFalse, "", "").Build()
 
+		nadGVR := schema.GroupVersionResource{
+			Group:    "k8s.cni.cncf.io",
+			Version:  "v1",
+			Resource: "network-attachment-definitions",
+		}
+
 		clientset := fake.NewSimpleClientset()
-		err := clientset.Tracker().Add(givenIPPool)
+		err := clientset.Tracker().Create(nadGVR, givenNAD, givenNAD.Namespace)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		err = clientset.Tracker().Add(givenIPPool)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -256,6 +311,8 @@ func TestHandler_OnChange(t *testing.T) {
 			ipAllocator:      givenIPAllocator,
 			metricsAllocator: metrics.New(),
 			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
+			nadClient:        fakeclient.NetworkAttachmentDefinitionClient(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
+			nadCache:         fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
 		}
 
 		ipPool, err := handler.OnChange(key, givenIPPool)
