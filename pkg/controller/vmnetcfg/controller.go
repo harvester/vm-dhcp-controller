@@ -228,10 +228,6 @@ func (h *Handler) Sync(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status n
 		return status, fmt.Errorf("vmnetcfg %s/%s was administratively disabled", vmNetCfg.Namespace, vmNetCfg.Name)
 	}
 
-	if len(vmNetCfg.Spec.NetworkConfigs) == 0 {
-		return status, fmt.Errorf("vmnetcfg %s/%s has no network configs", vmNetCfg.Namespace, vmNetCfg.Name)
-	}
-
 	// Nothing to do if the VirtualMachineNetworkConfig is already in-sync
 	if networkv1.InSynced.IsTrue(vmNetCfg) {
 		logrus.Debugf("(vmnetcfg.InSynced) vmnetcfg %s/%s is in-sync", vmNetCfg.Namespace, vmNetCfg.Name)
@@ -246,11 +242,15 @@ func (h *Handler) Sync(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status n
 		macAddressSet[nc.MACAddress] = struct{}{}
 	}
 
-	// Mark the NetworkConfigStatus as stale if the MAC address is not in the Spec
+	// Mark the NetworkConfigStatus as stale if the MAC address is not in
+	// the Spec; otherwise, add it to the non-stale list.
+	var nonStaleNetworkConfigs []networkv1.NetworkConfigStatus
 	for i, ncStatus := range status.NetworkConfigs {
 		if _, ok := macAddressSet[ncStatus.MACAddress]; !ok {
 			status.NetworkConfigs[i].State = networkv1.StaleState
+			continue
 		}
+		nonStaleNetworkConfigs = append(nonStaleNetworkConfigs, ncStatus)
 	}
 
 	// Cleanup the stale records
@@ -258,13 +258,7 @@ func (h *Handler) Sync(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status n
 		return status, err
 	}
 
-	// Remove the stale NetworkConfigStatus from the status
-	var nonStaleNetworkConfigs []networkv1.NetworkConfigStatus
-	for _, ncStatus := range status.NetworkConfigs {
-		if ncStatus.State != networkv1.StaleState {
-			nonStaleNetworkConfigs = append(nonStaleNetworkConfigs, ncStatus)
-		}
-	}
+	// Update the VirtualMachineNetworkConfig status after cleanup
 	status.NetworkConfigs = nonStaleNetworkConfigs
 
 	return status, nil
