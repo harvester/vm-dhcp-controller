@@ -106,6 +106,11 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 	vmNetCfgCpy := oldVmNetCfg.DeepCopy()
 	vmNetCfgCpy.Spec.NetworkConfigs = vmNetCfg.Spec.NetworkConfigs
 
+	// The following block is a two-step process. Ideally,
+	// 1. if the network config of the VirtualMachine has been changed, update the status of the VirtualMachineNetworkConfig
+	//   to out-of-sync so that the vmnetcfg-controller can handle it accordingly, and
+	// 2. since the spec of the VirtualMachineNetworkConfig hasn't been changed, update it to reflect the new network config.
+	// This is to throttle the vmnetcfg-controller and to avoid allocate-before-deallocate from happening.
 	if !reflect.DeepEqual(vmNetCfgCpy.Spec.NetworkConfigs, oldVmNetCfg.Spec.NetworkConfigs) {
 		if networkv1.InSynced.IsFalse(oldVmNetCfg) {
 			logrus.Infof("(vm.OnChange) vmnetcfg %s/%s is deemed out-of-sync, updating it", vmNetCfgCpy.Namespace, vmNetCfgCpy.Name)
