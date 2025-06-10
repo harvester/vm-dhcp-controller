@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/pointer"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
@@ -305,14 +306,17 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 			logrus.Warningf("(ippool.DeployAgent) agent pod %s missing, redeploying", ipPool.Status.AgentPodRef.Name)
 		} else {
 			if pod.DeletionTimestamp != nil {
-				return status, fmt.Errorf("agent pod %s marked for deletion", ipPool.Status.AgentPodRef.Name)
-			}
+				logrus.Warningf("(ippool.DeployAgent) deleting stuck agent pod %s", pod.Name)
+				if err := h.forceDeletePod(pod.Namespace, pod.Name); err != nil && !apierrors.IsNotFound(err) {
+					return status, err
+				}
+			} else {
+				if pod.GetUID() != ipPool.Status.AgentPodRef.UID {
+					return status, fmt.Errorf("agent pod %s uid mismatch", ipPool.Status.AgentPodRef.Name)
+				}
 
-			if pod.GetUID() != ipPool.Status.AgentPodRef.UID {
-				return status, fmt.Errorf("agent pod %s uid mismatch", ipPool.Status.AgentPodRef.Name)
+				return status, nil
 			}
-
-			return status, nil
 		}
 	}
 
@@ -445,7 +449,7 @@ func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPool
 			return status, fmt.Errorf("agent pod %s marked for deletion", agentPod.Name)
 		}
 
-		if err := h.podClient.Delete(agentPod.Namespace, agentPod.Name, &metav1.DeleteOptions{}); err != nil {
+		if err := h.forceDeletePod(agentPod.Namespace, agentPod.Name); err != nil {
 			return status, err
 		}
 
@@ -476,13 +480,18 @@ func (h *Handler) getAgentImage(ipPool *networkv1.IPPool) string {
 	return h.agentImage.String()
 }
 
+func (h *Handler) forceDeletePod(namespace, name string) error {
+	opts := metav1.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)}
+	return h.podClient.Delete(namespace, name, &opts)
+}
+
 func (h *Handler) cleanup(ipPool *networkv1.IPPool) error {
 	if ipPool.Status.AgentPodRef == nil {
 		return nil
 	}
 
 	logrus.Infof("(ippool.cleanup) remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, ipPool.Namespace, ipPool.Name)
-	if err := h.podClient.Delete(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, &metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+	if err := h.forceDeletePod(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 

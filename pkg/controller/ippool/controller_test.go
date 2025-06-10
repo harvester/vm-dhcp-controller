@@ -725,6 +725,66 @@ func TestHandler_DeployAgent(t *testing.T) {
 		_, err = handler.DeployAgent(givenIPPool, givenIPPool.Status)
 		assert.Equal(t, fmt.Sprintf("agent pod %s uid mismatch", testPodName), err.Error())
 	})
+
+	t.Run("existing agent pod deleting", func(t *testing.T) {
+		givenIPPool := newTestIPPoolBuilder().
+			ServerIP(testServerIP1).
+			CIDR(testCIDR).
+			NetworkName(testNetworkName).
+			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
+			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
+		givenPod, _ := prepareAgentPod(
+			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
+				ServerIP(testServerIP1).
+				CIDR(testCIDR).
+				NetworkName(testNetworkName).Build(),
+			false,
+			testPodNamespace,
+			testClusterNetwork,
+			testServiceAccountName,
+			&config.Image{
+				Repository: testImageRepository,
+				Tag:        testImageTag,
+			},
+		)
+		ts := metav1.Now()
+		givenPod.DeletionTimestamp = &ts
+
+		expectedStatus := newTestIPPoolStatusBuilder().
+			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+
+		nadGVR := schema.GroupVersionResource{
+			Group:    "k8s.cni.cncf.io",
+			Version:  "v1",
+			Resource: "network-attachment-definitions",
+		}
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Create(nadGVR, givenNAD, givenNAD.Namespace)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		k8sclientset := k8sfake.NewSimpleClientset()
+		err = k8sclientset.Tracker().Add(givenPod)
+		assert.Nil(t, err, "mock resource should add into fake controller tracker")
+
+		handler := Handler{
+			agentNamespace:          testPodNamespace,
+			agentImage:              &config.Image{Repository: testImageRepository, Tag: testImageTag},
+			agentServiceAccountName: testServiceAccountName,
+			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
+			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+		}
+
+		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedStatus, status)
+
+		pod, err := handler.podClient.Get(testPodNamespace, testPodName, metav1.GetOptions{})
+		assert.Nil(t, err)
+		assert.Nil(t, pod.DeletionTimestamp)
+	})
 }
 
 func TestHandler_BuildCache(t *testing.T) {
