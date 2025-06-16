@@ -23,6 +23,7 @@ type Controller struct {
 	poolRef       types.NamespacedName
 	dhcpAllocator *dhcp.DHCPAllocator
 	poolCache     map[string]string
+	nic           string
 }
 
 func NewController(
@@ -32,6 +33,7 @@ func NewController(
 	poolRef types.NamespacedName,
 	dhcpAllocator *dhcp.DHCPAllocator,
 	poolCache map[string]string,
+	nic string,
 ) *Controller {
 	return &Controller{
 		stopCh:        make(chan struct{}),
@@ -41,6 +43,7 @@ func NewController(
 		poolRef:       poolRef,
 		dhcpAllocator: dhcpAllocator,
 		poolCache:     poolCache,
+		nic:           nic,
 	}
 }
 

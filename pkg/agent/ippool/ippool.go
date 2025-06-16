@@ -10,6 +10,9 @@ import (
 func (c *Controller) Update(ipPool *networkv1.IPPool) error {
 	if !networkv1.CacheReady.IsTrue(ipPool) {
 		logrus.Warningf("ippool %s/%s is not ready", ipPool.Namespace, ipPool.Name)
+		if err := c.dhcpAllocator.Stop(c.nic); err != nil {
+			logrus.Errorf("(controller.Update) failed to stop DHCP service: %v", err)
+		}
 		return nil
 	}
 	if ipPool.Status.IPv4 == nil {

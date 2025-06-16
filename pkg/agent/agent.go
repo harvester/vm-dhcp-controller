@@ -41,6 +41,7 @@ func NewAgent(options *config.AgentOptions) *Agent {
 			options.IPPoolRef,
 			dhcpAllocator,
 			poolCache,
+			options.Nic,
 		),
 		poolCache: poolCache,
 	}
