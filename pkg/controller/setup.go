@@ -3,6 +3,7 @@ package controller
 import (
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/controller/ippool"
+	"github.com/harvester/vm-dhcp-controller/pkg/controller/node"
 	"github.com/harvester/vm-dhcp-controller/pkg/controller/vm"
 	"github.com/harvester/vm-dhcp-controller/pkg/controller/vmnetcfg"
 )
@@ -13,6 +14,7 @@ type Config struct {
 
 var RegisterFuncList = []config.RegisterFunc{
 	ippool.Register,
+	node.Register,
 	vm.Register,
 	vmnetcfg.Register,
 }
