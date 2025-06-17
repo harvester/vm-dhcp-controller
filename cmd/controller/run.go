@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/rancher/wrangler/pkg/signals"
@@ -16,6 +17,7 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/controller"
 	"github.com/harvester/vm-dhcp-controller/pkg/server"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
 var (
@@ -45,6 +47,8 @@ func run(options *config.ControllerOptions) error {
 	if err != nil {
 		logrus.Fatalf("Error building controllers: %s", err.Error())
 	}
+
+	go util.CleanupTerminatingPods(ctx, client, options.AgentNamespace, "controller", time.Minute)
 
 	callback := func(ctx context.Context) {
 		if err := management.Register(ctx, cfg, controller.RegisterFuncList); err != nil {
