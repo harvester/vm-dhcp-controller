@@ -3,14 +3,14 @@ package fakeclient
 import (
 	"context"
 
+	"github.com/rancher/wrangler/v3/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	typecorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-
-	ctlcorev1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core/v1"
+	"k8s.io/client-go/rest"
 )
 
 type PodClient func(string) typecorev1.PodInterface
@@ -40,6 +40,10 @@ func (c PodClient) Patch(namespace, name string, pt types.PatchType, data []byte
 	panic("implement me")
 }
 
+func (c PodClient) WithImpersonation(config rest.ImpersonationConfig) (generic.ClientInterface[*corev1.Pod, *corev1.PodList], error) {
+	panic("implement me")
+}
+
 type PodCache func(string) typecorev1.PodInterface
 
 func (c PodCache) Get(namespace, name string) (*corev1.Pod, error) {
@@ -57,7 +61,7 @@ func (c PodCache) List(namespace string, selector labels.Selector) ([]*corev1.Po
 	}
 	return result, err
 }
-func (c PodCache) AddIndexer(indexName string, indexer ctlcorev1.PodIndexer) {
+func (c PodCache) AddIndexer(indexName string, indexer generic.Indexer[*corev1.Pod]) {
 	panic("implement me")
 }
 func (c PodCache) GetByIndex(indexName, key string) ([]*corev1.Pod, error) {
