@@ -41,22 +41,24 @@ var ippoolsKind = v1alpha1.SchemeGroupVersion.WithKind("IPPool")
 
 // Get takes name of the iPPool, and returns the corresponding iPPool object, and an error if there is any.
 func (c *FakeIPPools) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.IPPool, err error) {
+	emptyResult := &v1alpha1.IPPool{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(ippoolsResource, c.ns, name), &v1alpha1.IPPool{})
+		Invokes(testing.NewGetActionWithOptions(ippoolsResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IPPool), err
 }
 
 // List takes label and field selectors, and returns the list of IPPools that match those selectors.
 func (c *FakeIPPools) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.IPPoolList, err error) {
+	emptyResult := &v1alpha1.IPPoolList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(ippoolsResource, ippoolsKind, c.ns, opts), &v1alpha1.IPPoolList{})
+		Invokes(testing.NewListActionWithOptions(ippoolsResource, ippoolsKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -75,40 +77,43 @@ func (c *FakeIPPools) List(ctx context.Context, opts v1.ListOptions) (result *v1
 // Watch returns a watch.Interface that watches the requested iPPools.
 func (c *FakeIPPools) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(ippoolsResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(ippoolsResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a iPPool and creates it.  Returns the server's representation of the iPPool, and an error, if there is any.
 func (c *FakeIPPools) Create(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.CreateOptions) (result *v1alpha1.IPPool, err error) {
+	emptyResult := &v1alpha1.IPPool{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(ippoolsResource, c.ns, iPPool), &v1alpha1.IPPool{})
+		Invokes(testing.NewCreateActionWithOptions(ippoolsResource, c.ns, iPPool, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IPPool), err
 }
 
 // Update takes the representation of a iPPool and updates it. Returns the server's representation of the iPPool, and an error, if there is any.
 func (c *FakeIPPools) Update(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.UpdateOptions) (result *v1alpha1.IPPool, err error) {
+	emptyResult := &v1alpha1.IPPool{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(ippoolsResource, c.ns, iPPool), &v1alpha1.IPPool{})
+		Invokes(testing.NewUpdateActionWithOptions(ippoolsResource, c.ns, iPPool, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IPPool), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeIPPools) UpdateStatus(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.UpdateOptions) (*v1alpha1.IPPool, error) {
+func (c *FakeIPPools) UpdateStatus(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.UpdateOptions) (result *v1alpha1.IPPool, err error) {
+	emptyResult := &v1alpha1.IPPool{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(ippoolsResource, "status", c.ns, iPPool), &v1alpha1.IPPool{})
+		Invokes(testing.NewUpdateSubresourceActionWithOptions(ippoolsResource, "status", c.ns, iPPool, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IPPool), err
 }
@@ -123,7 +128,7 @@ func (c *FakeIPPools) Delete(ctx context.Context, name string, opts v1.DeleteOpt
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeIPPools) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(ippoolsResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(ippoolsResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.IPPoolList{})
 	return err
@@ -131,11 +136,12 @@ func (c *FakeIPPools) DeleteCollection(ctx context.Context, opts v1.DeleteOption
 
 // Patch applies the patch and returns the patched iPPool.
 func (c *FakeIPPools) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IPPool, err error) {
+	emptyResult := &v1alpha1.IPPool{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(ippoolsResource, c.ns, name, pt, data, subresources...), &v1alpha1.IPPool{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(ippoolsResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.IPPool), err
 }

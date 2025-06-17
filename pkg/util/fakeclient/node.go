@@ -3,14 +3,14 @@ package fakeclient
 import (
 	"context"
 
+	"github.com/rancher/wrangler/v3/pkg/generic"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	typecorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-
-	ctlcorev1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core/v1"
+	"k8s.io/client-go/rest"
 )
 
 type NodeClient func() typecorev1.NodeInterface
@@ -40,6 +40,10 @@ func (c NodeClient) Patch(name string, pt types.PatchType, data []byte, subresou
 	panic("implement me")
 }
 
+func (c NodeClient) WithImpersonation(config rest.ImpersonationConfig) (generic.ClientInterface[*corev1.Node, *corev1.NodeList], error) {
+	panic("implement me")
+}
+
 type NodeCache func() typecorev1.NodeInterface
 
 func (c NodeCache) Get(name string) (*corev1.Node, error) {
@@ -57,7 +61,7 @@ func (c NodeCache) List(selector labels.Selector) ([]*corev1.Node, error) {
 	}
 	return result, err
 }
-func (c NodeCache) AddIndexer(indexName string, indexer ctlcorev1.NodeIndexer) {
+func (c NodeCache) AddIndexer(indexName string, indexer generic.Indexer[*corev1.Node]) {
 	panic("implement me")
 }
 func (c NodeCache) GetByIndex(indexName, key string) ([]*corev1.Node, error) {

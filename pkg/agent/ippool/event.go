@@ -96,23 +96,29 @@ func (e *EventHandler) EventListener(ctx context.Context) {
 	// TODO: could be more specific on what namespaces we want to watch and what fields we need
 	watcher := cache.NewListWatchFromClient(e.k8sClientset.NetworkV1alpha1().RESTClient(), "ippools", e.poolRef.Namespace, fields.Everything())
 
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[Event]())
 
-	indexer, informer := cache.NewIndexerInformer(watcher, &networkv1.IPPool{}, 0, cache.ResourceEventHandlerFuncs{
-		UpdateFunc: func(old interface{}, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(new)
-			if err == nil {
-				queue.Add(Event{
-					key:             key,
-					action:          UPDATE,
-					poolName:        new.(*networkv1.IPPool).ObjectMeta.Name,
-					poolNetworkName: new.(*networkv1.IPPool).Spec.NetworkName,
-				})
-			}
+	indexer, informer := cache.NewInformerWithOptions(cache.InformerOptions{
+		ListerWatcher: watcher,
+		ObjectType:    &networkv1.IPPool{},
+		ResyncPeriod:  0,
+		Handler: cache.ResourceEventHandlerFuncs{
+			UpdateFunc: func(old interface{}, new interface{}) {
+				key, err := cache.MetaNamespaceKeyFunc(new)
+				if err == nil {
+					queue.Add(Event{
+						key:             key,
+						action:          UPDATE,
+						poolName:        new.(*networkv1.IPPool).ObjectMeta.Name,
+						poolNetworkName: new.(*networkv1.IPPool).Spec.NetworkName,
+					})
+				}
+			},
 		},
-	}, cache.Indexers{})
+		Indexers: cache.Indexers{},
+	})
 
-	controller := NewController(queue, indexer, informer, e.poolRef, e.dhcpAllocator, e.poolCache)
+	controller := NewController(queue, indexer.(cache.Indexer), informer, e.poolRef, e.dhcpAllocator, e.poolCache)
 
 	go controller.Run(1)
 
