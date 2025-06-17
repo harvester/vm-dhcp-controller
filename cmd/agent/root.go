@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rancher/wrangler/pkg/kv"
+	"github.com/rancher/wrangler/v3/pkg/kv"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/types"

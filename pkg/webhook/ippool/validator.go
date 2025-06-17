@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/harvester/webhook/pkg/server/admission"
-	"github.com/rancher/wrangler/pkg/kv"
+	"github.com/rancher/wrangler/v3/pkg/kv"
 	"github.com/sirupsen/logrus"
 	admissionregv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/runtime"

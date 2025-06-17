@@ -21,7 +21,8 @@ package v1alpha1
 import (
 	v1alpha1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/rancher/lasso/pkg/controller"
-	"github.com/rancher/wrangler/pkg/schemes"
+	"github.com/rancher/wrangler/v3/pkg/generic"
+	"github.com/rancher/wrangler/v3/pkg/schemes"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -44,9 +45,10 @@ type version struct {
 	controllerFactory controller.SharedControllerFactory
 }
 
-func (c *version) IPPool() IPPoolController {
-	return NewIPPoolController(schema.GroupVersionKind{Group: "network.harvesterhci.io", Version: "v1alpha1", Kind: "IPPool"}, "ippools", true, c.controllerFactory)
+func (v *version) IPPool() IPPoolController {
+	return generic.NewController[*v1alpha1.IPPool, *v1alpha1.IPPoolList](schema.GroupVersionKind{Group: "network.harvesterhci.io", Version: "v1alpha1", Kind: "IPPool"}, "ippools", true, v.controllerFactory)
 }
-func (c *version) VirtualMachineNetworkConfig() VirtualMachineNetworkConfigController {
-	return NewVirtualMachineNetworkConfigController(schema.GroupVersionKind{Group: "network.harvesterhci.io", Version: "v1alpha1", Kind: "VirtualMachineNetworkConfig"}, "virtualmachinenetworkconfigs", true, c.controllerFactory)
+
+func (v *version) VirtualMachineNetworkConfig() VirtualMachineNetworkConfigController {
+	return generic.NewController[*v1alpha1.VirtualMachineNetworkConfig, *v1alpha1.VirtualMachineNetworkConfigList](schema.GroupVersionKind{Group: "network.harvesterhci.io", Version: "v1alpha1", Kind: "VirtualMachineNetworkConfig"}, "virtualmachinenetworkconfigs", true, v.controllerFactory)
 }

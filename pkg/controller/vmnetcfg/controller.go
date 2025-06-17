@@ -6,7 +6,7 @@ import (
 	"net"
 	"reflect"
 
-	"github.com/rancher/wrangler/pkg/kv"
+	"github.com/rancher/wrangler/v3/pkg/kv"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"

@@ -1,7 +1,7 @@
 FROM registry.suse.com/bci/golang:1.23
 
 ARG DAPPER_HOST_ARCH
-ENV ARCH $DAPPER_HOST_ARCH
+ENV ARCH=$DAPPER_HOST_ARCH
 
 RUN zypper -n install tar gzip bash git docker less file curl wget
 
@@ -13,12 +13,12 @@ RUN curl -sSfL https://github.com/docker/buildx/releases/download/v0.13.1/buildx
 	mv buildx-v0.13.1.linux-${ARCH} /usr/local/bin/buildx
 
 ## install controller-gen
-RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.14.0
+RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.17.1
 
-ENV DAPPER_ENV REPO PUSH TAG DRONE_TAG ARCH
-ENV DAPPER_SOURCE /go/src/github.com/harvester/vm-dhcp-controller
-ENV DAPPER_OUTPUT ./bin ./chart/crds
-ENV DAPPER_DOCKER_SOCKET true
+ENV DAPPER_ENV="REPO PUSH TAG DRONE_TAG ARCH"
+ENV DAPPER_SOURCE=/go/src/github.com/harvester/vm-dhcp-controller
+ENV DAPPER_OUTPUT="./bin ./chart/crds"
+ENV DAPPER_DOCKER_SOCKET=true
 WORKDIR ${DAPPER_SOURCE}
 
 ENTRYPOINT ["./scripts/entry"]
