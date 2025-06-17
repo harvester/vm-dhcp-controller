@@ -3,14 +3,15 @@ package fakeclient
 import (
 	"context"
 
+	"github.com/rancher/wrangler/v3/pkg/generic"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/rest"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	typenetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/network.harvesterhci.io/v1alpha1"
-	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 )
 
 type VirtualMachineNetworkConfigClient func(string) typenetworkv1.VirtualMachineNetworkConfigInterface
@@ -40,6 +41,10 @@ func (c VirtualMachineNetworkConfigClient) Patch(namespace, name string, pt type
 	panic("implement me")
 }
 
+func (c VirtualMachineNetworkConfigClient) WithImpersonation(config rest.ImpersonationConfig) (generic.ClientInterface[*networkv1.VirtualMachineNetworkConfig, *networkv1.VirtualMachineNetworkConfigList], error) {
+	panic("implement me")
+}
+
 type VirtualMachineNetworkConfigCache func(string) typenetworkv1.VirtualMachineNetworkConfigInterface
 
 func (c VirtualMachineNetworkConfigCache) Get(namespace, name string) (*networkv1.VirtualMachineNetworkConfig, error) {
@@ -57,7 +62,7 @@ func (c VirtualMachineNetworkConfigCache) List(namespace string, selector labels
 	}
 	return result, err
 }
-func (c VirtualMachineNetworkConfigCache) AddIndexer(indexName string, indexer ctlnetworkv1.VirtualMachineNetworkConfigIndexer) {
+func (c VirtualMachineNetworkConfigCache) AddIndexer(indexName string, indexer generic.Indexer[*networkv1.VirtualMachineNetworkConfig]) {
 	panic("implement me")
 }
 func (c VirtualMachineNetworkConfigCache) GetByIndex(indexName, key string) ([]*networkv1.VirtualMachineNetworkConfig, error) {

@@ -41,22 +41,24 @@ var virtualmachinenetworkconfigsKind = v1alpha1.SchemeGroupVersion.WithKind("Vir
 
 // Get takes name of the virtualMachineNetworkConfig, and returns the corresponding virtualMachineNetworkConfig object, and an error if there is any.
 func (c *FakeVirtualMachineNetworkConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.VirtualMachineNetworkConfig, err error) {
+	emptyResult := &v1alpha1.VirtualMachineNetworkConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(virtualmachinenetworkconfigsResource, c.ns, name), &v1alpha1.VirtualMachineNetworkConfig{})
+		Invokes(testing.NewGetActionWithOptions(virtualmachinenetworkconfigsResource, c.ns, name, options), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.VirtualMachineNetworkConfig), err
 }
 
 // List takes label and field selectors, and returns the list of VirtualMachineNetworkConfigs that match those selectors.
 func (c *FakeVirtualMachineNetworkConfigs) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.VirtualMachineNetworkConfigList, err error) {
+	emptyResult := &v1alpha1.VirtualMachineNetworkConfigList{}
 	obj, err := c.Fake.
-		Invokes(testing.NewListAction(virtualmachinenetworkconfigsResource, virtualmachinenetworkconfigsKind, c.ns, opts), &v1alpha1.VirtualMachineNetworkConfigList{})
+		Invokes(testing.NewListActionWithOptions(virtualmachinenetworkconfigsResource, virtualmachinenetworkconfigsKind, c.ns, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 
 	label, _, _ := testing.ExtractFromListOptions(opts)
@@ -75,40 +77,43 @@ func (c *FakeVirtualMachineNetworkConfigs) List(ctx context.Context, opts v1.Lis
 // Watch returns a watch.Interface that watches the requested virtualMachineNetworkConfigs.
 func (c *FakeVirtualMachineNetworkConfigs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(virtualmachinenetworkconfigsResource, c.ns, opts))
+		InvokesWatch(testing.NewWatchActionWithOptions(virtualmachinenetworkconfigsResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a virtualMachineNetworkConfig and creates it.  Returns the server's representation of the virtualMachineNetworkConfig, and an error, if there is any.
 func (c *FakeVirtualMachineNetworkConfigs) Create(ctx context.Context, virtualMachineNetworkConfig *v1alpha1.VirtualMachineNetworkConfig, opts v1.CreateOptions) (result *v1alpha1.VirtualMachineNetworkConfig, err error) {
+	emptyResult := &v1alpha1.VirtualMachineNetworkConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(virtualmachinenetworkconfigsResource, c.ns, virtualMachineNetworkConfig), &v1alpha1.VirtualMachineNetworkConfig{})
+		Invokes(testing.NewCreateActionWithOptions(virtualmachinenetworkconfigsResource, c.ns, virtualMachineNetworkConfig, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.VirtualMachineNetworkConfig), err
 }
 
 // Update takes the representation of a virtualMachineNetworkConfig and updates it. Returns the server's representation of the virtualMachineNetworkConfig, and an error, if there is any.
 func (c *FakeVirtualMachineNetworkConfigs) Update(ctx context.Context, virtualMachineNetworkConfig *v1alpha1.VirtualMachineNetworkConfig, opts v1.UpdateOptions) (result *v1alpha1.VirtualMachineNetworkConfig, err error) {
+	emptyResult := &v1alpha1.VirtualMachineNetworkConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(virtualmachinenetworkconfigsResource, c.ns, virtualMachineNetworkConfig), &v1alpha1.VirtualMachineNetworkConfig{})
+		Invokes(testing.NewUpdateActionWithOptions(virtualmachinenetworkconfigsResource, c.ns, virtualMachineNetworkConfig, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.VirtualMachineNetworkConfig), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeVirtualMachineNetworkConfigs) UpdateStatus(ctx context.Context, virtualMachineNetworkConfig *v1alpha1.VirtualMachineNetworkConfig, opts v1.UpdateOptions) (*v1alpha1.VirtualMachineNetworkConfig, error) {
+func (c *FakeVirtualMachineNetworkConfigs) UpdateStatus(ctx context.Context, virtualMachineNetworkConfig *v1alpha1.VirtualMachineNetworkConfig, opts v1.UpdateOptions) (result *v1alpha1.VirtualMachineNetworkConfig, err error) {
+	emptyResult := &v1alpha1.VirtualMachineNetworkConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(virtualmachinenetworkconfigsResource, "status", c.ns, virtualMachineNetworkConfig), &v1alpha1.VirtualMachineNetworkConfig{})
+		Invokes(testing.NewUpdateSubresourceActionWithOptions(virtualmachinenetworkconfigsResource, "status", c.ns, virtualMachineNetworkConfig, opts), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.VirtualMachineNetworkConfig), err
 }
@@ -123,7 +128,7 @@ func (c *FakeVirtualMachineNetworkConfigs) Delete(ctx context.Context, name stri
 
 // DeleteCollection deletes a collection of objects.
 func (c *FakeVirtualMachineNetworkConfigs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(virtualmachinenetworkconfigsResource, c.ns, listOpts)
+	action := testing.NewDeleteCollectionActionWithOptions(virtualmachinenetworkconfigsResource, c.ns, opts, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.VirtualMachineNetworkConfigList{})
 	return err
@@ -131,11 +136,12 @@ func (c *FakeVirtualMachineNetworkConfigs) DeleteCollection(ctx context.Context,
 
 // Patch applies the patch and returns the patched virtualMachineNetworkConfig.
 func (c *FakeVirtualMachineNetworkConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.VirtualMachineNetworkConfig, err error) {
+	emptyResult := &v1alpha1.VirtualMachineNetworkConfig{}
 	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(virtualmachinenetworkconfigsResource, c.ns, name, pt, data, subresources...), &v1alpha1.VirtualMachineNetworkConfig{})
+		Invokes(testing.NewPatchSubresourceActionWithOptions(virtualmachinenetworkconfigsResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
 
 	if obj == nil {
-		return nil, err
+		return emptyResult, err
 	}
 	return obj.(*v1alpha1.VirtualMachineNetworkConfig), err
 }

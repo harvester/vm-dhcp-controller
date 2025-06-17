@@ -3,14 +3,15 @@ package fakeclient
 import (
 	"context"
 
+	"github.com/rancher/wrangler/v3/pkg/generic"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/rest"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	typenetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/network.harvesterhci.io/v1alpha1"
-	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 )
 
 type IPPoolClient func(string) typenetworkv1.IPPoolInterface
@@ -40,6 +41,10 @@ func (c IPPoolClient) Patch(namespace, name string, pt types.PatchType, data []b
 	panic("implement me")
 }
 
+func (c IPPoolClient) WithImpersonation(config rest.ImpersonationConfig) (generic.ClientInterface[*networkv1.IPPool, *networkv1.IPPoolList], error) {
+	panic("implement me")
+}
+
 type IPPoolCache func(string) typenetworkv1.IPPoolInterface
 
 func (c IPPoolCache) Get(namespace, name string) (*networkv1.IPPool, error) {
@@ -57,7 +62,7 @@ func (c IPPoolCache) List(namespace string, selector labels.Selector) ([]*networ
 	}
 	return result, err
 }
-func (c IPPoolCache) AddIndexer(indexName string, indexer ctlnetworkv1.IPPoolIndexer) {
+func (c IPPoolCache) AddIndexer(indexName string, indexer generic.Indexer[*networkv1.IPPool]) {
 	panic("implement me")
 }
 func (c IPPoolCache) GetByIndex(indexName, key string) ([]*networkv1.IPPool, error) {
