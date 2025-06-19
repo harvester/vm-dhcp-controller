@@ -328,6 +328,12 @@ func (a *DHCPAllocator) stop(nic string) (err error) {
 	return a.servers[nic].Close()
 }
 
+// Stop stops the running DHCP server on the given network interface.
+// It is safe to call Stop multiple times for the same interface.
+func (a *DHCPAllocator) Stop(nic string) error {
+	return a.stop(nic)
+}
+
 func (a *DHCPAllocator) ListAll(name string) (map[string]string, error) {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()

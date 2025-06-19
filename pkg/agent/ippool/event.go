@@ -33,6 +33,7 @@ type EventHandler struct {
 	poolRef       types.NamespacedName
 	dhcpAllocator *dhcp.DHCPAllocator
 	poolCache     map[string]string
+	nic           string
 }
 
 type Event struct {
@@ -49,6 +50,7 @@ func NewEventHandler(
 	poolRef types.NamespacedName,
 	dhcpAllocator *dhcp.DHCPAllocator,
 	poolCache map[string]string,
+	nic string,
 ) *EventHandler {
 	return &EventHandler{
 		kubeConfig:     kubeConfig,
@@ -57,6 +59,7 @@ func NewEventHandler(
 		poolRef:        poolRef,
 		dhcpAllocator:  dhcpAllocator,
 		poolCache:      poolCache,
+		nic:            nic,
 	}
 }
 
@@ -112,7 +115,7 @@ func (e *EventHandler) EventListener(ctx context.Context) {
 		},
 	}, cache.Indexers{})
 
-	controller := NewController(queue, indexer, informer, e.poolRef, e.dhcpAllocator, e.poolCache)
+	controller := NewController(queue, indexer, informer, e.poolRef, e.dhcpAllocator, e.poolCache, e.nic)
 
 	go controller.Run(1)
 

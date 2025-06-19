@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"time"
 
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 	"github.com/harvester/webhook/pkg/config"
 	"github.com/harvester/webhook/pkg/server"
 	"github.com/rancher/wrangler/pkg/start"
 	"github.com/sirupsen/logrus"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
 	ctlcore "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core"
@@ -69,6 +72,13 @@ func run(ctx context.Context, cfg *rest.Config, options *config.Options) error {
 	if err != nil {
 		return err
 	}
+
+	client, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	go util.CleanupTerminatingPods(ctx, client, options.Namespace, "webhook", time.Minute)
 
 	webhookServer := server.NewWebhookServer(ctx, cfg, name, options)
 
