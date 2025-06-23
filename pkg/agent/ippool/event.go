@@ -109,7 +109,7 @@ func (e *EventHandler) EventListener(ctx context.Context) {
 					queue.Add(Event{
 						key:             key,
 						action:          UPDATE,
-						poolName:        new.(*networkv1.IPPool).ObjectMeta.Name,
+						poolName:        new.(*networkv1.IPPool).Name,
 						poolNetworkName: new.(*networkv1.IPPool).Spec.NetworkName,
 					})
 				}
