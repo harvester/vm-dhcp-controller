@@ -21,7 +21,7 @@ func listIPByNetworkHandler(ipAllocator *ipam.IPAllocator) http.Handler {
 		set, err := ipAllocator.ListAll(networkName)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "failed to list ipam of %s: %s", networkName, err.Error())
+			_, _ = fmt.Fprintf(w, "failed to list ipam of %s: %s", networkName, err.Error())
 			return
 		}
 		payload, err := json.Marshal(set)
@@ -42,7 +42,7 @@ func listCacheByNetworkHandler(cacheAllocator *cache.CacheAllocator) http.Handle
 		set, err := cacheAllocator.ListAll(networkName)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "failed to list cache of %s: %s", networkName, err.Error())
+			_, _ = fmt.Fprintf(w, "failed to list cache of %s: %s", networkName, err.Error())
 			return
 		}
 		payload, err := json.Marshal(set)
@@ -61,7 +61,7 @@ func listLeaseHandler(dhcpAllocator *dhcp.DHCPAllocator) http.Handler {
 		set, err := dhcpAllocator.ListAll("")
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "cannot list leases: %s", err.Error())
+			_, _ = fmt.Fprintf(w, "cannot list leases: %s", err.Error())
 			return
 		}
 		payload, err := json.Marshal(set)
