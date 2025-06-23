@@ -69,7 +69,7 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 
 	// Update network name for each network config if it's of type Multus
 	for _, network := range vm.Spec.Template.Spec.Networks {
-		if network.NetworkSource.Multus == nil {
+		if network.Multus == nil {
 			continue
 		}
 		nc, ok := ncm[network.Name]
