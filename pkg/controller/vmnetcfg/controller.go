@@ -214,6 +214,11 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 		}
 	}
 
+	if len(ncStatuses) == 0 {
+		logrus.Infof("(vmnetcfg.Allocate) no network configs found for vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
+		return status, fmt.Errorf("no network configs found for vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
+	}
+
 	status.NetworkConfigs = ncStatuses
 
 	return status, nil
