@@ -87,6 +87,12 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 		}
 	}
 
+	// If no network config is found, return early
+	if len(ncm) == 0 {
+		logrus.Infof("(vm.OnChange) no effective network configs found for vm %s, skipping", key)
+		return vm, nil
+	}
+
 	vmNetCfg := prepareVmNetCfg(vm, ncm)
 
 	oldVmNetCfg, err := h.vmnetcfgCache.Get(vm.Namespace, vm.Name)
