@@ -20,7 +20,7 @@ func nadControllerInterfaceRefactor() {
 		logrus.Fatalf("failed to read the network-attachment-definition file: %v", err)
 	}
 
-	output := bytes.Replace(input, []byte("networkattachmentdefinitions"), []byte("network-attachment-definitions"), -1)
+	output := bytes.ReplaceAll(input, []byte("networkattachmentdefinitions"), []byte("network-attachment-definitions"))
 
 	if err = os.WriteFile(absPath, output, 0644); err != nil {
 		logrus.Fatalf("failed to update the network-attachment-definition file: %v", err)
@@ -28,7 +28,9 @@ func nadControllerInterfaceRefactor() {
 }
 
 func main() {
-	os.Unsetenv("GOPATH")
+	if err := os.Unsetenv("GOPATH"); err != nil {
+		logrus.Fatalf("failed to unset GOPATH: %v", err)
+	}
 	controllergen.Run(args.Options{
 		OutputPackage: "github.com/harvester/vm-dhcp-controller/pkg/generated",
 		Boilerplate:   "scripts/boilerplate.go.txt",

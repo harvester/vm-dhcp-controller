@@ -1,6 +1,6 @@
 module github.com/harvester/vm-dhcp-controller
 
-go 1.23.10
+go 1.24.4
 
 replace (
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20191219222812-2987a591a72c
