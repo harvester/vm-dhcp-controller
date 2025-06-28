@@ -12,7 +12,7 @@ if [[ -z "$DIRTY" && -n "$GIT_TAG" ]]; then
     IMAGE_PUSH_TAG="${GIT_TAG}"
     VERSION="$GIT_TAG"
 else
-    IMAGE_PUSH_TAG="${COMMIT_BRANCH}-head"
+    IMAGE_PUSH_TAG="$(echo ${COMMIT_BRANCH} | tr '/' '-')-head"
     VERSION="${COMMIT}${DIRTY}"
 fi
 
@@ -36,3 +36,4 @@ if echo "$TAG" | grep -q dirty; then
     HELM_TAG="dev"
     HELM_VERSION="0.0.0-dev"
 fi
+
