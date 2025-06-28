@@ -28,7 +28,9 @@ RUN if [ -n "$https_proxy" ]; then \
 # Copy SUSE credentials
 COPY SCCcredentials /etc/zypp/credentials.d/SCCcredentials
 
-RUN zypper ref -s && zypper -n install -y curl
+RUN zypper ref -s && zypper -n update && \
+    zypper -n rm container-suseconnect && \
+    zypper -n in curl dhcp-tools jq
 
 ARG TARGETPLATFORM
 
