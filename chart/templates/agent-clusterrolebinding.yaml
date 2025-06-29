@@ -1,0 +1,19 @@
+{{- if .Values.agent.enabled -}}
+{{- if .Values.agent.rbac.create -}}
+apiVersion: {{ template "harvester-vm-dhcp-controller.rbac.apiVersion" . }}
+kind: ClusterRoleBinding
+metadata:
+  name: {{ template "harvester-vm-dhcp-controller.fullname" . }}-agent
+  labels:
+    {{- include "harvester-vm-dhcp-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ template "harvester-vm-dhcp-controller.fullname" . }}-agent
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "harvester-vm-dhcp-controller.agentServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

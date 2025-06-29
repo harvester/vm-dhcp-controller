@@ -1,0 +1,33 @@
+{{- if .Values.agent.enabled -}}
+{{- if .Values.agent.rbac.create -}}
+apiVersion: {{ template "harvester-vm-dhcp-controller.rbac.apiVersion" . }}
+kind: ClusterRole
+metadata:
+  name: {{ template "harvester-vm-dhcp-controller.fullname" . }}-agent
+  labels:
+    {{- include "harvester-vm-dhcp-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+rules:
+  # Permissions for leader election (e.g., in kube-system or release namespace)
+  # Adjust the namespace in ClusterRoleBinding if a Role is used instead for a specific namespace
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  # Resource names can be restricted if known, e.g., "vm-dhcp-agents"
+  # resourceNames: ["{{ template "harvester-vm-dhcp-controller.fullname" . }}-agent-lock"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""] # Core API group
+  resources: ["events"] # Useful for leader election to emit events
+  verbs: ["create", "patch"]
+  # Permissions to watch IPPools
+- apiGroups: ["network.harvesterhci.io"]
+  resources: ["ippools"]
+  verbs: ["get", "list", "watch"]
+  # Potential other permissions:
+  # - apiGroups: [""]
+  #   resources: ["pods", "nodes"]
+  #   verbs: ["get", "list", "watch"]
+  # - apiGroups: ["network.harvesterhci.io"]
+  #   resources: ["ippools/status"]
+  #   verbs: ["get", "update", "patch"] # If agent needs to update status
+{{- end }}
+{{- end }}
