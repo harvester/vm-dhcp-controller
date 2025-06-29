@@ -25,6 +25,7 @@ var (
 	kubeConfigPath     string
 	kubeContext        string
 	ippoolRef          string
+	noLeaderElection   bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -76,6 +77,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&enableCacheDumpAPI, "enable-cache-dump-api", false, "Enable cache dump APIs")
 	rootCmd.Flags().StringVar(&ippoolRef, "ippool-ref", os.Getenv("IPPOOL_REF"), "The IPPool object the agent should sync with")
 	rootCmd.Flags().StringVar(&nic, "nic", agent.DefaultNetworkInterface, "The network interface the embedded DHCP server listens on")
+	rootCmd.Flags().BoolVar(&noLeaderElection, "no-leader-election", false, "Disable leader election")
 }
 
 // execute adds all child commands to the root command and sets flags appropriately.
