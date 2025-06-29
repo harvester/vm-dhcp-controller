@@ -24,6 +24,17 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
+Return the agent service account name
+*/}}
+{{- define "harvester-vm-dhcp-controller.agentServiceAccountName" -}}
+{{- if .Values.agent.serviceAccount.create }}
+{{- default (printf "%s-agent" (include "harvester-vm-dhcp-controller.fullname" .)) .Values.agent.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.agent.serviceAccount.name }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Create chart name and version as used by the chart label.
 */}}
 {{- define "harvester-vm-dhcp-controller.chart" -}}
