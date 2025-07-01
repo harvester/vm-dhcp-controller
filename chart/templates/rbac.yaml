@@ -52,8 +52,11 @@ rules:
   resources: [ "ippools", "virtualmachinenetworkconfigs" ]
   verbs: [ "*" ]
 - apiGroups: [ "" ]
-  resources: [ "nodes", "secrets" ]
+  resources: [ "nodes" ]
   verbs: [ "watch", "list" ]
+- apiGroups: [ "" ]
+  resources: [ "secrets" ]
+  verbs: [ "get", "watch", "list", "create", "update", "patch" ]
 - apiGroups: [ "k8s.cni.cncf.io" ]
   resources: [ "network-attachment-definitions" ]
   verbs: [ "get", "watch", "list" ]
@@ -184,3 +187,4 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "harvester-vm-dhcp-controller.serviceAccountName" . }}-webhook
   namespace: {{ .Release.Namespace }}
+
