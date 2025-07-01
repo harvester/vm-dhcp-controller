@@ -5,15 +5,8 @@ kind: ClusterRole
 metadata:
   name: {{ template "harvester-vm-dhcp-controller.fullname" . }}-agent
   labels:
-    {{- /* Rimuovi l'helper labels per evitare duplicati e definisci direttamente */}}
-    helm.sh/chart: {{ include "harvester-vm-dhcp-controller.chart" . }}
-    app.kubernetes.io/name: {{ include "harvester-vm-dhcp-controller.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    {{- if .Chart.AppVersion }}
-    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-    {{- end }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
-    app.kubernetes.io/component: agent # Etichetta corretta
+    {{- include "harvester-vm-dhcp-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent # Override component to agent
 rules:
 - apiGroups: ["coordination.k8s.io"]
   resources: ["leases"]
