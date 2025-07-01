@@ -35,8 +35,6 @@ spec:
           args:
           - --name
           - {{ include "harvester-vm-dhcp-controller.fullname" . }}
-          - --namespace
-          - {{ .Release.Namespace }}
           # --image # Rimosso: l'agent ora ha il suo deployment
           # - "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag | default .Chart.AppVersion }}" # Rimosso
           # --service-account-name # Rimosso
@@ -109,8 +107,6 @@ spec:
           args:
           - --name
           - {{ include "harvester-vm-dhcp-controller.fullname" . }}-webhook
-          - --namespace
-          - {{ .Release.Namespace }}
           - --https-port
           - "{{ .Values.webhook.httpsPort }}"
           ports:
