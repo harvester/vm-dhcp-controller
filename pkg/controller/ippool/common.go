@@ -1,16 +1,11 @@
 package ippool
 
 import (
-	"encoding/json"
-	"fmt"
-	"net"
 	"time"
 
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	"github.com/rancher/wrangler/pkg/kv"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	// "k8s.io/apimachinery/pkg/util/intstr" // No longer needed after prepareAgentPod removal
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
@@ -438,3 +433,4 @@ func SanitizeStatus(status *networkv1.IPPoolStatus) {
 		status.Conditions[i].LastUpdateTime = ""
 	}
 }
+
