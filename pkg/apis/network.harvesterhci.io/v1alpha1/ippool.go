@@ -4,7 +4,6 @@ import (
 	"github.com/rancher/wrangler/pkg/condition"
 	"github.com/rancher/wrangler/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 var (
@@ -118,6 +117,10 @@ type IPPoolStatus struct {
 	// +optional
 	// +kubebuilder:validation:Optional
 	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
+
+	// +optional
+	// +kubebuilder:validation:Optional
+	AgentPodRef *PodReference `json:"agentPodRef,omitempty"`
 }
 
 type IPv4Status struct {
@@ -125,3 +128,11 @@ type IPv4Status struct {
 	Used      int               `json:"used"`
 	Available int               `json:"available"`
 }
+
+// PodReference contains enough information to locate the referenced pod.
+type PodReference struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	UID       string `json:"uid"`
+}
+
