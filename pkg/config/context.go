@@ -2,7 +2,7 @@ package config
 
 import (
 	"context"
-	"fmt"
+	// "fmt" // No longer used after Image struct removal
 
 	harvesterv1 "github.com/harvester/harvester/pkg/apis/harvesterhci.io/v1beta1"
 	"github.com/rancher/lasso/pkg/controller"
@@ -49,28 +49,9 @@ func init() {
 
 type RegisterFunc func(context.Context, *Management) error
 
-type Image struct {
-	Repository string
-	Tag        string
-}
-
-func NewImage(repo, tag string) *Image {
-	i := new(Image)
-	i.Repository = repo
-	i.Tag = tag
-	return i
-}
-
-func (i *Image) String() string {
-	return fmt.Sprintf("%s:%s", i.Repository, i.Tag)
-}
-
+// type Image struct { // Removed
+// 	Repository string // Removed
 type ControllerOptions struct {
-	NoAgent                 bool
-	AgentNamespace          string
-	AgentImage              *Image
-	AgentServiceAccountName string
-	NoDHCP                  bool
 }
 
 type AgentOptions struct {
