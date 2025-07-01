@@ -18,7 +18,7 @@ spec:
         {{- include "harvester-vm-dhcp-controller.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: agent
     spec:
-      serviceAccountName: {{ .Values.agent.serviceAccount.name | default (include "harvester-vm-dhcp-controller.serviceAccountName" .) }}
+      serviceAccountName: {{ include "harvester-vm-dhcp-controller.agentServiceAccountName" . }}
       securityContext:
         {{- toYaml .Values.agent.podSecurityContext | nindent 8 }}
       containers:
@@ -28,32 +28,17 @@ spec:
           image: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
           args:
-            - "--name={{ include "harvester-vm-dhcp-controller.fullname" . }}-agent"
-            - "--namespace={{ .Release.Namespace }}"
-            # Dovremo decidere come l'agent ottiene la configurazione dell'IPPool.
-            # Se osserva i CRD IPPool, potrebbe non aver bisogno di argomenti specifici qui per i pool.
-            # Se necessita di un riferimento a un ConfigMap o altro, andrà aggiunto.
-            - "--kubeconfig=/etc/kubeconfig" # Assumendo che il Service Account gestisca l'autenticazione
-            - "--no-leader-election={{ .Values.agent.noLeaderElection | default false }}"
-            # Potrebbe essere necessario un argomento per specificare il lock ID per la leader election,
-            # o potrebbe essere derivato dal nome e namespace.
-            # L'attuale implementazione in cmd/agent/run.go usa "vm-dhcp-agents" in "kube-system".
-            # Potremmo volerlo rendere configurabile o basarlo su .Release.Namespace.
+            - {{ printf "--name=%s-agent" (include "harvester-vm-dhcp-controller.fullname" .) }}
+            # - {{ printf "--namespace=%s" .Release.Namespace }} # Rimosso
+            - "--kubeconfig=/etc/kubeconfig"
+            - {{ printf "--no-leader-election=%t" (.Values.agent.noLeaderElection | default false) }}
+            - "--nic=eth0"
           ports:
-            - name: metrics # Se l'agent espone metriche
-              containerPort: 8080 # Da confermare la porta, se diversa
+            - name: metrics
+              containerPort: 8080
               protocol: TCP
-          # livenessProbe:
-          #   httpGet:
-          #     path: /healthz # Da definire un endpoint di healthcheck per l'agent
-          #     port: metrics
-          # readinessProbe:
-          #   httpGet:
-          #     path: /readyz # Da definire un endpoint di readiness per l'agent
-          #     port: metrics
           resources:
             {{- toYaml .Values.agent.resources | nindent 12 }}
-      # Affinity, tolerations, nodeSelector, etc. possono essere aggiunti qui se necessario
       {{- with .Values.agent.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -66,4 +51,4 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-{{- end }}
+{{- end -}}

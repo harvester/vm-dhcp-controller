@@ -87,3 +87,14 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Return the appropriate apiVersion for rbac.
+*/}}
+{{- define "harvester-vm-dhcp-controller.rbac.apiVersion" -}}
+{{- if .Capabilities.APIVersions.Has "rbac.authorization.k8s.io/v1" }}
+{{- print "rbac.authorization.k8s.io/v1" }}
+{{- else }}
+{{- print "v1" }}
+{{- end }}
+{{- end -}}
