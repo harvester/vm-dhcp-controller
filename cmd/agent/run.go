@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/rancher/wrangler/pkg/signals"
@@ -63,8 +64,14 @@ func run(options *config.AgentOptions) error {
 		if noLeaderElection {
 			callback(egctx)
 		} else {
+			podNamespace := os.Getenv("POD_NAMESPACE")
+			if podNamespace == "" {
+				logrus.Warn("POD_NAMESPACE environment variable not set, defaulting to 'default' for leader election. This might not be the desired namespace.")
+				podNamespace = "default" // Fallback, though this should be set via Downward API
+			}
+			logrus.Infof("Using namespace %s for leader election", podNamespace)
 			// TODO: use correct lock name
-			leader.RunOrDie(egctx, "kube-system", "vm-dhcp-agents", client, callback)
+			leader.RunOrDie(egctx, podNamespace, "vm-dhcp-agents", client, callback)
 		}
 		return nil
 	})
