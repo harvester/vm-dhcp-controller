@@ -107,6 +107,8 @@ spec:
           args:
           - --name
           - {{ include "harvester-vm-dhcp-controller.fullname" . }}-webhook
+          - --namespace
+          - {{ .Release.Namespace }}
           - --https-port
           - "{{ .Values.webhook.httpsPort }}"
           ports:
