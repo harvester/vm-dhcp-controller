@@ -369,7 +369,6 @@ func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
 
 			// Update/Set IPPOOL_REF environment variable
 			desiredIPPoolRef := fmt.Sprintf("%s/%s", ipPool.Namespace, ipPool.Name)
-			envVarUpdated := false
 			envVarFound := false
 			for k, envVar := range deployment.Spec.Template.Spec.Containers[i].Env {
 				if envVar.Name == "IPPOOL_REF" {
@@ -379,7 +378,6 @@ func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
 							agentDepNamespace, agentDepName, envVar.Value, desiredIPPoolRef)
 						deployment.Spec.Template.Spec.Containers[i].Env[k].Value = desiredIPPoolRef
 						needsUpdate = true
-						envVarUpdated = true
 					}
 					break
 				}
@@ -391,10 +389,7 @@ func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
 					Value: desiredIPPoolRef,
 				})
 				needsUpdate = true
-				envVarUpdated = true // Strictly speaking, it was added, but it results in an update to the deployment
 			}
-			// No need to set needsUpdate again if envVarUpdated is true, as it's already covered.
-
 			break
 		}
 	}
