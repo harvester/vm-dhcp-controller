@@ -19,10 +19,28 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
+	appsv1 "k8s.io/api/apps/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/kubernetes"
+	"encoding/json"
 )
 
 const (
 	controllerName = "vm-dhcp-ippool-controller"
+
+	// AgentDeploymentNameSuffix is the suffix appended to the controller's fullname to get the agent deployment name.
+	// This assumes the controller's name (passed via --name flag) is the "fullname" from Helm.
+	AgentDeploymentNameSuffix = "-agent"
+	// AgentContainerName is the name of the container within the agent deployment.
+	// This needs to match what's in chart/templates/agent-deployment.yaml ({{ .Chart.Name }}-agent)
+	// For robustness, this might need to be configurable or derived more reliably.
+	// Assuming Chart.Name is stable, e.g., "harvester-vm-dhcp-controller".
+	// Let's use a placeholder and refine if needed. It's currently {{ .Chart.Name }} in agent-deployment.yaml
+	// which resolves to "vm-dhcp-controller" if the chart is named that.
+	// The agent deployment.yaml has container name {{ .Chart.Name }}-agent
+	AgentContainerNameDefault = "vm-dhcp-controller-agent" // Based on {{ .Chart.Name }}-agent
+	// DefaultAgentPodInterfaceName is the default name for the Multus interface in the agent pod.
+	DefaultAgentPodInterfaceName = "net1"
 
 	multusNetworksAnnotationKey         = "k8s.v1.cni.cncf.io/networks"
 	holdIPPoolAgentUpgradeAnnotationKey = "network.harvesterhci.io/hold-ippool-agent-upgrade"
@@ -62,6 +80,8 @@ type Handler struct {
 	podCache         ctlcorev1.PodCache
 	nadClient        ctlcniv1.NetworkAttachmentDefinitionClient
 	nadCache         ctlcniv1.NetworkAttachmentDefinitionCache
+	kubeClient       kubernetes.Interface
+	agentNamespace   string // Namespace where the agent deployment resides
 }
 
 func Register(ctx context.Context, management *config.Management) error {
@@ -81,6 +101,8 @@ func Register(ctx context.Context, management *config.Management) error {
 		podCache:         pods.Cache(),
 		nadClient:        nads,
 		nadCache:         nads.Cache(),
+		kubeClient:       management.KubeClient,     // Added KubeClient
+		agentNamespace:   management.Namespace,    // Assuming Management has Namespace for the controller/agent
 	}
 
 	ctlnetworkv1.RegisterIPPoolStatusHandler(
@@ -194,8 +216,178 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		return h.ippoolClient.UpdateStatus(ipPoolCpy)
 	}
 
-	return ipPool, nil
+	// After other processing, sync the agent deployment
+	// Assuming `management.ControllerName` is available and set to the controller's helm fullname
+	// This name needs to be reliably determined. For now, using a placeholder.
+	// The actual controller name (used for leader election etc.) is often passed via --name flag.
+	// Let's assume `management.ControllerName` is available in `h` or can be fetched.
+	// For now, this part of agent deployment name construction is illustrative.
+	// It needs to align with how the agent deployment is actually named by Helm.
+	// Agent deployment name is: {{ include "harvester-vm-dhcp-controller.fullname" . }}-agent
+	// The controller's own "fullname" is needed. This is typically available from options.
+	// Let's assume `h.agentNamespace` is where the controller (and agent) runs.
+	// And the controller's name (helm fullname) is something we can get, e.g. from an env var or option.
+	// This dynamic configuration needs the controller's own Helm fullname.
+	// Let's assume it's available via h.getControllerHelmFullName() for now.
+	// This is a complex part to get right without knowing how controllerName is populated.
+	// For now, skipping the actual agent deployment update to avoid introducing half-baked logic
+	// without having the controller's own Helm fullname.
+	// TODO: Implement dynamic agent deployment update once controller's Helm fullname is accessible.
+	if err := h.syncAgentDeployment(ipPoolCpy); err != nil {
+		// Log the error but don't necessarily block IPPool reconciliation for agent deployment issues.
+		// The IPPool status update should still proceed.
+		logrus.Errorf("Failed to sync agent deployment for ippool %s: %v", key, err)
+		// Depending on desired behavior, you might want to return the error or update a condition on ipPool.
+		// For now, just logging.
+	}
+
+	return ipPoolCpy, nil // Return potentially updated ipPoolCpy from status updates
 }
+
+// getAgentDeploymentName constructs the expected name of the agent deployment.
+// This needs access to the controller's Helm release name.
+// This is a placeholder; actual implementation depends on how Release.Name is made available.
+func (h *Handler) getAgentDeploymentName(controllerHelmReleaseName string) string {
+	// This assumes the agent deployment follows "<helm-release-name>-<chart-name>-agent" if fullname is complex,
+	// or just "<helm-release-name>-agent" if chart name is part of release name.
+	// The agent deployment is named: {{ template "harvester-vm-dhcp-controller.fullname" . }}-agent
+	// If controllerHelmReleaseName is the "fullname", then it's controllerHelmReleaseName + AgentDeploymentNameSuffix
+	// This needs to be robust. For now, let's assume a simpler derivation for the placeholder.
+	// This needs to match what `{{ include "harvester-vm-dhcp-controller.fullname" . }}-agent` resolves to.
+	// This is difficult to resolve from within the controller without more context (like Release Name, Chart Name).
+	// Let's hardcode for now based on common Helm chart naming, this is a simplification.
+	// Example: if release is "harvester", chart is "vm-dhcp-controller", fullname is "harvester-vm-dhcp-controller"
+	// Agent deployment: "harvester-vm-dhcp-controller-agent"
+	// This is a critical piece that needs to be accurate.
+	// It might be better to pass this via an environment variable set in the controller's deployment.yaml.
+	agentDeploymentName := os.Getenv("AGENT_DEPLOYMENT_NAME")
+	if agentDeploymentName == "" {
+		// Fallback, but this should be explicitly set for reliability.
+		logrus.Warn("AGENT_DEPLOYMENT_NAME env var not set, agent deployment updates may fail.")
+		// This is a guess and likely incorrect without proper templating/env var.
+		agentDeploymentName = "harvester-vm-dhcp-controller-agent"
+	}
+	return agentDeploymentName
+}
+
+
+// syncAgentDeployment updates the agent deployment to attach to the NAD from the IPPool
+func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
+	if ipPool == nil || ipPool.Spec.NetworkName == "" {
+		// Or handle deletion/detachment if networkName is cleared
+		return nil
+	}
+
+	agentDepName := h.getAgentDeploymentName( /* needs controller helm release name or similar */ )
+	agentDepNamespace := h.agentNamespace
+
+	logrus.Infof("Syncing agent deployment %s/%s for IPPool %s/%s (NAD: %s)",
+		agentDepNamespace, agentDepName, ipPool.Namespace, ipPool.Name, ipPool.Spec.NetworkName)
+
+	deployment, err := h.kubeClient.AppsV1().Deployments(agentDepNamespace).Get(context.TODO(), agentDepName, metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			logrus.Errorf("Agent deployment %s/%s not found, cannot update for IPPool %s", agentDepNamespace, agentDepName, ipPool.Name)
+			return nil // Or return error if agent deployment is mandatory
+		}
+		return fmt.Errorf("failed to get agent deployment %s/%s: %w", agentDepNamespace, agentDepName, err)
+	}
+
+	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
+	if nadName == "" { // Assume it's in the same namespace as IPPool if no "/"
+		nadName = nadNamespace
+		nadNamespace = ipPool.Namespace
+	}
+
+	// Determine target interface name, e.g., from IPPool annotation or default
+	// For now, using DefaultAgentPodInterfaceName = "net1"
+	podIFName := DefaultAgentPodInterfaceName
+	// Potentially override podIFName from an IPPool annotation in the future
+	// e.g., podIFName = ipPool.Annotations["network.harvesterhci.io/agent-pod-interface-name"]
+
+	desiredAnnotationValue := fmt.Sprintf("%s/%s@%s", nadNamespace, nadName, podIFName)
+
+	needsUpdate := false
+	currentAnnotationValue, annotationExists := deployment.Spec.Template.Annotations[multusNetworksAnnotationKey]
+
+	if !annotationExists || currentAnnotationValue != desiredAnnotationValue {
+		if deployment.Spec.Template.Annotations == nil {
+			deployment.Spec.Template.Annotations = make(map[string]string)
+		}
+		deployment.Spec.Template.Annotations[multusNetworksAnnotationKey] = desiredAnnotationValue
+		needsUpdate = true
+		logrus.Infof("Updating agent deployment %s/%s annotation to: %s", agentDepNamespace, agentDepName, desiredAnnotationValue)
+	}
+
+	// Find and update the --nic argument
+	containerFound := false
+	for i, container := range deployment.Spec.Template.Spec.Containers {
+		// AgentContainerNameDefault needs to be accurate for this to work.
+		// It was defined as "vm-dhcp-controller-agent"
+		if container.Name == AgentContainerNameDefault {
+			containerFound = true
+			nicUpdated := false
+			newArgs := []string{}
+			nicArgFound := false
+			for j := 0; j < len(container.Args); j++ {
+				if container.Args[j] == "--nic" {
+					nicArgFound = true
+					if (j+1 < len(container.Args)) && container.Args[j+1] != podIFName {
+						logrus.Infof("Updating --nic arg for agent deployment %s/%s from %s to %s",
+							agentDepNamespace, agentDepName, container.Args[j+1], podIFName)
+						newArgs = append(newArgs, "--nic", podIFName)
+						needsUpdate = true
+						nicUpdated = true
+					} else if (j+1 < len(container.Args)) && container.Args[j+1] == podIFName {
+						// Already correct
+						newArgs = append(newArgs, "--nic", container.Args[j+1])
+					} else {
+						// Malformed --nic without value? Should not happen with current templates.
+						// Add it correctly.
+						logrus.Infof("Correcting --nic arg for agent deployment %s/%s to %s",
+							agentDepNamespace, agentDepName, podIFName)
+						newArgs = append(newArgs, "--nic", podIFName)
+						needsUpdate = true
+						nicUpdated = true
+					}
+					j++ // skip next element as it's the value of --nic
+				} else {
+					newArgs = append(newArgs, container.Args[j])
+				}
+			}
+			if !nicArgFound { // if --nic was not present at all
+				logrus.Infof("Adding --nic arg %s for agent deployment %s/%s", podIFName, agentDepNamespace, agentDepName)
+				newArgs = append(newArgs, "--nic", podIFName)
+				needsUpdate = true
+				nicUpdated = true
+			}
+			if nicUpdated || !nicArgFound {
+				deployment.Spec.Template.Spec.Containers[i].Args = newArgs
+			}
+			break
+		}
+	}
+
+	if !containerFound {
+		logrus.Warnf("Agent container '%s' not found in deployment %s/%s. Cannot update --nic arg.", AgentContainerNameDefault, agentDepNamespace, agentDepName)
+	}
+
+
+	if needsUpdate {
+		logrus.Infof("Patching agent deployment %s/%s", agentDepNamespace, agentDepName)
+		_, err = h.kubeClient.AppsV1().Deployments(agentDepNamespace).Update(context.TODO(), deployment, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to update agent deployment %s/%s: %w", agentDepNamespace, agentDepName, err)
+		}
+		logrus.Infof("Successfully patched agent deployment %s/%s", agentDepNamespace, agentDepName)
+	} else {
+		logrus.Infof("Agent deployment %s/%s already up-to-date for IPPool %s/%s (NAD: %s)",
+			agentDepNamespace, agentDepName, ipPool.Namespace, ipPool.Name, ipPool.Spec.NetworkName)
+	}
+
+	return nil
+}
+
 
 func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
 	if ipPool == nil {

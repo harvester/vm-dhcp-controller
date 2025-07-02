@@ -32,7 +32,7 @@ spec:
             # - {{ printf "--namespace=%s" .Release.Namespace }} # Rimosso
             - "--kubeconfig=/etc/kubeconfig"
             - {{ printf "--no-leader-election=%t" (.Values.agent.noLeaderElection | default false) }}
-            - "--nic=eth0"
+            - "--nic=eth0" # Controller will update this if needed
           ports:
             - name: metrics
               containerPort: 8080

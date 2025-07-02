@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/rancher/wrangler/pkg/leader"
 	"github.com/rancher/wrangler/pkg/signals"
@@ -24,6 +25,17 @@ var (
 
 func run(options *config.ControllerOptions) error {
 	logrus.Infof("Starting VM DHCP Controller: %s", name)
+
+	// Get controller's own namespace from an environment variable
+	// This should be set in the deployment manifest using the Downward API
+	podNamespace := os.Getenv("POD_NAMESPACE")
+	if podNamespace == "" {
+		logrus.Warn("POD_NAMESPACE environment variable not set, agent deployment updates might target the wrong namespace or fail.")
+		// Default to a common namespace or leave empty if that's handled downstream,
+		// but it's better if this is always set.
+		// For now, let SetupManagement handle if options.Namespace is empty, or it might default.
+	}
+	options.Namespace = podNamespace
 
 	ctx := signals.SetupSignalContext()
 

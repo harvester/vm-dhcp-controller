@@ -52,6 +52,7 @@ type RegisterFunc func(context.Context, *Management) error
 // type Image struct { // Removed
 // 	Repository string // Removed
 type ControllerOptions struct {
+	Namespace string // Namespace where the controller is running
 }
 
 type AgentOptions struct {
@@ -82,6 +83,8 @@ type Management struct {
 	KubeVirtFactory *ctlkubevirt.Factory
 
 	ClientSet *kubernetes.Clientset
+	KubeClient kubernetes.Interface // Alias or can use ClientSet directly
+	Namespace  string             // Namespace where the controller is running
 
 	CacheAllocator   *cache.CacheAllocator
 	IPAllocator      *ipam.IPAllocator
@@ -168,6 +171,8 @@ func SetupManagement(ctx context.Context, restConfig *rest.Config, options *Cont
 	if err != nil {
 		return nil, err
 	}
+	management.KubeClient = management.ClientSet // Set KubeClient
+	management.Namespace = options.Namespace     // Set Namespace
 
 	return management, nil
 }
