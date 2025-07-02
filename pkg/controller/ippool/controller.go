@@ -21,7 +21,7 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
 	// appsv1 "k8s.io/api/apps/v1" // Unused
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // Used for GetOptions, UpdateOptions
+	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // This was the duplicate
 	"k8s.io/client-go/kubernetes"
 	// "encoding/json" // Unused
 	"os" // For os.Getenv
