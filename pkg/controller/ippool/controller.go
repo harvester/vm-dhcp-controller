@@ -22,6 +22,7 @@ import (
 	// appsv1 "k8s.io/api/apps/v1" // Unused
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // This was the duplicate
+	corev1 "k8s.io/api/core/v1"                   // For EnvVar
 	"k8s.io/client-go/kubernetes"
 	// "encoding/json" // Unused
 	"os" // For os.Getenv
@@ -365,12 +366,41 @@ func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
 			if nicUpdated || !nicArgFound {
 				deployment.Spec.Template.Spec.Containers[i].Args = newArgs
 			}
+
+			// Update/Set IPPOOL_REF environment variable
+			desiredIPPoolRef := fmt.Sprintf("%s/%s", ipPool.Namespace, ipPool.Name)
+			envVarUpdated := false
+			envVarFound := false
+			for k, envVar := range deployment.Spec.Template.Spec.Containers[i].Env {
+				if envVar.Name == "IPPOOL_REF" {
+					envVarFound = true
+					if envVar.Value != desiredIPPoolRef {
+						logrus.Infof("Updating IPPOOL_REF env var for agent deployment %s/%s from '%s' to '%s'",
+							agentDepNamespace, agentDepName, envVar.Value, desiredIPPoolRef)
+						deployment.Spec.Template.Spec.Containers[i].Env[k].Value = desiredIPPoolRef
+						needsUpdate = true
+						envVarUpdated = true
+					}
+					break
+				}
+			}
+			if !envVarFound {
+				logrus.Infof("Adding IPPOOL_REF env var '%s' for agent deployment %s/%s", desiredIPPoolRef, agentDepNamespace, agentDepName)
+				deployment.Spec.Template.Spec.Containers[i].Env = append(deployment.Spec.Template.Spec.Containers[i].Env, corev1.EnvVar{
+					Name:  "IPPOOL_REF",
+					Value: desiredIPPoolRef,
+				})
+				needsUpdate = true
+				envVarUpdated = true // Strictly speaking, it was added, but it results in an update to the deployment
+			}
+			// No need to set needsUpdate again if envVarUpdated is true, as it's already covered.
+
 			break
 		}
 	}
 
 	if !containerFound {
-		logrus.Warnf("Agent container '%s' not found in deployment %s/%s. Cannot update --nic arg.", AgentContainerNameDefault, agentDepNamespace, agentDepName)
+		logrus.Warnf("Agent container '%s' not found in deployment %s/%s. Cannot update --nic arg or IPPOOL_REF env var.", AgentContainerNameDefault, agentDepNamespace, agentDepName)
 	}
 
 
