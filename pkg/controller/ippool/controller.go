@@ -19,10 +19,12 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
-	appsv1 "k8s.io/api/apps/v1"
+	// appsv1 "k8s.io/api/apps/v1" // Unused
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // Used for GetOptions, UpdateOptions
 	"k8s.io/client-go/kubernetes"
-	"encoding/json"
+	// "encoding/json" // Unused
+	"os" // For os.Getenv
 )
 
 const (
@@ -245,9 +247,8 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 }
 
 // getAgentDeploymentName constructs the expected name of the agent deployment.
-// This needs access to the controller's Helm release name.
-// This is a placeholder; actual implementation depends on how Release.Name is made available.
-func (h *Handler) getAgentDeploymentName(controllerHelmReleaseName string) string {
+// It relies on the AGENT_DEPLOYMENT_NAME environment variable.
+func (h *Handler) getAgentDeploymentName() string {
 	// This assumes the agent deployment follows "<helm-release-name>-<chart-name>-agent" if fullname is complex,
 	// or just "<helm-release-name>-agent" if chart name is part of release name.
 	// The agent deployment is named: {{ template "harvester-vm-dhcp-controller.fullname" . }}-agent
@@ -278,7 +279,7 @@ func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
 		return nil
 	}
 
-	agentDepName := h.getAgentDeploymentName( /* needs controller helm release name or similar */ )
+	agentDepName := h.getAgentDeploymentName()
 	agentDepNamespace := h.agentNamespace
 
 	logrus.Infof("Syncing agent deployment %s/%s for IPPool %s/%s (NAD: %s)",
