@@ -1,6 +1,7 @@
 package ippool
 
 import (
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -12,6 +13,7 @@ import (
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/dhcp"
+	"github.com/harvester/vm-dhcp-controller/pkg/util" // Added for util.ExcludedMark etc.
 )
 
 type Controller struct {
@@ -132,11 +134,7 @@ func (c *Controller) Update(ipPool *networkv1.IPPool) error {
 	// The `c.poolCache` (map[string]string) seems intended for this.
 	// Let's assume c.poolCache stores MAC -> IP for the current IPPool.
 
-	currentLeasesInAllocator := make(map[string]string) // MAC -> IP
-	// Populate currentLeasesInAllocator from c.dhcpAllocator.leases (needs a way to list them or track them)
-	// This is a conceptual step, as DHCPAllocator.leases is not exported and has no list method.
-	// The agent's `poolCache` (map[string]string) is passed to NewController.
-	// This `poolCache` is likely intended to mirror the leases for the specific IPPool.
+	// currentLeasesInAllocator := make(map[string]string) // MAC -> IP // Unused
 
 	// Let's assume `c.poolCache` stores MAC -> IP for the IPPool being managed.
 	// We should clear these from dhcpAllocator first.
@@ -177,8 +175,9 @@ func (c *Controller) Update(ipPool *networkv1.IPPool) error {
 
 			// If lease for this MAC already exists, delete it first to allow AddLease to work (as AddLease errors if MAC exists)
 			// This handles updates to existing leases (e.g. if lease time or other params changed, though not stored in IPPool status)
-			if _, exists := c.dhcpAllocator.GetLease(hwAddr); exists {
-				logrus.Debugf("Deleting existing lease for MAC %s before re-adding/updating.", hwAddr)
+			existingLease := c.dhcpAllocator.GetLease(hwAddr)
+			if existingLease.ClientIP != nil { // Check if ClientIP is not nil to confirm existence
+				logrus.Debugf("Deleting existing lease for MAC %s (IP: %s) before re-adding/updating.", hwAddr, existingLease.ClientIP.String())
 				if err := c.dhcpAllocator.DeleteLease(hwAddr); err != nil {
 					logrus.Warnf("Failed to delete existing lease for MAC %s during update: %v", hwAddr, err)
 					// Continue, AddLease might still work or fail cleanly
