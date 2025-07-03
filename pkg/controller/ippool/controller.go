@@ -411,7 +411,12 @@ func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
 	}
 
 	if !containerFound {
-		logrus.Warnf("Agent container '%s' not found in deployment %s/%s. Cannot update --nic arg or IPPOOL_REF env var.", AgentContainerNameDefault, agentDepNamespace, agentDepName)
+		// Use agentContainerName variable which holds the result of h.getAgentContainerName()
+		// This variable should be defined at the beginning of the loop or function if not already.
+		// Let's ensure agentContainerName is in scope here.
+		// It was defined when iterating containers: agentContainerName := h.getAgentContainerName()
+		// This means it needs to be fetched once before the loop.
+		logrus.Warnf("Agent container '%s' not found in deployment %s/%s. Cannot update --nic arg or IPPOOL_REF env var.", h.getAgentContainerName(), agentDepNamespace, agentDepName)
 	}
 
 
