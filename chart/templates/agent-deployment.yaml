@@ -24,7 +24,15 @@ spec:
       containers:
         - name: {{ .Chart.Name }}-agent
           securityContext:
-            {{- toYaml .Values.agent.securityContext | nindent 12 }}
+            {{- $mergedSecContext := .Values.agent.securityContext | default dict -}}
+            {{- $capabilities := $mergedSecContext.capabilities | default dict -}}
+            {{- $addCapabilities := $capabilities.add | default list -}}
+            {{- if not (has "NET_ADMIN" $addCapabilities) -}}
+            {{- $addCapabilities = append $addCapabilities "NET_ADMIN" -}}
+            {{- end -}}
+            {{- $_ := set $capabilities "add" $addCapabilities -}}
+            {{- $_ := set $mergedSecContext "capabilities" $capabilities -}}
+            {{- toYaml $mergedSecContext | nindent 12 }}
           image: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
           args:

@@ -61,6 +61,8 @@ type AgentOptions struct {
 	KubeConfigPath string
 	KubeContext    string
 	IPPoolRef      types.NamespacedName
+	ServerIP       string // Static IP for the agent's DHCP interface
+	CIDR           string // CIDR for the ServerIP (e.g., 192.168.1.100/24)
 }
 
 type HTTPServerOptions struct {
