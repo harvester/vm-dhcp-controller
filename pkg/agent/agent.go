@@ -54,15 +54,6 @@ func NewAgent(options *config.AgentOptions) *Agent {
 	}
 }
 
-import (
-	"context"
-	"fmt"
-	"net"
-	"os/exec"
-	"strings"
-
-	"github.com/sirupsen/logrus"
-)
 // ... (other imports remain the same)
 
 func (a *Agent) configureInterface() error {
