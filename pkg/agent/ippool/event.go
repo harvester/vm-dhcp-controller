@@ -2,6 +2,7 @@ package ippool
 
 import (
 	"context"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/fields"
@@ -33,6 +34,9 @@ type EventHandler struct {
 	poolRef       types.NamespacedName
 	dhcpAllocator *dhcp.DHCPAllocator
 	poolCache     map[string]string
+
+	InitialSyncDone chan struct{}
+	initialSyncOnce sync.Once
 }
 
 type Event struct {
@@ -57,6 +61,8 @@ func NewEventHandler(
 		poolRef:        poolRef,
 		dhcpAllocator:  dhcpAllocator,
 		poolCache:      poolCache,
+		InitialSyncDone: make(chan struct{}),
+		// initialSyncOnce is zero-valued sync.Once, which is ready to use
 	}
 }
 
@@ -112,7 +118,7 @@ func (e *EventHandler) EventListener(ctx context.Context) {
 		},
 	}, cache.Indexers{})
 
-	controller := NewController(queue, indexer, informer, e.poolRef, e.dhcpAllocator, e.poolCache)
+	controller := NewController(queue, indexer, informer, e.poolRef, e.dhcpAllocator, e.poolCache, e.InitialSyncDone, &e.initialSyncOnce)
 
 	go controller.Run(1)
 
