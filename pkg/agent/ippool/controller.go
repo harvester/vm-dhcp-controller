@@ -184,7 +184,9 @@ func (c *Controller) Update(ipPool *networkv1.IPPool) error {
 				}
 			}
 
-			leaseTime := int(specConf.LeaseTime)
+			// specConf.LeaseTime is *int (based on compiler error)
+			// dhcpAllocator.AddLease expects *int for leaseTime argument.
+			// Pass specConf.LeaseTime directly.
 			err := c.dhcpAllocator.AddLease(
 				hwAddr,
 				specConf.ServerIP,
@@ -195,7 +197,7 @@ func (c *Controller) Update(ipPool *networkv1.IPPool) error {
 				domainName,   // Nil or from a global config
 				domainSearch, // Empty or from a global config
 				ntpServers,   // Empty or from a global config
-				&leaseTime,
+				specConf.LeaseTime,
 			)
 			if err != nil {
 				logrus.Errorf("Failed to add/update lease for MAC %s, IP %s: %v", hwAddr, clientIPStr, err)
