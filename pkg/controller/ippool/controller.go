@@ -25,7 +25,8 @@ import (
 	corev1 "k8s.io/api/core/v1"                   // For EnvVar
 	"k8s.io/client-go/kubernetes"
 	// "encoding/json" // Unused
-	"os" // For os.Getenv
+	"os"     // For os.Getenv
+	"strings" // For argument parsing
 )
 
 const (
@@ -344,47 +345,63 @@ func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
 		agentContainerName := h.getAgentContainerName()
 		if container.Name == agentContainerName {
 			containerFound = true
-			nicUpdated := false
+			originalArgs := container.Args
 			newArgs := []string{}
-			nicArgFound := false
-			for j := 0; j < len(container.Args); j++ {
-				if container.Args[j] == "--nic" {
-					nicArgFound = true
-					if (j+1 < len(container.Args)) && container.Args[j+1] != podIFName {
-						logrus.Infof("Updating --nic arg for agent deployment %s/%s from %s to %s",
-							agentDepNamespace, agentDepName, container.Args[j+1], podIFName)
-						newArgs = append(newArgs, "--nic", podIFName)
+			nicArgUpdated := false
+			skipNext := false
+
+			for j := 0; j < len(originalArgs); j++ {
+				if skipNext {
+					skipNext = false
+					continue
+				}
+				arg := originalArgs[j]
+				if strings.HasPrefix(arg, "--nic=") {
+					currentVal := strings.SplitN(arg, "=", 2)[1]
+					if currentVal != podIFName {
+						logrus.Infof("Updating --nic arg for agent deployment %s/%s from %s to %s (form --nic=value)",
+							agentDepNamespace, agentDepName, arg, fmt.Sprintf("--nic=%s", podIFName))
+						newArgs = append(newArgs, fmt.Sprintf("--nic=%s", podIFName))
 						needsUpdate = true
-						nicUpdated = true
-					} else if (j+1 < len(container.Args)) && container.Args[j+1] == podIFName {
-						// Already correct
-						newArgs = append(newArgs, "--nic", container.Args[j+1])
 					} else {
-						// Malformed --nic without value? Should not happen with current templates.
-						// Add it correctly.
-						logrus.Infof("Correcting --nic arg for agent deployment %s/%s to %s",
+						newArgs = append(newArgs, arg) // Already correct
+					}
+					nicArgUpdated = true
+				} else if arg == "--nic" {
+					if j+1 < len(originalArgs) { // Check if there's a value after --nic
+						currentVal := originalArgs[j+1]
+						if currentVal != podIFName {
+							logrus.Infof("Updating --nic arg for agent deployment %s/%s from %s to %s (form --nic value)",
+								agentDepNamespace, agentDepName, currentVal, podIFName)
+							newArgs = append(newArgs, "--nic", podIFName)
+							needsUpdate = true
+						} else {
+							newArgs = append(newArgs, "--nic", currentVal) // Already correct
+						}
+						skipNext = true // Skip the original value part
+					} else { // --nic was the last argument, malformed or expecting default
+						logrus.Infof("Adding value for --nic arg for agent deployment %s/%s, new value: %s",
 							agentDepNamespace, agentDepName, podIFName)
 						newArgs = append(newArgs, "--nic", podIFName)
 						needsUpdate = true
-						nicUpdated = true
 					}
-					j++ // skip next element as it's the value of --nic
+					nicArgUpdated = true
 				} else {
-					newArgs = append(newArgs, container.Args[j])
+					newArgs = append(newArgs, arg)
 				}
 			}
-			if !nicArgFound { // if --nic was not present at all
+
+			if !nicArgUpdated {
 				logrus.Infof("Adding --nic arg %s for agent deployment %s/%s", podIFName, agentDepNamespace, agentDepName)
 				newArgs = append(newArgs, "--nic", podIFName)
 				needsUpdate = true
-				nicUpdated = true
 			}
-			if nicUpdated || !nicArgFound {
-				deployment.Spec.Template.Spec.Containers[i].Args = newArgs
-			}
+			deployment.Spec.Template.Spec.Containers[i].Args = newArgs // Commit --nic changes
+
+			// Ensure desiredIPPoolRef is defined before this block
+			desiredIPPoolRef := fmt.Sprintf("%s/%s", ipPool.Namespace, ipPool.Name)
 
 			// Update/Set IPPOOL_REF environment variable
-			desiredIPPoolRef := fmt.Sprintf("%s/%s", ipPool.Namespace, ipPool.Name)
 			envVarFound := false
 			for k, envVar := range deployment.Spec.Template.Spec.Containers[i].Env {
 				if envVar.Name == "IPPOOL_REF" {
@@ -406,6 +423,102 @@ func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
 				})
 				needsUpdate = true
 			}
+
+			// Update/Set --server-ip and --cidr arguments
+			desiredServerIP := ipPool.Spec.IPv4Config.ServerIP
+			desiredCIDR := ipPool.Spec.IPv4Config.CIDR
+
+			// Re-fetch args as they might have been changed by --nic update
+			currentArgs := deployment.Spec.Template.Spec.Containers[i].Args
+			finalArgs := []string{}
+			processedFlags := make(map[string]bool) // To track if we've handled a flag
+
+			for j := 0; j < len(currentArgs); j++ {
+				arg := currentArgs[j]
+				// Handle --nic (already processed, just copy)
+				if strings.HasPrefix(arg, "--nic=") || arg == "--nic" {
+					finalArgs = append(finalArgs, arg)
+					if arg == "--nic" && j+1 < len(currentArgs) && !strings.HasPrefix(currentArgs[j+1], "--") {
+						finalArgs = append(finalArgs, currentArgs[j+1])
+						j++
+					}
+					processedFlags["--nic"] = true
+					continue
+				}
+
+				// Handle --server-ip
+				if strings.HasPrefix(arg, "--server-ip=") {
+					if arg != fmt.Sprintf("--server-ip=%s", desiredServerIP) {
+						logrus.Infof("Updating --server-ip arg for agent deployment from %s to %s", arg, desiredServerIP)
+						finalArgs = append(finalArgs, fmt.Sprintf("--server-ip=%s", desiredServerIP))
+						needsUpdate = true
+					} else {
+						finalArgs = append(finalArgs, arg)
+					}
+					processedFlags["--server-ip"] = true
+					continue
+				}
+				if arg == "--server-ip" {
+					if j+1 < len(currentArgs) && !strings.HasPrefix(currentArgs[j+1], "--") {
+						if currentArgs[j+1] != desiredServerIP {
+							logrus.Infof("Updating --server-ip value for agent deployment from %s to %s", currentArgs[j+1], desiredServerIP)
+							needsUpdate = true
+						}
+						finalArgs = append(finalArgs, "--server-ip", desiredServerIP)
+						j++
+					} else { // Flag without value or next is another flag
+						logrus.Infof("Setting value for --server-ip arg for agent deployment to %s", desiredServerIP)
+						finalArgs = append(finalArgs, "--server-ip", desiredServerIP)
+						needsUpdate = true
+					}
+					processedFlags["--server-ip"] = true
+					continue
+				}
+
+				// Handle --cidr
+				if strings.HasPrefix(arg, "--cidr=") {
+					if arg != fmt.Sprintf("--cidr=%s", desiredCIDR) {
+						logrus.Infof("Updating --cidr arg for agent deployment from %s to %s", arg, desiredCIDR)
+						finalArgs = append(finalArgs, fmt.Sprintf("--cidr=%s", desiredCIDR))
+						needsUpdate = true
+					} else {
+						finalArgs = append(finalArgs, arg)
+					}
+					processedFlags["--cidr"] = true
+					continue
+				}
+				if arg == "--cidr" {
+					if j+1 < len(currentArgs) && !strings.HasPrefix(currentArgs[j+1], "--") {
+						if currentArgs[j+1] != desiredCIDR {
+							logrus.Infof("Updating --cidr value for agent deployment from %s to %s", currentArgs[j+1], desiredCIDR)
+							needsUpdate = true
+						}
+						finalArgs = append(finalArgs, "--cidr", desiredCIDR)
+						j++
+					} else {
+						logrus.Infof("Setting value for --cidr arg for agent deployment to %s", desiredCIDR)
+						finalArgs = append(finalArgs, "--cidr", desiredCIDR)
+						needsUpdate = true
+					}
+					processedFlags["--cidr"] = true
+					continue
+				}
+				// Copy other args
+				finalArgs = append(finalArgs, arg)
+			}
+
+			// Add flags if they weren't processed (i.e., didn't exist)
+			if !processedFlags["--server-ip"] && desiredServerIP != "" {
+				logrus.Infof("Adding --server-ip arg %s for agent deployment", desiredServerIP)
+				finalArgs = append(finalArgs, "--server-ip", desiredServerIP)
+				needsUpdate = true
+			}
+			if !processedFlags["--cidr"] && desiredCIDR != "" {
+				logrus.Infof("Adding --cidr arg %s for agent deployment", desiredCIDR)
+				finalArgs = append(finalArgs, "--cidr", desiredCIDR)
+				needsUpdate = true
+			}
+			deployment.Spec.Template.Spec.Containers[i].Args = finalArgs
 			break
 		}
 	}
@@ -416,7 +529,7 @@ func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
 		// Let's ensure agentContainerName is in scope here.
 		// It was defined when iterating containers: agentContainerName := h.getAgentContainerName()
 		// This means it needs to be fetched once before the loop.
-		logrus.Warnf("Agent container '%s' not found in deployment %s/%s. Cannot update --nic arg or IPPOOL_REF env var.", h.getAgentContainerName(), agentDepNamespace, agentDepName)
+		logrus.Warnf("Agent container '%s' not found in deployment %s/%s. Cannot update args or IPPOOL_REF env var.", h.getAgentContainerName(), agentDepNamespace, agentDepName)
 	}
 
 

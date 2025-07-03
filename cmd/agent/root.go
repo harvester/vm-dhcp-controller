@@ -26,6 +26,8 @@ var (
 	kubeContext        string
 	ippoolRef          string
 	noLeaderElection   bool
+	serverIP           string // New: Agent's own IP on the DHCP-served network
+	cidr               string // New: CIDR for the ServerIP
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -54,6 +56,8 @@ var rootCmd = &cobra.Command{
 				Namespace: ipPoolNamespace,
 				Name:      ipPoolName,
 			},
+			ServerIP: serverIP, // New
+			CIDR:     cidr,     // New
 		}
 
 		if err := run(options); err != nil {
@@ -78,6 +82,8 @@ func init() {
 	rootCmd.Flags().StringVar(&ippoolRef, "ippool-ref", os.Getenv("IPPOOL_REF"), "The IPPool object the agent should sync with")
 	rootCmd.Flags().StringVar(&nic, "nic", agent.DefaultNetworkInterface, "The network interface for the DHCP server (e.g., eth0 or a Multus-provided interface like net1)")
 	rootCmd.Flags().BoolVar(&noLeaderElection, "no-leader-election", false, "Disable leader election")
+	rootCmd.Flags().StringVar(&serverIP, "server-ip", "", "Static IP for the agent's DHCP interface (optional)")
+	rootCmd.Flags().StringVar(&cidr, "cidr", "", "CIDR for the server-ip (e.g., 192.168.1.10/24) (optional, required if server-ip is set)")
 }
 
 // execute adds all child commands to the root command and sets flags appropriately.
