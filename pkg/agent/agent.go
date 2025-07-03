@@ -140,6 +140,21 @@ func (a *Agent) Run(ctx context.Context) error {
 		// The current DHCPAllocator.Run does not take serverIP as an argument.
 		// This might require modification to DHCPAllocator and go-dhcpd setup if it's not automatically using the interface's IP.
 		// For now, we assume go-dhcpd will correctly use the IP set on `a.nic`.
+
+		// Wait for initial cache sync before starting DHCP server
+		if a.ippoolEventHandler != nil && a.ippoolEventHandler.InitialSyncDone != nil {
+			logrus.Info("DHCP server goroutine waiting for initial IPPool cache sync...")
+			select {
+			case <-a.ippoolEventHandler.InitialSyncDone:
+				logrus.Info("Initial IPPool cache sync complete. Starting DHCP server.")
+			case <-egctx.Done(): // Ensure we don't block indefinitely if context is cancelled
+				logrus.Info("Context cancelled while waiting for initial IPPool cache sync.")
+				return egctx.Err()
+			}
+		} else {
+			logrus.Warn("ippoolEventHandler or InitialSyncDone channel is nil, cannot wait for cache sync.")
+		}
+
 		return a.DHCPAllocator.Run(egctx, a.nic)
 	})
 
