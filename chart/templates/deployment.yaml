@@ -54,6 +54,8 @@ spec:
                   fieldPath: metadata.namespace
             - name: AGENT_DEPLOYMENT_NAME
               value: {{ include "harvester-vm-dhcp-controller.fullname" . }}-agent
+            - name: AGENT_CONTAINER_NAME
+              value: {{ .Chart.Name }}-agent
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- with .Values.volumeMounts }}
