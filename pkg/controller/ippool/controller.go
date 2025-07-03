@@ -41,7 +41,7 @@ const (
 	// Let's use a placeholder and refine if needed. It's currently {{ .Chart.Name }} in agent-deployment.yaml
 	// which resolves to "vm-dhcp-controller" if the chart is named that.
 	// The agent deployment.yaml has container name {{ .Chart.Name }}-agent
-	AgentContainerNameDefault = "vm-dhcp-controller-agent" // Based on {{ .Chart.Name }}-agent
+	// AgentContainerNameDefault = "vm-dhcp-controller-agent" // Replaced by env var
 	// DefaultAgentPodInterfaceName is the default name for the Multus interface in the agent pod.
 	DefaultAgentPodInterfaceName = "net1"
 
@@ -272,6 +272,23 @@ func (h *Handler) getAgentDeploymentName() string {
 	return agentDeploymentName
 }
 
+// getAgentContainerName retrieves the agent container name from an environment variable.
+func (h *Handler) getAgentContainerName() string {
+	agentContainerName := os.Getenv("AGENT_CONTAINER_NAME")
+	if agentContainerName == "" {
+		logrus.Warnf("AGENT_CONTAINER_NAME env var not set, agent deployment updates may fail to find the container. Defaulting to '%s-agent'", "harvester-vm-dhcp-controller")
+		// This fallback is a guess based on common chart naming.
+		// It should be `Chart.Name + "-agent"`. Since Chart.Name is "harvester-vm-dhcp-controller",
+		// this becomes "harvester-vm-dhcp-controller-agent".
+		// However, the Helm template for agent container name is `{{ .Chart.Name }}-agent`.
+		// If Chart.Name from Chart.yaml is `harvester-vm-dhcp-controller`, then this is correct.
+		// If Chart.Name is something else, this fallback is wrong.
+		// The env var is the reliable source.
+		return "harvester-vm-dhcp-controller-agent" // Fallback based on typical Chart.Name
+	}
+	return agentContainerName
+}
+
 
 // syncAgentDeployment updates the agent deployment to attach to the NAD from the IPPool
 func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
@@ -324,9 +341,8 @@ func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
 	// Find and update the --nic argument
 	containerFound := false
 	for i, container := range deployment.Spec.Template.Spec.Containers {
-		// AgentContainerNameDefault needs to be accurate for this to work.
-		// It was defined as "vm-dhcp-controller-agent"
-		if container.Name == AgentContainerNameDefault {
+		agentContainerName := h.getAgentContainerName()
+		if container.Name == agentContainerName {
 			containerFound = true
 			nicUpdated := false
 			newArgs := []string{}
