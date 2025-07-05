@@ -328,7 +328,7 @@ func (h *Handler) reconcileAgentDeployment(ctx context.Context) error {
 
 	deployment, err := h.kubeClient.AppsV1().Deployments(agentDepNamespace).Get(ctx, agentDepName, metav1.GetOptions{})
 	if err != nil {
-		if k8serrors.IsNotFound(err) {
+		if errors.IsNotFound(err) { // Corrected: Use errors.IsNotFound
 			logrus.Warnf("Agent deployment %s/%s not found. Cannot apply IPPool configurations.", agentDepNamespace, agentDepName)
 			return nil // Nothing to update if deployment doesn't exist
 		}
@@ -563,7 +563,11 @@ func (h *Handler) ensureNADLabels(ipPool *networkv1.IPPool) error {
 	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
 	nad, err := h.nadCache.Get(nadNamespace, nadName)
 	if err != nil {
-		return err
+		if errors.IsNotFound(err) { // Corrected: Use errors.IsNotFound for NAD check
+			logrus.Errorf("NetworkAttachmentDefinition %s/%s not found for IPPool %s/%s", nadNamespace, nadName, ipPool.Namespace, ipPool.Name)
+			return fmt.Errorf("NAD %s/%s not found: %w", nadNamespace, nadName, err)
+		}
+		return fmt.Errorf("failed to get NAD %s/%s: %w", nadNamespace, nadName, err)
 	}
 
 	nadCpy := nad.DeepCopy()
