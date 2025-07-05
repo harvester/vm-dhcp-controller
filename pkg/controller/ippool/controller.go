@@ -19,6 +19,7 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
+	k8scache "k8s.io/client-go/tools/cache" // Added for WaitForCacheSync
 	"k8s.io/apimachinery/pkg/api/errors" // k8serrors alias is used
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -109,7 +110,7 @@ func Register(ctx context.Context, management *config.Management) error {
 	// Wrap OnChange and OnRemove to trigger global agent deployment reconciliation
 	wrappedOnChange := func(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
 		pool, err := handler.OnChangeInternal(key, ipPool) // Call the original logic
-		if nerr := handler.reconcileAgentDeployment(context.TODO()); nerr != nil {
+		if nerr := handler.reconcileAgentDeployment(ctx); nerr != nil { // Pass down the main context
 			logrus.Errorf("Error reconciling agent deployment after IPPool %s OnChange: %v", key, nerr)
 			if err == nil { // If original OnChange was fine, return this new error
 				err = nerr
@@ -121,7 +122,7 @@ func Register(ctx context.Context, management *config.Management) error {
 
 	wrappedOnRemove := func(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
 		pool, err := handler.OnRemoveInternal(key, ipPool) // Call the original logic
-		if nerr := handler.reconcileAgentDeployment(context.TODO()); nerr != nil {
+		if nerr := handler.reconcileAgentDeployment(ctx); nerr != nil { // Pass down the main context
 			logrus.Errorf("Error reconciling agent deployment after IPPool %s OnRemove: %v", key, nerr)
 			if err == nil { // If original OnRemove was fine, return this new error
 				err = nerr
@@ -245,6 +246,15 @@ func (h *Handler) getAgentContainerName() string {
 
 func (h *Handler) reconcileAgentDeployment(ctx context.Context) error {
 	logrus.Info("Reconciling agent deployment for all active IPPools")
+
+	// Wait for the IPPool cache to sync before proceeding
+	if !h.ippoolController.HasSynced() {
+		logrus.Info("reconcileAgentDeployment: IPPool cache not synced, waiting...")
+		if !k8scache.WaitForCacheSync(ctx.Done(), h.ippoolController.HasSynced) {
+			return fmt.Errorf("reconcileAgentDeployment: failed to sync IPPool cache before reconciliation")
+		}
+		logrus.Info("reconcileAgentDeployment: IPPool cache synced.")
+	}
 
 	agentDepName := h.getAgentDeploymentName()
 	agentDepNamespace := h.agentNamespace
