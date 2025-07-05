@@ -21,6 +21,8 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
+const agentReplicas int32 = 2
+
 func prepareAgentPod(
 	ipPool *networkv1.IPPool,
 	noDHCP bool,
