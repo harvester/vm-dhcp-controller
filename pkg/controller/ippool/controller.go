@@ -133,13 +133,8 @@ func Register(ctx context.Context, management *config.Management) error {
 	ippools.OnChange(ctx, controllerName, wrappedOnChange)
 	ippools.OnRemove(ctx, controllerName, wrappedOnRemove)
 
-	// Initial reconciliation of agent deployment on startup
-	go func() {
-		// Potentially add a small delay or wait for caches to sync if necessary
-		if err := handler.reconcileAgentDeployment(context.TODO()); err != nil {
-			logrus.Errorf("Initial agent deployment reconciliation failed: %v", err)
-		}
-	}()
+	// The initial reconciliation will be triggered by OnChange events when existing IPPools are synced.
+	// Removing the explicit goroutine for initial reconciliation to prevent race conditions with cache sync.
 
 	return nil
 }
