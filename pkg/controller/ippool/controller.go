@@ -19,8 +19,7 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
-	"k8s.io/apimachinery/pkg/api/errors"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors" // Duplicate import: "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors" // k8serrors alias is used
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -264,8 +263,11 @@ func (h *Handler) reconcileAgentDeployment(ctx context.Context) error {
 	var activeIPPools []*networkv1.IPPool
 	for _, ipPool := range allIPPools {
 		if ipPool.DeletionTimestamp == nil && (ipPool.Spec.Paused == nil || !*ipPool.Spec.Paused) {
-			if ipPool.Spec.NetworkName == "" || ipPool.Spec.IPv4Config == nil || ipPool.Spec.IPv4Config.ServerIP == "" || ipPool.Spec.IPv4Config.CIDR == "" {
-				logrus.Warnf("IPPool %s/%s is active but missing required fields (NetworkName, ServerIP, CIDR), skipping for agent config", ipPool.Namespace, ipPool.Name)
+			// Check if IPv4Config itself is present and then check its fields.
+			// The direct comparison ipPool.Spec.IPv4Config == nil was incorrect for a struct type.
+			// The intention is to ensure essential fields within IPv4Config are populated.
+			if ipPool.Spec.NetworkName == "" || ipPool.Spec.IPv4Config.ServerIP == "" || ipPool.Spec.IPv4Config.CIDR == "" {
+				logrus.Warnf("IPPool %s/%s is active but missing required fields (NetworkName, IPv4Config.ServerIP, IPv4Config.CIDR), skipping for agent config", ipPool.Namespace, ipPool.Name)
 				continue
 			}
 			activeIPPools = append(activeIPPools, ipPool)
