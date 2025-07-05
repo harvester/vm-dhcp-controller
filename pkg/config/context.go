@@ -56,13 +56,11 @@ type ControllerOptions struct {
 }
 
 type AgentOptions struct {
-	DryRun         bool
-	Nic            string
-	KubeConfigPath string
-	KubeContext    string
-	IPPoolRef      types.NamespacedName
-	ServerIP       string // Static IP for the agent's DHCP interface
-	CIDR           string // CIDR for the ServerIP (e.g., 192.168.1.100/24)
+	DryRun                  bool
+	KubeConfigPath          string
+	KubeContext             string
+	AgentNetworkConfigsJSON string // JSON string of []AgentNetConfig
+	IPPoolRefsJSON          string // JSON string of []string (Namespaced IPPool names)
 }
 
 type HTTPServerOptions struct {

@@ -40,7 +40,7 @@ spec:
             # - {{ printf "--namespace=%s" .Release.Namespace }} # Rimosso
             - "--kubeconfig=/etc/kubeconfig"
             - {{ printf "--no-leader-election=%t" (.Values.agent.noLeaderElection | default false) }}
-            - "--nic=eth0" # Controller will update this if needed
+            # Removed --nic argument, controller will manage interfaces via annotations and AGENT_NETWORK_CONFIGS
           ports:
             - name: metrics
               containerPort: 8080
@@ -50,8 +50,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: IPPOOL_REF # Controller will update this value
-              value: ""
+            # IPPOOL_REF is removed, replaced by AGENT_NETWORK_CONFIGS and IPPOOL_REFS_JSON
+            # These will be populated by the controller. Default to empty JSON arrays.
+            - name: AGENT_NETWORK_CONFIGS
+              value: "[]"
+            - name: IPPOOL_REFS_JSON
+              value: "[]"
           resources:
             {{- toYaml .Values.agent.resources | nindent 12 }}
       {{- with .Values.agent.nodeSelector }}

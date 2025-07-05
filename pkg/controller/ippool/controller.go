@@ -19,32 +19,22 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
 	"github.com/harvester/vm-dhcp-controller/pkg/metrics"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
-	// appsv1 "k8s.io/api/apps/v1" // Unused
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1" // This was the duplicate
-	corev1 "k8s.io/api/core/v1"                   // For EnvVar
+	"k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors" // Duplicate import: "k8s.io/apimachinery/pkg/api/errors"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
-	// "encoding/json" // Unused
-	"os"     // For os.Getenv
-	"strings" // For argument parsing
+
+	"encoding/json" // For serializing AgentNetConfig
+	"os"            // For os.Getenv
+	"sort"          // For sorting IPPools
+	"strings"       // For argument parsing
 )
 
 const (
 	controllerName = "vm-dhcp-ippool-controller"
 
 	// AgentDeploymentNameSuffix is the suffix appended to the controller's fullname to get the agent deployment name.
-	// This assumes the controller's name (passed via --name flag) is the "fullname" from Helm.
 	AgentDeploymentNameSuffix = "-agent"
-	// AgentContainerName is the name of the container within the agent deployment.
-	// This needs to match what's in chart/templates/agent-deployment.yaml ({{ .Chart.Name }}-agent)
-	// For robustness, this might need to be configurable or derived more reliably.
-	// Assuming Chart.Name is stable, e.g., "harvester-vm-dhcp-controller".
-	// Let's use a placeholder and refine if needed. It's currently {{ .Chart.Name }} in agent-deployment.yaml
-	// which resolves to "vm-dhcp-controller" if the chart is named that.
-	// The agent deployment.yaml has container name {{ .Chart.Name }}-agent
-	// AgentContainerNameDefault = "vm-dhcp-controller-agent" // Replaced by env var
-	// DefaultAgentPodInterfaceName is the default name for the Multus interface in the agent pod.
-	DefaultAgentPodInterfaceName = "net1"
 
 	multusNetworksAnnotationKey         = "k8s.v1.cni.cncf.io/networks"
 	holdIPPoolAgentUpgradeAnnotationKey = "network.harvesterhci.io/hold-ippool-agent-upgrade"
@@ -52,13 +42,9 @@ const (
 	vmDHCPControllerLabelKey = network.GroupName + "/vm-dhcp-controller"
 	clusterNetworkLabelKey   = network.GroupName + "/clusternetwork"
 
-	setIPAddrScript = `
-#!/usr/bin/env sh
-set -ex
-
-ip address flush dev eth1
-ip address add %s/%d dev eth1
-`
+	// Environment variable keys for agent configuration
+	agentNetworkConfigsEnvKey = "AGENT_NETWORK_CONFIGS"
+	agentIPPoolRefsEnvKey     = "IPPOOL_REFS_JSON"
 )
 
 var (
@@ -66,10 +52,14 @@ var (
 	runAsGroupID int64 = 0
 )
 
-type Network struct {
-	Namespace     string `json:"namespace"`
-	Name          string `json:"name"`
-	InterfaceName string `json:"interface"`
+// AgentNetConfig defines the network configuration for a single interface in the agent pod.
+type AgentNetConfig struct {
+	InterfaceName string `json:"interfaceName"`
+	ServerIP      string `json:"serverIP"`
+	CIDR          string `json:"cidr"`
+	IPPoolName    string `json:"ipPoolName"` // Namespaced name "namespace/name"
+	IPPoolRef     string `json:"ipPoolRef"`  // Namespaced name "namespace/name" for direct reference
+	NadName       string `json:"nadName"`    // Namespaced name "namespace/name" of the NAD
 }
 
 type Handler struct {
@@ -105,8 +95,8 @@ func Register(ctx context.Context, management *config.Management) error {
 		podCache:         pods.Cache(),
 		nadClient:        nads,
 		nadCache:         nads.Cache(),
-		kubeClient:       management.KubeClient,     // Added KubeClient
-		agentNamespace:   management.Namespace,    // Assuming Management has Namespace for the controller/agent
+		kubeClient:       management.KubeClient,
+		agentNamespace:   management.Namespace,
 	}
 
 	ctlnetworkv1.RegisterIPPoolStatusHandler(
@@ -117,37 +107,69 @@ func Register(ctx context.Context, management *config.Management) error {
 		handler.BuildCache,
 	)
 
-	ippools.OnChange(ctx, controllerName, handler.OnChange)
-	ippools.OnRemove(ctx, controllerName, handler.OnRemove)
+	// Wrap OnChange and OnRemove to trigger global agent deployment reconciliation
+	wrappedOnChange := func(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
+		pool, err := handler.OnChangeInternal(key, ipPool) // Call the original logic
+		if nerr := handler.reconcileAgentDeployment(context.TODO()); nerr != nil {
+			logrus.Errorf("Error reconciling agent deployment after IPPool %s OnChange: %v", key, nerr)
+			if err == nil { // If original OnChange was fine, return this new error
+				err = nerr
+			}
+			// Potentially combine errors or prioritize one, for now, log and pass original/new error
+		}
+		return pool, err
+	}
+
+	wrappedOnRemove := func(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
+		pool, err := handler.OnRemoveInternal(key, ipPool) // Call the original logic
+		if nerr := handler.reconcileAgentDeployment(context.TODO()); nerr != nil {
+			logrus.Errorf("Error reconciling agent deployment after IPPool %s OnRemove: %v", key, nerr)
+			if err == nil { // If original OnRemove was fine, return this new error
+				err = nerr
+			}
+		}
+		return pool, err
+	}
+
+	ippools.OnChange(ctx, controllerName, wrappedOnChange)
+	ippools.OnRemove(ctx, controllerName, wrappedOnRemove)
+
+	// Initial reconciliation of agent deployment on startup
+	go func() {
+		// Potentially add a small delay or wait for caches to sync if necessary
+		if err := handler.reconcileAgentDeployment(context.TODO()); err != nil {
+			logrus.Errorf("Initial agent deployment reconciliation failed: %v", err)
+		}
+	}()
 
 	return nil
 }
 
-func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
+// OnChangeInternal contains the original logic of OnChange
+func (h *Handler) OnChangeInternal(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
 	if ipPool == nil || ipPool.DeletionTimestamp != nil {
 		return nil, nil
 	}
 
-	logrus.Debugf("(ippool.OnChange) ippool configuration %s has been changed: %+v", key, ipPool.Spec.IPv4Config)
+	logrus.Debugf("(ippool.OnChangeInternal) ippool configuration %s has been changed: %+v", key, ipPool.Spec.IPv4Config)
 
-	// Build the relationship between IPPool and NetworkAttachmentDefinition for VirtualMachineNetworkConfig to reference
 	if err := h.ensureNADLabels(ipPool); err != nil {
 		return ipPool, err
 	}
 
 	ipPoolCpy := ipPool.DeepCopy()
 
-	// Check if the IPPool is administratively disabled
 	if ipPool.Spec.Paused != nil && *ipPool.Spec.Paused {
-		logrus.Infof("(ippool.OnChange) try to cleanup cache and agent for ippool %s", key)
-		if err := h.cleanup(ipPool); err != nil {
-			return ipPool, err
+		logrus.Infof("(ippool.OnChangeInternal) ippool %s is paused, cleaning up local resources", key)
+		if err := h.cleanup(ipPool); err != nil { // cleanup local IPAM etc.
+			logrus.Errorf("Error during cleanup for paused IPPool %s: %v", key, err)
+			// Continue to update status
 		}
 		networkv1.Stopped.True(ipPoolCpy)
 		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
 			return h.ippoolClient.UpdateStatus(ipPoolCpy)
 		}
-		return ipPool, nil
+		return ipPoolCpy, nil
 	}
 	networkv1.Stopped.False(ipPoolCpy)
 
@@ -156,12 +178,10 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		networkv1.CacheReady.Reason(ipPoolCpy, "NotInitialized")
 		networkv1.CacheReady.Message(ipPoolCpy, "")
 		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-			logrus.Warningf("(ippool.OnChange) ipam for ippool %s/%s is not initialized", ipPool.Namespace, ipPool.Name)
+			logrus.Warningf("(ippool.OnChangeInternal) ipam for ippool %s/%s is not initialized", ipPool.Namespace, ipPool.Name)
 			return h.ippoolClient.UpdateStatus(ipPoolCpy)
 		}
 	}
-
-	// Update IPPool status based on up-to-date IPAM
 
 	ipv4Status := ipPoolCpy.Status.IPv4
 	if ipv4Status == nil {
@@ -170,28 +190,18 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 
 	used, err := h.ipAllocator.GetUsed(ipPool.Spec.NetworkName)
 	if err != nil {
-		return nil, err
+		return ipPool, fmt.Errorf("failed to get used IP count for %s: %w", ipPool.Spec.NetworkName, err)
 	}
 	ipv4Status.Used = used
 
 	available, err := h.ipAllocator.GetAvailable(ipPool.Spec.NetworkName)
 	if err != nil {
-		return nil, err
+		return ipPool, fmt.Errorf("failed to get available IP count for %s: %w", ipPool.Spec.NetworkName, err)
 	}
 	ipv4Status.Available = available
 
-	// Update IPPool metrics
-	h.metricsAllocator.UpdateIPPoolUsed(
-		key,
-		ipPool.Spec.IPv4Config.CIDR,
-		ipPool.Spec.NetworkName,
-		used,
-	)
-	h.metricsAllocator.UpdateIPPoolAvailable(key,
-		ipPool.Spec.IPv4Config.CIDR,
-		ipPool.Spec.NetworkName,
-		available,
-	)
+	h.metricsAllocator.UpdateIPPoolUsed(key, ipPool.Spec.IPv4Config.CIDR, ipPool.Spec.NetworkName, used)
+	h.metricsAllocator.UpdateIPPoolAvailable(key, ipPool.Spec.IPv4Config.CIDR, ipPool.Spec.NetworkName, available)
 
 	allocated := ipv4Status.Allocated
 	if allocated == nil {
@@ -206,350 +216,247 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 	for _, eIP := range ipPool.Spec.IPv4Config.Pool.Exclude {
 		allocated[eIP] = util.ExcludedMark
 	}
-	// For DeepEqual
 	if len(allocated) == 0 {
 		allocated = nil
 	}
 	ipv4Status.Allocated = allocated
-
 	ipPoolCpy.Status.IPv4 = ipv4Status
 
-	if !reflect.DeepEqual(ipPoolCpy, ipPool) {
-		logrus.Infof("(ippool.OnChange) update ippool %s/%s", ipPool.Namespace, ipPool.Name)
+	if !reflect.DeepEqual(ipPoolCpy.Status, ipPool.Status) {
+		logrus.Infof("(ippool.OnChangeInternal) updating ippool status %s/%s", ipPool.Namespace, ipPool.Name)
 		ipPoolCpy.Status.LastUpdate = metav1.Now()
 		return h.ippoolClient.UpdateStatus(ipPoolCpy)
 	}
 
-	// After other processing, sync the agent deployment
-	// Assuming `management.ControllerName` is available and set to the controller's helm fullname
-	// This name needs to be reliably determined. For now, using a placeholder.
-	// The actual controller name (used for leader election etc.) is often passed via --name flag.
-	// Let's assume `management.ControllerName` is available in `h` or can be fetched.
-	// For now, this part of agent deployment name construction is illustrative.
-	// It needs to align with how the agent deployment is actually named by Helm.
-	// Agent deployment name is: {{ include "harvester-vm-dhcp-controller.fullname" . }}-agent
-	// The controller's own "fullname" is needed. This is typically available from options.
-	// Let's assume `h.agentNamespace` is where the controller (and agent) runs.
-	// And the controller's name (helm fullname) is something we can get, e.g. from an env var or option.
-	// This dynamic configuration needs the controller's own Helm fullname.
-	// Let's assume it's available via h.getControllerHelmFullName() for now.
-	// This is a complex part to get right without knowing how controllerName is populated.
-	// For now, skipping the actual agent deployment update to avoid introducing half-baked logic
-	// without having the controller's own Helm fullname.
-	// TODO: Implement dynamic agent deployment update once controller's Helm fullname is accessible.
-	if err := h.syncAgentDeployment(ipPoolCpy); err != nil {
-		// Log the error but don't necessarily block IPPool reconciliation for agent deployment issues.
-		// The IPPool status update should still proceed.
-		logrus.Errorf("Failed to sync agent deployment for ippool %s: %v", key, err)
-		// Depending on desired behavior, you might want to return the error or update a condition on ipPool.
-		// For now, just logging.
-	}
-
-	return ipPoolCpy, nil // Return potentially updated ipPoolCpy from status updates
+	return ipPoolCpy, nil
 }
 
-// getAgentDeploymentName constructs the expected name of the agent deployment.
-// It relies on the AGENT_DEPLOYMENT_NAME environment variable.
 func (h *Handler) getAgentDeploymentName() string {
-	// This assumes the agent deployment follows "<helm-release-name>-<chart-name>-agent" if fullname is complex,
-	// or just "<helm-release-name>-agent" if chart name is part of release name.
-	// The agent deployment is named: {{ template "harvester-vm-dhcp-controller.fullname" . }}-agent
-	// If controllerHelmReleaseName is the "fullname", then it's controllerHelmReleaseName + AgentDeploymentNameSuffix
-	// This needs to be robust. For now, let's assume a simpler derivation for the placeholder.
-	// This needs to match what `{{ include "harvester-vm-dhcp-controller.fullname" . }}-agent` resolves to.
-	// This is difficult to resolve from within the controller without more context (like Release Name, Chart Name).
-	// Let's hardcode for now based on common Helm chart naming, this is a simplification.
-	// Example: if release is "harvester", chart is "vm-dhcp-controller", fullname is "harvester-vm-dhcp-controller"
-	// Agent deployment: "harvester-vm-dhcp-controller-agent"
-	// This is a critical piece that needs to be accurate.
-	// It might be better to pass this via an environment variable set in the controller's deployment.yaml.
 	agentDeploymentName := os.Getenv("AGENT_DEPLOYMENT_NAME")
 	if agentDeploymentName == "" {
-		// Fallback, but this should be explicitly set for reliability.
-		logrus.Warn("AGENT_DEPLOYMENT_NAME env var not set, agent deployment updates may fail.")
-		// This is a guess and likely incorrect without proper templating/env var.
-		agentDeploymentName = "harvester-vm-dhcp-controller-agent"
+		logrus.Warn("AGENT_DEPLOYMENT_NAME env var not set, agent deployment updates may fail. Defaulting to a common pattern.")
+		agentDeploymentName = "vm-dhcp-controller-agent" // Adjust if chart naming is different
 	}
 	return agentDeploymentName
 }
 
-// getAgentContainerName retrieves the agent container name from an environment variable.
 func (h *Handler) getAgentContainerName() string {
 	agentContainerName := os.Getenv("AGENT_CONTAINER_NAME")
 	if agentContainerName == "" {
-		logrus.Warnf("AGENT_CONTAINER_NAME env var not set, agent deployment updates may fail to find the container. Defaulting to '%s-agent'", "harvester-vm-dhcp-controller")
-		// This fallback is a guess based on common chart naming.
-		// It should be `Chart.Name + "-agent"`. Since Chart.Name is "harvester-vm-dhcp-controller",
-		// this becomes "harvester-vm-dhcp-controller-agent".
-		// However, the Helm template for agent container name is `{{ .Chart.Name }}-agent`.
-		// If Chart.Name from Chart.yaml is `harvester-vm-dhcp-controller`, then this is correct.
-		// If Chart.Name is something else, this fallback is wrong.
-		// The env var is the reliable source.
-		return "harvester-vm-dhcp-controller-agent" // Fallback based on typical Chart.Name
+		logrus.Warnf("AGENT_CONTAINER_NAME env var not set. Defaulting to a common pattern.")
+		agentContainerName = "vm-dhcp-controller-agent" // Adjust if chart naming is different
 	}
 	return agentContainerName
 }
 
-
-// syncAgentDeployment updates the agent deployment to attach to the NAD from the IPPool
-func (h *Handler) syncAgentDeployment(ipPool *networkv1.IPPool) error {
-	if ipPool == nil || ipPool.Spec.NetworkName == "" {
-		// Or handle deletion/detachment if networkName is cleared
-		return nil
-	}
+func (h *Handler) reconcileAgentDeployment(ctx context.Context) error {
+	logrus.Info("Reconciling agent deployment for all active IPPools")
 
 	agentDepName := h.getAgentDeploymentName()
 	agentDepNamespace := h.agentNamespace
+	agentContainerName := h.getAgentContainerName()
 
-	logrus.Infof("Syncing agent deployment %s/%s for IPPool %s/%s (NAD: %s)",
-		agentDepNamespace, agentDepName, ipPool.Namespace, ipPool.Name, ipPool.Spec.NetworkName)
+	allIPPools, err := h.ippoolCache.List(metav1.NamespaceAll, nil)
+	if err != nil {
+		return fmt.Errorf("failed to list IPPools: %w", err)
+	}
 
-	deployment, err := h.kubeClient.AppsV1().Deployments(agentDepNamespace).Get(context.TODO(), agentDepName, metav1.GetOptions{})
+	var activeIPPools []*networkv1.IPPool
+	for _, ipPool := range allIPPools {
+		if ipPool.DeletionTimestamp == nil && (ipPool.Spec.Paused == nil || !*ipPool.Spec.Paused) {
+			if ipPool.Spec.NetworkName == "" || ipPool.Spec.IPv4Config == nil || ipPool.Spec.IPv4Config.ServerIP == "" || ipPool.Spec.IPv4Config.CIDR == "" {
+				logrus.Warnf("IPPool %s/%s is active but missing required fields (NetworkName, ServerIP, CIDR), skipping for agent config", ipPool.Namespace, ipPool.Name)
+				continue
+			}
+			activeIPPools = append(activeIPPools, ipPool)
+		}
+	}
+
+	sort.SliceStable(activeIPPools, func(i, j int) bool {
+		if activeIPPools[i].Namespace != activeIPPools[j].Namespace {
+			return activeIPPools[i].Namespace < activeIPPools[j].Namespace
+		}
+		return activeIPPools[i].Name < activeIPPools[j].Name
+	})
+
+	var agentNetConfigs []AgentNetConfig
+	var multusAnnotationItems []string
+	var ipPoolRefs []string
+
+	for i, ipPool := range activeIPPools {
+		interfaceName := fmt.Sprintf("net%d", i)
+		nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
+		if nadName == "" {
+			nadName = nadNamespace
+			nadNamespace = ipPool.Namespace
+		}
+
+		fullNadName := fmt.Sprintf("%s/%s", nadNamespace, nadName)
+		multusAnnotationItems = append(multusAnnotationItems, fmt.Sprintf("%s@%s", fullNadName, interfaceName))
+
+		poolRefKey := fmt.Sprintf("%s/%s", ipPool.Namespace, ipPool.Name)
+		agentNetConfigs = append(agentNetConfigs, AgentNetConfig{
+			InterfaceName: interfaceName,
+			ServerIP:      ipPool.Spec.IPv4Config.ServerIP,
+			CIDR:          ipPool.Spec.IPv4Config.CIDR,
+			IPPoolName:    poolRefKey, // Original field, might be redundant with IPPoolRef
+			IPPoolRef:     poolRefKey,
+			NadName:       fullNadName,
+		})
+		ipPoolRefs = append(ipPoolRefs, poolRefKey)
+	}
+
+	agentNetConfigsJSONString := "[]"
+	if len(agentNetConfigs) > 0 {
+		jsonData, err := json.Marshal(agentNetConfigs)
+		if err != nil {
+			return fmt.Errorf("failed to marshal agent network configs: %w", err)
+		}
+		agentNetConfigsJSONString = string(jsonData)
+	}
+
+	ipPoolRefsJSONString := "[]"
+	if len(ipPoolRefs) > 0 {
+		jsonData, err := json.Marshal(ipPoolRefs)
+		if err != nil {
+			return fmt.Errorf("failed to marshal IPPool references: %w", err)
+		}
+		ipPoolRefsJSONString = string(jsonData)
+	}
+
+	deployment, err := h.kubeClient.AppsV1().Deployments(agentDepNamespace).Get(ctx, agentDepName, metav1.GetOptions{})
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			logrus.Errorf("Agent deployment %s/%s not found, cannot update for IPPool %s", agentDepNamespace, agentDepName, ipPool.Name)
-			return nil // Or return error if agent deployment is mandatory
+			logrus.Warnf("Agent deployment %s/%s not found. Cannot apply IPPool configurations.", agentDepNamespace, agentDepName)
+			return nil // Nothing to update if deployment doesn't exist
 		}
 		return fmt.Errorf("failed to get agent deployment %s/%s: %w", agentDepNamespace, agentDepName, err)
 	}
 
-	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
-	if nadName == "" { // Assume it's in the same namespace as IPPool if no "/"
-		nadName = nadNamespace
-		nadNamespace = ipPool.Namespace
-	}
-
-	// Determine target interface name, e.g., from IPPool annotation or default
-	// For now, using DefaultAgentPodInterfaceName = "net1"
-	podIFName := DefaultAgentPodInterfaceName
-	// Potentially override podIFName from an IPPool annotation in the future
-	// e.g., podIFName = ipPool.Annotations["network.harvesterhci.io/agent-pod-interface-name"]
-
-	desiredAnnotationValue := fmt.Sprintf("%s/%s@%s", nadNamespace, nadName, podIFName)
-
 	needsUpdate := false
-	currentAnnotationValue, annotationExists := deployment.Spec.Template.Annotations[multusNetworksAnnotationKey]
+	depCopy := deployment.DeepCopy()
 
-	if !annotationExists || currentAnnotationValue != desiredAnnotationValue {
-		if deployment.Spec.Template.Annotations == nil {
-			deployment.Spec.Template.Annotations = make(map[string]string)
+	// 1. Update Multus annotation
+	desiredMultusAnnotation := strings.Join(multusAnnotationItems, ",")
+	if depCopy.Spec.Template.Annotations == nil {
+		depCopy.Spec.Template.Annotations = make(map[string]string)
+	}
+	currentMultusAnnotation := depCopy.Spec.Template.Annotations[multusNetworksAnnotationKey]
+
+	if desiredMultusAnnotation == "" { // No active IPPools with valid config
+		if _, exists := depCopy.Spec.Template.Annotations[multusNetworksAnnotationKey]; exists {
+			delete(depCopy.Spec.Template.Annotations, multusNetworksAnnotationKey)
+			needsUpdate = true
+			logrus.Infof("Agent deployment %s/%s: Removing Multus annotation as no active/valid IPPools.", agentDepNamespace, agentDepName)
 		}
-		deployment.Spec.Template.Annotations[multusNetworksAnnotationKey] = desiredAnnotationValue
-		needsUpdate = true
-		logrus.Infof("Updating agent deployment %s/%s annotation to: %s", agentDepNamespace, agentDepName, desiredAnnotationValue)
+	} else {
+		if currentMultusAnnotation != desiredMultusAnnotation {
+			depCopy.Spec.Template.Annotations[multusNetworksAnnotationKey] = desiredMultusAnnotation
+			needsUpdate = true
+			logrus.Infof("Agent deployment %s/%s: Updating Multus annotation to: %s", agentDepNamespace, agentDepName, desiredMultusAnnotation)
+		}
+	}
+	if len(depCopy.Spec.Template.Annotations) == 0 { // Clean up if empty
+	    depCopy.Spec.Template.Annotations = nil
 	}
 
-	// Find and update the --nic argument
-	containerFound := false
-	for i, container := range deployment.Spec.Template.Spec.Containers {
-		agentContainerName := h.getAgentContainerName()
-		if container.Name == agentContainerName {
-			containerFound = true
-			originalArgs := container.Args
-			newArgs := []string{}
-			nicArgUpdated := false
-			skipNext := false
 
-			for j := 0; j < len(originalArgs); j++ {
-				if skipNext {
-					skipNext = false
-					continue
-				}
-				arg := originalArgs[j]
-				if strings.HasPrefix(arg, "--nic=") {
-					currentVal := strings.SplitN(arg, "=", 2)[1]
-					if currentVal != podIFName {
-						logrus.Infof("Updating --nic arg for agent deployment %s/%s from %s to %s (form --nic=value)",
-							agentDepNamespace, agentDepName, arg, fmt.Sprintf("--nic=%s", podIFName))
-						newArgs = append(newArgs, fmt.Sprintf("--nic=%s", podIFName))
-						needsUpdate = true
-					} else {
-						newArgs = append(newArgs, arg) // Already correct
-					}
-					nicArgUpdated = true
-				} else if arg == "--nic" {
-					if j+1 < len(originalArgs) { // Check if there's a value after --nic
-						currentVal := originalArgs[j+1]
-						if currentVal != podIFName {
-							logrus.Infof("Updating --nic arg for agent deployment %s/%s from %s to %s (form --nic value)",
-								agentDepNamespace, agentDepName, currentVal, podIFName)
-							newArgs = append(newArgs, "--nic", podIFName)
-							needsUpdate = true
-						} else {
-							newArgs = append(newArgs, "--nic", currentVal) // Already correct
-						}
-						skipNext = true // Skip the original value part
-					} else { // --nic was the last argument, malformed or expecting default
-						logrus.Infof("Adding value for --nic arg for agent deployment %s/%s, new value: %s",
-							agentDepNamespace, agentDepName, podIFName)
-						newArgs = append(newArgs, "--nic", podIFName)
-						needsUpdate = true
-					}
-					nicArgUpdated = true
-				} else {
+	// 2. Update container args and env vars
+	containerUpdated := false
+	for i, c := range depCopy.Spec.Template.Spec.Containers {
+		if c.Name == agentContainerName {
+			var newArgs []string
+			for _, arg := range c.Args { // Remove only specific old args
+				if !strings.HasPrefix(arg, "--nic") &&
+					!strings.HasPrefix(arg, "--server-ip") &&
+					!strings.HasPrefix(arg, "--cidr") &&
+					!strings.HasPrefix(arg, "--ippool-ref") {
 					newArgs = append(newArgs, arg)
+				} else {
+					needsUpdate = true // Indicate that an old arg was found and removed
 				}
 			}
-
-			if !nicArgUpdated {
-				logrus.Infof("Adding --nic arg %s for agent deployment %s/%s", podIFName, agentDepNamespace, agentDepName)
-				newArgs = append(newArgs, "--nic", podIFName)
-				needsUpdate = true
-			}
-			deployment.Spec.Template.Spec.Containers[i].Args = newArgs // Commit --nic changes
-
-			// Ensure desiredIPPoolRef is defined before this block
-			desiredIPPoolRef := fmt.Sprintf("%s/%s", ipPool.Namespace, ipPool.Name)
-
-			// Update/Set IPPOOL_REF environment variable
-			envVarFound := false
-			for k, envVar := range deployment.Spec.Template.Spec.Containers[i].Env {
-				if envVar.Name == "IPPOOL_REF" {
-					envVarFound = true
-					if envVar.Value != desiredIPPoolRef {
-						logrus.Infof("Updating IPPOOL_REF env var for agent deployment %s/%s from '%s' to '%s'",
-							agentDepNamespace, agentDepName, envVar.Value, desiredIPPoolRef)
-						deployment.Spec.Template.Spec.Containers[i].Env[k].Value = desiredIPPoolRef
-						needsUpdate = true
-					}
-					break
-				}
-			}
-			if !envVarFound {
-				logrus.Infof("Adding IPPOOL_REF env var '%s' for agent deployment %s/%s", desiredIPPoolRef, agentDepNamespace, agentDepName)
-				deployment.Spec.Template.Spec.Containers[i].Env = append(deployment.Spec.Template.Spec.Containers[i].Env, corev1.EnvVar{
-					Name:  "IPPOOL_REF",
-					Value: desiredIPPoolRef,
-				})
-				needsUpdate = true
+			if len(newArgs) != len(c.Args) { // Check if args actually changed
+			    depCopy.Spec.Template.Spec.Containers[i].Args = newArgs
+			    // needsUpdate is already true if an old arg was removed
 			}
 
-			// Update/Set --server-ip and --cidr arguments
-			desiredServerIP := ipPool.Spec.IPv4Config.ServerIP
-			desiredCIDR := ipPool.Spec.IPv4Config.CIDR
 
-			// Re-fetch args as they might have been changed by --nic update
-			currentArgs := deployment.Spec.Template.Spec.Containers[i].Args
-			finalArgs := []string{}
-			processedFlags := make(map[string]bool) // To track if we've handled a flag
+			currentEnv := depCopy.Spec.Template.Spec.Containers[i].Env
+			updatedEnv := h.updateEnvVar(currentEnv, agentNetworkConfigsEnvKey, agentNetConfigsJSONString, &needsUpdate)
+			updatedEnv = h.updateEnvVar(updatedEnv, agentIPPoolRefsEnvKey, ipPoolRefsJSONString, &needsUpdate)
+			updatedEnv = h.removeEnvVar(updatedEnv, "IPPOOL_REF", &needsUpdate) // Remove old single IPPOOL_REF
 
-			for j := 0; j < len(currentArgs); j++ {
-				arg := currentArgs[j]
-				// Handle --nic (already processed, just copy)
-				if strings.HasPrefix(arg, "--nic=") || arg == "--nic" {
-					finalArgs = append(finalArgs, arg)
-					if arg == "--nic" && j+1 < len(currentArgs) && !strings.HasPrefix(currentArgs[j+1], "--") {
-						finalArgs = append(finalArgs, currentArgs[j+1])
-						j++
-					}
-					processedFlags["--nic"] = true
-					continue
-				}
-
-				// Handle --server-ip
-				if strings.HasPrefix(arg, "--server-ip=") {
-					if arg != fmt.Sprintf("--server-ip=%s", desiredServerIP) {
-						logrus.Infof("Updating --server-ip arg for agent deployment from %s to %s", arg, desiredServerIP)
-						finalArgs = append(finalArgs, fmt.Sprintf("--server-ip=%s", desiredServerIP))
-						needsUpdate = true
-					} else {
-						finalArgs = append(finalArgs, arg)
-					}
-					processedFlags["--server-ip"] = true
-					continue
-				}
-				if arg == "--server-ip" {
-					if j+1 < len(currentArgs) && !strings.HasPrefix(currentArgs[j+1], "--") {
-						if currentArgs[j+1] != desiredServerIP {
-							logrus.Infof("Updating --server-ip value for agent deployment from %s to %s", currentArgs[j+1], desiredServerIP)
-							needsUpdate = true
-						}
-						finalArgs = append(finalArgs, "--server-ip", desiredServerIP)
-						j++
-					} else { // Flag without value or next is another flag
-						logrus.Infof("Setting value for --server-ip arg for agent deployment to %s", desiredServerIP)
-						finalArgs = append(finalArgs, "--server-ip", desiredServerIP)
-						needsUpdate = true
-					}
-					processedFlags["--server-ip"] = true
-					continue
-				}
-
-				// Handle --cidr
-				if strings.HasPrefix(arg, "--cidr=") {
-					if arg != fmt.Sprintf("--cidr=%s", desiredCIDR) {
-						logrus.Infof("Updating --cidr arg for agent deployment from %s to %s", arg, desiredCIDR)
-						finalArgs = append(finalArgs, fmt.Sprintf("--cidr=%s", desiredCIDR))
-						needsUpdate = true
-					} else {
-						finalArgs = append(finalArgs, arg)
-					}
-					processedFlags["--cidr"] = true
-					continue
-				}
-				if arg == "--cidr" {
-					if j+1 < len(currentArgs) && !strings.HasPrefix(currentArgs[j+1], "--") {
-						if currentArgs[j+1] != desiredCIDR {
-							logrus.Infof("Updating --cidr value for agent deployment from %s to %s", currentArgs[j+1], desiredCIDR)
-							needsUpdate = true
-						}
-						finalArgs = append(finalArgs, "--cidr", desiredCIDR)
-						j++
-					} else {
-						logrus.Infof("Setting value for --cidr arg for agent deployment to %s", desiredCIDR)
-						finalArgs = append(finalArgs, "--cidr", desiredCIDR)
-						needsUpdate = true
-					}
-					processedFlags["--cidr"] = true
-					continue
-				}
-				// Copy other args
-				finalArgs = append(finalArgs, arg)
+			if !reflect.DeepEqual(currentEnv, updatedEnv) {
+				depCopy.Spec.Template.Spec.Containers[i].Env = updatedEnv
+				// needsUpdate would have been set by helpers if changes occurred
 			}
-
-			// Add flags if they weren't processed (i.e., didn't exist)
-			if !processedFlags["--server-ip"] && desiredServerIP != "" {
-				logrus.Infof("Adding --server-ip arg %s for agent deployment", desiredServerIP)
-				finalArgs = append(finalArgs, "--server-ip", desiredServerIP)
-				needsUpdate = true
-			}
-			if !processedFlags["--cidr"] && desiredCIDR != "" {
-				logrus.Infof("Adding --cidr arg %s for agent deployment", desiredCIDR)
-				finalArgs = append(finalArgs, "--cidr", desiredCIDR)
-				needsUpdate = true
-			}
-			deployment.Spec.Template.Spec.Containers[i].Args = finalArgs
+			containerUpdated = true
 			break
 		}
 	}
 
-	if !containerFound {
-		// Use agentContainerName variable which holds the result of h.getAgentContainerName()
-		// This variable should be defined at the beginning of the loop or function if not already.
-		// Let's ensure agentContainerName is in scope here.
-		// It was defined when iterating containers: agentContainerName := h.getAgentContainerName()
-		// This means it needs to be fetched once before the loop.
-		logrus.Warnf("Agent container '%s' not found in deployment %s/%s. Cannot update args or IPPOOL_REF env var.", h.getAgentContainerName(), agentDepNamespace, agentDepName)
+	if !containerUpdated && (len(activeIPPools) > 0 || currentMultusAnnotation != "") {
+		// Only warn if we expected to find the container but didn't,
+		// and there are active pools or existing annotations to manage.
+		logrus.Warnf("Agent container '%s' not found in deployment %s/%s. Cannot update args or env vars.", agentContainerName, agentDepNamespace, agentDepName)
 	}
 
-
 	if needsUpdate {
-		logrus.Infof("Patching agent deployment %s/%s", agentDepNamespace, agentDepName)
-		_, err = h.kubeClient.AppsV1().Deployments(agentDepNamespace).Update(context.TODO(), deployment, metav1.UpdateOptions{})
+		logrus.Infof("Updating agent deployment %s/%s due to IPPool changes.", agentDepNamespace, agentDepName)
+		_, err = h.kubeClient.AppsV1().Deployments(agentDepNamespace).Update(ctx, depCopy, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to update agent deployment %s/%s: %w", agentDepNamespace, agentDepName, err)
 		}
-		logrus.Infof("Successfully patched agent deployment %s/%s", agentDepNamespace, agentDepName)
+		logrus.Infof("Successfully updated agent deployment %s/%s", agentDepNamespace, agentDepName)
 	} else {
-		logrus.Infof("Agent deployment %s/%s already up-to-date for IPPool %s/%s (NAD: %s)",
-			agentDepNamespace, agentDepName, ipPool.Namespace, ipPool.Name, ipPool.Spec.NetworkName)
+		logrus.Infof("Agent deployment %s/%s is already up-to-date regarding IPPool configurations.", agentDepNamespace, agentDepName)
 	}
 
 	return nil
 }
 
+func (h *Handler) updateEnvVar(envVars []corev1.EnvVar, key, value string, needsUpdate *bool) []corev1.EnvVar {
+	found := false
+	for i, envVar := range envVars {
+		if envVar.Name == key {
+			if envVar.Value != value {
+				envVars[i].Value = value
+				*needsUpdate = true
+				logrus.Debugf("Updated env var %s.", key)
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		envVars = append(envVars, corev1.EnvVar{Name: key, Value: value})
+		*needsUpdate = true
+		logrus.Debugf("Added env var %s.", key)
+	}
+	return envVars
+}
 
-func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
+func (h *Handler) removeEnvVar(envVars []corev1.EnvVar, key string, needsUpdate *bool) []corev1.EnvVar {
+	var result []corev1.EnvVar
+	removed := false
+	for _, envVar := range envVars {
+		if envVar.Name == key {
+			*needsUpdate = true
+			removed = true
+			logrus.Debugf("Removed env var %s.", key)
+			continue
+		}
+		result = append(result, envVar)
+	}
+	if !removed && len(result) == 0 && len(envVars) > 0 { // Handles case where all vars are removed
+	    return nil
+	}
+	return result
+}
+
+// OnRemoveInternal contains the original logic of OnRemove
+func (h *Handler) OnRemoveInternal(key string, ipPool *networkv1.IPPool) (*networkv1.IPPool, error) {
 	if ipPool == nil {
 		return nil, nil
 	}

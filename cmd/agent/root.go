@@ -4,14 +4,20 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rancher/wrangler/pkg/kv"
+	// "github.com/rancher/wrangler/pkg/kv" // No longer needed for ippoolRef parsing
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/types"
+	// "k8s.io/apimachinery/pkg/types" // No longer needed for IPPoolRef
 
-	"github.com/harvester/vm-dhcp-controller/pkg/agent"
+	// "github.com/harvester/vm-dhcp-controller/pkg/agent" // DefaultNetworkInterface no longer used here
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
+)
+
+const (
+	// Environment variable keys, must match controller-side
+	agentNetworkConfigsEnvKey = "AGENT_NETWORK_CONFIGS"
+	agentIPPoolRefsEnvKey     = "IPPOOL_REFS_JSON"
 )
 
 var (
@@ -20,14 +26,11 @@ var (
 
 	name               string
 	dryRun             bool
-	nic                string
 	enableCacheDumpAPI bool
 	kubeConfigPath     string
 	kubeContext        string
-	ippoolRef          string
 	noLeaderElection   bool
-	serverIP           string // New: Agent's own IP on the DHCP-served network
-	cidr               string // New: CIDR for the ServerIP
+	// Removed: nic, ippoolRef, serverIP, cidr
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -46,18 +49,29 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		ipPoolNamespace, ipPoolName := kv.RSplit(ippoolRef, "/")
+		// Populate options from environment variables
+		agentNetworkConfigsJSON := os.Getenv(agentNetworkConfigsEnvKey)
+		ipPoolRefsJSON := os.Getenv(agentIPPoolRefsEnvKey)
+
+		if agentNetworkConfigsJSON == "" {
+			// Log a warning or error, as this is critical for the agent's function
+			// Depending on desired behavior, could default to "[]" or exit.
+			// For now, warn and proceed; the agent logic should handle empty/invalid JSON.
+			logrus.Warnf("%s environment variable is not set or is empty. Agent may not configure any interfaces.", agentNetworkConfigsEnvKey)
+			agentNetworkConfigsJSON = "[]" // Default to empty JSON array
+		}
+
+		if ipPoolRefsJSON == "" {
+			logrus.Warnf("%s environment variable is not set or is empty.", agentIPPoolRefsEnvKey)
+			ipPoolRefsJSON = "[]" // Default to empty JSON array
+		}
+
 		options := &config.AgentOptions{
-			DryRun:         dryRun,
-			Nic:            nic,
-			KubeConfigPath: kubeConfigPath,
-			KubeContext:    kubeContext,
-			IPPoolRef: types.NamespacedName{
-				Namespace: ipPoolNamespace,
-				Name:      ipPoolName,
-			},
-			ServerIP: serverIP, // New
-			CIDR:     cidr,     // New
+			DryRun:                  dryRun,
+			KubeConfigPath:          kubeConfigPath,
+			KubeContext:             kubeContext,
+			AgentNetworkConfigsJSON: agentNetworkConfigsJSON,
+			IPPoolRefsJSON:          ipPoolRefsJSON,
 		}
 
 		if err := run(options); err != nil {
