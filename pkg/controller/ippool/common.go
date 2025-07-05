@@ -8,6 +8,7 @@ import (
 
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/rancher/wrangler/pkg/kv"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -148,6 +149,43 @@ func prepareAgentPod(
 						},
 					},
 				},
+			},
+		},
+	}, nil
+}
+
+func prepareAgentDeployment(
+	ipPool *networkv1.IPPool,
+	noDHCP bool,
+	agentNamespace string,
+	clusterNetwork string,
+	agentServiceAccountName string,
+	agentImage *config.Image,
+) (*appsv1.Deployment, error) {
+	pod, err := prepareAgentPod(ipPool, noDHCP, agentNamespace, clusterNetwork, agentServiceAccountName, agentImage)
+	if err != nil {
+		return nil, err
+	}
+
+	pod.ObjectMeta.Name = ""
+
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      util.SafeAgentConcatName(ipPool.Namespace, ipPool.Name),
+			Namespace: agentNamespace,
+			Labels:    pod.Labels,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &agentReplicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: pod.Labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      pod.Labels,
+					Annotations: pod.Annotations,
+				},
+				Spec: pod.Spec,
 			},
 		},
 	}, nil
