@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
@@ -72,6 +73,7 @@ type Handler struct {
 	ippoolCache      ctlnetworkv1.IPPoolCache
 	podClient        ctlcorev1.PodClient
 	podCache         ctlcorev1.PodCache
+	deploymentClient kubernetes.Interface
 	nadClient        ctlcniv1.NetworkAttachmentDefinitionClient
 	nadCache         ctlcniv1.NetworkAttachmentDefinitionCache
 }
@@ -97,6 +99,7 @@ func Register(ctx context.Context, management *config.Management) error {
 		ippoolCache:      ippools.Cache(),
 		podClient:        pods,
 		podCache:         pods.Cache(),
+		deploymentClient: management.ClientSet,
 		nadClient:        nads,
 		nadCache:         nads.Cache(),
 	}
@@ -297,30 +300,23 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 
 	if ipPool.Status.AgentPodRef != nil {
 		status.AgentPodRef.Image = h.getAgentImage(ipPool)
-		pod, err := h.podCache.Get(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name)
+		dep, err := h.deploymentClient.AppsV1().Deployments(h.agentNamespace).Get(context.TODO(), ipPool.Status.AgentPodRef.Name, metav1.GetOptions{})
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
 				return status, err
 			}
 
-			logrus.Warningf("(ippool.DeployAgent) agent pod %s missing, redeploying", ipPool.Status.AgentPodRef.Name)
+			logrus.Warningf("(ippool.DeployAgent) agent deployment %s missing, redeploying", ipPool.Status.AgentPodRef.Name)
 		} else {
-			if pod.DeletionTimestamp != nil {
-				logrus.Warningf("(ippool.DeployAgent) deleting stuck agent pod %s", pod.Name)
-				if err := h.forceDeletePod(pod.Namespace, pod.Name); err != nil && !apierrors.IsNotFound(err) {
-					return status, err
-				}
-			} else {
-				if pod.GetUID() != ipPool.Status.AgentPodRef.UID {
-					return status, fmt.Errorf("agent pod %s uid mismatch", ipPool.Status.AgentPodRef.Name)
-				}
-
-				return status, nil
+			if dep.GetUID() != ipPool.Status.AgentPodRef.UID {
+				return status, fmt.Errorf("agent deployment %s uid mismatch", dep.Name)
 			}
+
+			return status, nil
 		}
 	}
 
-	agent, err := prepareAgentPod(ipPool, h.noDHCP, h.agentNamespace, clusterNetwork, h.agentServiceAccountName, h.agentImage)
+	agent, err := prepareAgentDeployment(ipPool, h.noDHCP, h.agentNamespace, clusterNetwork, h.agentServiceAccountName, h.agentImage)
 	if err != nil {
 		return status, err
 	}
@@ -331,7 +327,7 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 
 	status.AgentPodRef.Image = h.agentImage.String()
 
-	agentPod, err := h.podClient.Create(agent)
+	agentDep, err := h.deploymentClient.AppsV1().Deployments(agent.Namespace).Create(context.TODO(), agent, metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			return status, nil
@@ -341,9 +337,9 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 
 	logrus.Infof("(ippool.DeployAgent) agent for ippool %s/%s has been deployed", ipPool.Namespace, ipPool.Name)
 
-	status.AgentPodRef.Namespace = agentPod.Namespace
-	status.AgentPodRef.Name = agentPod.Name
-	status.AgentPodRef.UID = agentPod.GetUID()
+	status.AgentPodRef.Namespace = agentDep.Namespace
+	status.AgentPodRef.Name = agentDep.Name
+	status.AgentPodRef.UID = agentDep.GetUID()
 
 	return status, nil
 }
@@ -439,28 +435,35 @@ func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPool
 		return status, fmt.Errorf("agent for ippool %s/%s is not deployed", ipPool.Namespace, ipPool.Name)
 	}
 
-	agentPod, err := h.podCache.Get(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name)
+	sets := labels.Set{
+		vmDHCPControllerLabelKey:     "agent",
+		util.IPPoolNamespaceLabelKey: ipPool.Namespace,
+		util.IPPoolNameLabelKey:      ipPool.Name,
+	}
+
+	pods, err := h.podCache.List(h.agentNamespace, sets.AsSelector())
 	if err != nil {
 		return status, err
 	}
 
-	if agentPod.GetUID() != ipPool.Status.AgentPodRef.UID || agentPod.Spec.Containers[0].Image != ipPool.Status.AgentPodRef.Image {
-		if agentPod.DeletionTimestamp != nil {
-			return status, fmt.Errorf("agent pod %s marked for deletion", agentPod.Name)
+	for _, pod := range pods {
+		if pod.DeletionTimestamp != nil {
+			continue
 		}
 
-		if err := h.forceDeletePod(agentPod.Namespace, agentPod.Name); err != nil {
-			return status, err
+		if pod.Spec.Containers[0].Image != ipPool.Status.AgentPodRef.Image {
+			continue
 		}
 
-		return status, fmt.Errorf("agent pod %s obsolete and purged", agentPod.Name)
+		if isPodReady(pod) {
+			status.AgentPodRef.Namespace = pod.Namespace
+			status.AgentPodRef.Name = pod.Name
+			status.AgentPodRef.UID = pod.GetUID()
+			return status, nil
+		}
 	}
 
-	if !isPodReady(agentPod) {
-		return status, fmt.Errorf("agent pod %s not ready", agentPod.Name)
-	}
-
-	return status, nil
+	return status, fmt.Errorf("no ready agent pod for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 }
 
 func isPodReady(pod *corev1.Pod) bool {
