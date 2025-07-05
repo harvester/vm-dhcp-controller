@@ -248,9 +248,9 @@ func (h *Handler) reconcileAgentDeployment(ctx context.Context) error {
 	logrus.Info("Reconciling agent deployment for all active IPPools")
 
 	// Wait for the IPPool cache to sync before proceeding
-	if !h.ippoolCache.HasSynced() {
+	if !h.ippoolController.Informer().HasSynced() {
 		logrus.Info("reconcileAgentDeployment: IPPool cache not synced, waiting...")
-		if !k8scache.WaitForCacheSync(ctx.Done(), h.ippoolCache.HasSynced) {
+		if !k8scache.WaitForCacheSync(ctx.Done(), h.ippoolController.Informer().HasSynced) {
 			return fmt.Errorf("reconcileAgentDeployment: failed to sync IPPool cache before reconciliation")
 		}
 		logrus.Info("reconcileAgentDeployment: IPPool cache synced.")
