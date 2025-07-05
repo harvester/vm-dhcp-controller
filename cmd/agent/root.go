@@ -22,6 +22,7 @@ var (
 	dryRun             bool
 	nic                string
 	enableCacheDumpAPI bool
+	noLeaderElection   bool
 	kubeConfigPath     string
 	kubeContext        string
 	ippoolRef          string
@@ -74,6 +75,7 @@ func init() {
 	rootCmd.Flags().StringVar(&kubeContext, "kubecontext", os.Getenv("KUBECONTEXT"), "Context name")
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Run vm-dhcp-agent without starting the DHCP server")
 	rootCmd.Flags().BoolVar(&enableCacheDumpAPI, "enable-cache-dump-api", false, "Enable cache dump APIs")
+	rootCmd.Flags().BoolVar(&noLeaderElection, "no-leader-election", false, "Run vm-dhcp-agent with leader election disabled")
 	rootCmd.Flags().StringVar(&ippoolRef, "ippool-ref", os.Getenv("IPPOOL_REF"), "The IPPool object the agent should sync with")
 	rootCmd.Flags().StringVar(&nic, "nic", agent.DefaultNetworkInterface, "The network interface the embedded DHCP server listens on")
 }
