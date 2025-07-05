@@ -93,11 +93,12 @@ func init() {
 	rootCmd.Flags().StringVar(&kubeContext, "kubecontext", os.Getenv("KUBECONTEXT"), "Context name")
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Run vm-dhcp-agent without starting the DHCP server")
 	rootCmd.Flags().BoolVar(&enableCacheDumpAPI, "enable-cache-dump-api", false, "Enable cache dump APIs")
-	rootCmd.Flags().StringVar(&ippoolRef, "ippool-ref", os.Getenv("IPPOOL_REF"), "The IPPool object the agent should sync with")
-	rootCmd.Flags().StringVar(&nic, "nic", agent.DefaultNetworkInterface, "The network interface for the DHCP server (e.g., eth0 or a Multus-provided interface like net1)")
+	// Removed old flags that are now sourced from environment variables set by the controller:
+	// - ippool-ref
+	// - nic
+	// - server-ip
+	// - cidr
 	rootCmd.Flags().BoolVar(&noLeaderElection, "no-leader-election", false, "Disable leader election")
-	rootCmd.Flags().StringVar(&serverIP, "server-ip", "", "Static IP for the agent's DHCP interface (optional)")
-	rootCmd.Flags().StringVar(&cidr, "cidr", "", "CIDR for the server-ip (e.g., 192.168.1.10/24) (optional, required if server-ip is set)")
 }
 
 // execute adds all child commands to the root command and sets flags appropriately.
