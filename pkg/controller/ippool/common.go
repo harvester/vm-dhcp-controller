@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
@@ -176,7 +177,7 @@ func prepareAgentDeployment(
 			Labels:    pod.Labels,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: &agentReplicas,
+			Replicas: pointer.Int32(agentReplicas),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: pod.Labels,
 			},
