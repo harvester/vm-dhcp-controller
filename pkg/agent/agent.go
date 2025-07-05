@@ -189,7 +189,16 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 		*/
 		logrus.Info("Starting DHCP server logic for configured interfaces (TODO: Needs multi-interface support in DHCPAllocator).")
-		return a.DHCPAllocator.Run(egctx, a.netConfigs) // Placeholder: Pass all configs
+		// Temporarily pass the first NIC name to satisfy the current Run signature.
+		// This is a placeholder until DHCPAllocator.Run is refactored.
+		firstNicToRun := ""
+		if len(a.netConfigs) > 0 {
+			firstNicToRun = a.netConfigs[0].InterfaceName
+		}
+		if a.dryRun { // Pass firstNicToRun to DryRun as well, assuming similar signature for now.
+		    return a.DHCPAllocator.DryRun(egctx, firstNicToRun)
+		}
+		return a.DHCPAllocator.Run(egctx, firstNicToRun)
 	})
 
 	// Commenting out ippoolEventHandler logic as its role is unclear in the new multi-pool agent model
