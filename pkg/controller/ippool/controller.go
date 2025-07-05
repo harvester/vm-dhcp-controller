@@ -247,15 +247,30 @@ func (h *Handler) getAgentContainerName() string {
 func (h *Handler) reconcileAgentDeployment(ctx context.Context) error {
 	logrus.Info("Reconciling agent deployment for all active IPPools")
 
+	logrus.Infof("reconcileAgentDeployment: Entered function. Context error (if any): %v", ctx.Err())
+
+	hasSyncedInitially := h.ippoolController.Informer().HasSynced()
+	logrus.Infof("reconcileAgentDeployment: Initial h.ippoolController.Informer().HasSynced() = %t", hasSyncedInitially)
+
 	// Wait for the IPPool cache to sync before proceeding
-	if !h.ippoolController.Informer().HasSynced() {
-		logrus.Info("reconcileAgentDeployment: IPPool cache not synced, waiting...")
-		if !k8scache.WaitForCacheSync(ctx.Done(), h.ippoolController.Informer().HasSynced) {
-			return fmt.Errorf("reconcileAgentDeployment: failed to sync IPPool cache before reconciliation")
+	if !hasSyncedInitially {
+		logrus.Info("reconcileAgentDeployment: IPPool cache not synced, proceeding to WaitForCacheSync...")
+		// Log context state again before blocking call
+		logrus.Infof("reconcileAgentDeployment: Context error before WaitForCacheSync: %v", ctx.Err())
+		waitSuccessful := k8scache.WaitForCacheSync(ctx.Done(), h.ippoolController.Informer().HasSynced)
+		logrus.Infof("reconcileAgentDeployment: WaitForCacheSync result: %t. Context error after: %v", waitSuccessful, ctx.Err())
+		if !waitSuccessful {
+			// Log current HasSynced status if WaitForCacheSync failed
+			currentSyncStatus := h.ippoolController.Informer().HasSynced()
+			logrus.Errorf("reconcileAgentDeployment: failed to sync IPPool cache. Current HasSynced status: %t", currentSyncStatus)
+			return fmt.Errorf("reconcileAgentDeployment: failed to sync IPPool cache before reconciliation. Current HasSynced status: %t", currentSyncStatus)
 		}
-		logrus.Info("reconcileAgentDeployment: IPPool cache synced.")
+		logrus.Info("reconcileAgentDeployment: IPPool cache reported synced by WaitForCacheSync.")
+	} else {
+		logrus.Info("reconcileAgentDeployment: IPPool cache was already synced initially.")
 	}
 
+	logrus.Info("reconcileAgentDeployment: Proceeding to list IPPools from cache...")
 	agentDepName := h.getAgentDeploymentName()
 	agentDepNamespace := h.agentNamespace
 	agentContainerName := h.getAgentContainerName()
