@@ -189,16 +189,31 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 		*/
 		logrus.Info("Starting DHCP server logic for configured interfaces (TODO: Needs multi-interface support in DHCPAllocator).")
-		// Temporarily pass the first NIC name to satisfy the current Run signature.
-		// This is a placeholder until DHCPAllocator.Run is refactored.
-		firstNicToRun := ""
-		if len(a.netConfigs) > 0 {
-			firstNicToRun = a.netConfigs[0].InterfaceName
+		// Pass all network configurations to DHCPAllocator.Run or DryRun.
+		// The DHCPAllocator's Run/DryRun methods now expect []dhcp.DHCPNetConfig.
+		// a.netConfigs is []AgentNetConfig. We need to ensure these are compatible.
+		// For now, we assume the local dhcp.AgentNetConfig (if used) or direct use of
+		// agent.AgentNetConfig in dhcp pkg (if import is fine) matches this structure.
+		// The local DHCPNetConfig struct in dhcp.go was designed to match the relevant fields.
+
+		// Create a slice of dhcp.DHCPNetConfig from a.netConfigs
+		dhcpConfigs := make([]dhcp.DHCPNetConfig, len(a.netConfigs))
+		for i, agentConf := range a.netConfigs {
+			dhcpConfigs[i] = dhcp.DHCPNetConfig{
+				InterfaceName: agentConf.InterfaceName,
+				ServerIP:      agentConf.ServerIP,
+				CIDR:          agentConf.CIDR,
+				IPPoolRef:     agentConf.IPPoolRef,
+			}
 		}
-		if a.dryRun { // Pass firstNicToRun to DryRun as well, assuming similar signature for now.
-		    return a.DHCPAllocator.DryRun(egctx, firstNicToRun)
+
+		if a.dryRun {
+			logrus.Info("Dry run mode: Simulating DHCP server start for configured interfaces.")
+			return a.DHCPAllocator.DryRun(egctx, dhcpConfigs) // Pass the slice of configs
 		}
-		return a.DHCPAllocator.Run(egctx, firstNicToRun)
+
+		logrus.Info("Starting DHCP server logic for all configured interfaces.")
+		return a.DHCPAllocator.Run(egctx, dhcpConfigs) // Pass the slice of configs
 	})
 
 	// Commenting out ippoolEventHandler logic as its role is unclear in the new multi-pool agent model
@@ -216,23 +231,46 @@ func (a *Agent) Run(ctx context.Context) error {
 		})
 	*/
 
-	// TODO: dhcp.Cleanup needs to be adapted for multiple NICs/configs if it does interface-specific cleanup.
-	// For now, passing an empty string or the first interface name as a placeholder.
-	// The actual cleanup logic inside dhcp.Cleanup will need to be aware of all managed interfaces.
-	firstNic := ""
-	if len(a.netConfigs) > 0 {
-		firstNic = a.netConfigs[0].InterfaceName
-	}
-	errCh := dhcp.Cleanup(egctx, a.DHCPAllocator, firstNic) // Placeholder for NIC
+	// dhcp.Cleanup has been updated to not require a specific NIC, as DHCPAllocator.stopAll() handles all servers.
+	errCh := dhcp.Cleanup(egctx, a.DHCPAllocator)
 
 	if err := eg.Wait(); err != nil {
-		return err
+		// If context is cancelled, eg.Wait() will return ctx.Err().
+		// We should check if the error from errCh is also a context cancellation
+		// to avoid redundant logging or error messages if the cleanup was graceful.
+		select {
+		case cleanupErr := <-errCh:
+			if cleanupErr != nil && !(err == context.Canceled && cleanupErr == context.Canceled) {
+				// Log cleanup error only if it's different from the main error or not a cancel error when main is cancel
+				logrus.Errorf("DHCP cleanup error: %v", cleanupErr)
+			}
+		default:
+			// Non-blocking read, in case errCh hasn't been written to yet (should not happen if eg.Wait() returned)
+		}
+		return err // Return the primary error from the error group
 	}
 
-	// Return cleanup error message if any
-	if err := <-errCh; err != nil {
-		return err
+	// Process the cleanup error after eg.Wait() has completed without error,
+	// or if eg.Wait() error was context cancellation and cleanup might have its own error.
+	if cleanupErr := <-errCh; cleanupErr != nil {
+		// Avoid returning error if it was just context cancellation and eg.Wait() was also cancelled.
+		// This depends on whether eg.Wait() returned an error already.
+		// If eg.Wait() was fine, any cleanupErr is significant.
+		// If eg.Wait() returned ctx.Err(), then a ctx.Err() from cleanup is expected.
+		// The current structure returns eg.Wait() error first. If that was nil, then this error matters.
+		// If eg.Wait() already returned an error, this cleanupErr is mostly for logging,
+		// unless it's a different, more specific error.
+		// The logic above eg.Wait() already tries to log cleanupErr if distinct.
+		// This final check ensures it's returned if no other error took precedence.
+		// This part might be redundant if the error handling around eg.Wait() is comprehensive.
+		// For now, let's assume if eg.Wait() was nil, this error is the one to return.
+		// If eg.Wait() had an error, that one is already returned.
+		logrus.Infof("DHCP cleanup completed with message/error: %v", cleanupErr) // Log it regardless
+		// Only return if eg.Wait() was successful, otherwise its error takes precedence.
+		// This check is implicitly handled by returning eg.Wait() error first.
+		// This path is reached if eg.Wait() returned nil.
+		return cleanupErr
 	}
-
+	logrus.Info("VM DHCP Agent Run loop and cleanup finished successfully.")
 	return nil
 }
