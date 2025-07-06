@@ -10,6 +10,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 	// "github.com/harvester/vm-dhcp-controller/pkg/agent" // Avoid direct import for now
+	"github.com/insomniacslk/dhcp/dhcpv4"
+	"github.com/insomniacslk/dhcp/dhcpv4/server4"
+	"github.com/insomniacslk/dhcp/rfc1035label"
 )
 
 // DHCPNetConfig is a local representation of network configuration for the DHCP allocator.
@@ -28,11 +31,8 @@ type AgentNetConfig struct { // Temporary local definition, assuming it's passed
 	IPPoolName    string `json:"ipPoolName"`
 	IPPoolRef     string `json:"ipPoolRef"`
 	NadName       string `json:"nadName"`
-
-	"github.com/insomniacslk/dhcp/dhcpv4"
-	"github.com/insomniacslk/dhcp/dhcpv4/server4"
-	"github.com/insomniacslk/dhcp/rfc1035label"
-)
+	// Misplaced imports removed from here
+}
 
 type DHCPLease struct {
 	ServerIP     net.IP
