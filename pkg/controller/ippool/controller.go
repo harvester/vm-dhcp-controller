@@ -275,9 +275,19 @@ func (h *Handler) reconcileAgentDeployment(ctx context.Context) error {
 	agentDepNamespace := h.agentNamespace
 	agentContainerName := h.getAgentContainerName()
 
-	allIPPools, err := h.ippoolCache.List(metav1.NamespaceAll, nil)
+	// Get a fresh cache instance from the controller after sync checks
+	currentIPPoolCache := h.ippoolController.Cache()
+	if currentIPPoolCache == nil {
+		// This should ideally not happen if the informer is synced,
+		// but as a safeguard:
+		return fmt.Errorf("reconcileAgentDeployment: IPPoolController.Cache() returned nil even after informer sync")
+	}
+
+	allIPPools, err := currentIPPoolCache.List(metav1.NamespaceAll, nil)
 	if err != nil {
-		return fmt.Errorf("failed to list IPPools: %w", err)
+		// The panic we are addressing would occur inside List if its internal indexer is nil.
+		// If err is non-nil here, it's a listing error, not the specific panic.
+		return fmt.Errorf("failed to list IPPools using freshly obtained cache: %w", err)
 	}
 
 	var activeIPPools []*networkv1.IPPool
