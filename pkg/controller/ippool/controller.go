@@ -275,27 +275,31 @@ func (h *Handler) reconcileAgentDeployment(ctx context.Context) error {
 	agentDepNamespace := h.agentNamespace
 	agentContainerName := h.getAgentContainerName()
 
-	// Get a fresh cache instance from the controller after sync checks
-	currentIPPoolCache := h.ippoolController.Cache()
-	if currentIPPoolCache == nil {
-		// This should ideally not happen if the informer is synced,
-		// but as a safeguard:
-		return fmt.Errorf("reconcileAgentDeployment: IPPoolController.Cache() returned nil even after informer sync")
-	}
+	// Directly use the informer's store to list IPPools
+	store := h.ippoolController.Informer().GetStore()
+	objList := store.List()
 
-	allIPPools, err := currentIPPoolCache.List(metav1.NamespaceAll, nil)
-	if err != nil {
-		// The panic we are addressing would occur inside List if its internal indexer is nil.
-		// If err is non-nil here, it's a listing error, not the specific panic.
-		return fmt.Errorf("failed to list IPPools using freshly obtained cache: %w", err)
+	var allIPPools []*networkv1.IPPool
+	for _, obj := range objList {
+		ipPool, ok := obj.(*networkv1.IPPool)
+		if !ok {
+			// This should not happen if the store only contains IPPool objects.
+			// Log an error and continue, or return an error, depending on desired strictness.
+			logrus.Errorf("reconcileAgentDeployment: found non-IPPool object in IPPool informer store: %T", obj)
+			continue
+		}
+		allIPPools = append(allIPPools, ipPool)
 	}
+	// No error is returned by store.List(), so no `if err != nil` check here for that part.
 
 	var activeIPPools []*networkv1.IPPool
 	for _, ipPool := range allIPPools {
+		if ipPool == nil { // Added nil check for safety, though type assertion should ensure it's not.
+			logrus.Warnf("reconcileAgentDeployment: encountered a nil IPPool object in the list from store, skipping.")
+			continue
+		}
 		if ipPool.DeletionTimestamp == nil && (ipPool.Spec.Paused == nil || !*ipPool.Spec.Paused) {
 			// Check if IPv4Config itself is present and then check its fields.
-			// The direct comparison ipPool.Spec.IPv4Config == nil was incorrect for a struct type.
-			// The intention is to ensure essential fields within IPv4Config are populated.
 			if ipPool.Spec.NetworkName == "" || ipPool.Spec.IPv4Config.ServerIP == "" || ipPool.Spec.IPv4Config.CIDR == "" {
 				logrus.Warnf("IPPool %s/%s is active but missing required fields (NetworkName, IPv4Config.ServerIP, IPv4Config.CIDR), skipping for agent config", ipPool.Namespace, ipPool.Name)
 				continue
