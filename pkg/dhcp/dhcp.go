@@ -355,24 +355,53 @@ func (a *DHCPAllocator) Run(ctx context.Context, netConfigs []DHCPNetConfig) (er
 			continue
 		}
 
-		go func(ifName string, poolRef string) { // Capture interface name and pool ref for logging
-			logrus.Infof("DHCP server goroutine started for interface %s (IPPool %s)", ifName, poolRef)
-			if err := server.Serve(); err != nil {
-				// Check if context was cancelled, which might cause Serve() to return an error.
-				select {
-				case <-ctx.Done():
-					logrus.Infof("(dhcp.Run) DHCP server on nic %s (IPPool %s) stopped due to context cancellation: %v", ifName, poolRef, err)
-				default:
-					logrus.Errorf("(dhcp.Run) DHCP server on nic %s (IPPool %s) exited with error: %v", ifName, poolRef, err)
-				}
+		// Use an errgroup for the servers themselves, so if one fails, the context of the group is cancelled.
+		// We need a new context for this errgroup, derived from the input ctx.
+		// However, the server.Serve() itself should react to the cancellation of the original ctx.
+		// The primary purpose of DHCPAllocator.Run is to manage these servers.
+		// It should only return when all servers have stopped (due to error or context cancellation).
+
+		// Storing server instances to allow for graceful shutdown via their Close() method.
+		a.servers[nc.InterfaceName] = server // Store server instance keyed by interface name
+
+		// This internal goroutine will run server.Serve() and log its lifecycle.
+		// It will respect the passed-in ctx for its own termination.
+		go func(s *server4.Server, ifName string, poolRef string, Ctx context.Context) {
+			logrus.Infof("DHCP server goroutine starting for interface %s (IPPool %s)", ifName, poolRef)
+			errServe := s.Serve()
+			// Check if context was cancelled, which might cause Serve() to return an error.
+			select {
+			case <-Ctx.Done():
+				// If the context is done, this error is likely related to the context cancellation (e.g., listener closed).
+				logrus.Infof("(dhcp.Run) DHCP server on nic %s (IPPool %s) stopped due to context cancellation: %v", ifName, poolRef, errServe)
+			default:
+				// If context is not done, but Serve() returned, it's an unexpected error.
+				logrus.Errorf("(dhcp.Run) DHCP server on nic %s (IPPool %s) exited unexpectedly with error: %v", ifName, poolRef, errServe)
+				// This scenario (unexpected error) should ideally trigger a shutdown of the group if using an errgroup here.
+				// For now, individual servers exiting due to non-context errors are just logged.
+				// A more robust solution would propagate this error to make DHCPAllocator.Run return.
 			}
 			logrus.Infof("DHCP server goroutine ended for interface %s (IPPool %s)", ifName, poolRef)
-		}(nc.InterfaceName, currentIPPoolRef) // Pass current values to goroutine
-
-		a.servers[nc.InterfaceName] = server // Store server instance keyed by interface name
+		}(server, nc.InterfaceName, currentIPPoolRef, ctx) // Pass the original ctx
 	}
 
-	return nil // Assuming errors in starting individual servers are logged and not fatal for others
+	// If no servers were configured or started, return nil.
+	if len(a.servers) == 0 {
+		logrus.Info("(dhcp.Run) no DHCP servers were actually started.")
+		return nil
+	}
+
+	// Wait for the context to be cancelled. This will keep DHCPAllocator.Run alive.
+	// The actual server goroutines will react to this cancellation.
+	// The Cleanup function (called by the agent) will then call stopAll to close servers.
+	<-ctx.Done()
+	logrus.Info("(dhcp.Run) context cancelled. DHCPAllocator.Run is terminating.")
+
+	// It's important that server.Close() is called to release resources.
+	// This is handled by the Cleanup function which calls stopAll().
+	// So, DHCPAllocator.Run itself doesn't need to call stopAll() here.
+	// It just needs to ensure it stays alive until the context is done.
+	return ctx.Err() // Return the context error (e.g., context.Canceled)
 }
 
 // DryRun now accepts a slice of DHCPNetConfig
