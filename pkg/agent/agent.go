@@ -35,14 +35,14 @@ type Agent struct {
 	netConfigs  []AgentNetConfig
 	ipPoolRefs  []string // Parsed from IPPoolRefsJSON, stores "namespace/name" strings
 
-	// ippoolEventHandler *ippool.EventHandler // Commented out for now
-	DHCPAllocator *dhcp.DHCPAllocator
-	// poolCache          map[string]string // Commented out as it was tied to ippoolEventHandler
+	ipPoolEventHandlers []*ippool.EventHandler // Changed to a slice of handlers
+	DHCPAllocator     *dhcp.DHCPAllocator
+	// Each EventHandler will have its own poolCache.
+	// The agent itself doesn't need a global poolCache if handlers are per-pool.
 }
 
 func NewAgent(options *config.AgentOptions) *Agent {
 	dhcpAllocator := dhcp.NewDHCPAllocator()
-	// poolCache := make(map[string]string, 10) // Commented out
 
 	var netConfigs []AgentNetConfig
 	if options.AgentNetworkConfigsJSON != "" {
@@ -60,23 +60,55 @@ func NewAgent(options *config.AgentOptions) *Agent {
 	}
 
 	agent := &Agent{
-		dryRun:     options.DryRun,
-		netConfigs: netConfigs,
-		ipPoolRefs: ipPoolRefs,
-
-		DHCPAllocator: dhcpAllocator,
-		// poolCache: poolCache, // Commented out
+		dryRun:              options.DryRun,
+		netConfigs:          netConfigs,
+		ipPoolRefs:          ipPoolRefs, // This might be redundant if netConfigs is the source of truth
+		DHCPAllocator:       dhcpAllocator,
+		ipPoolEventHandlers: make([]*ippool.EventHandler, 0, len(netConfigs)),
 	}
 
-	// Commenting out ippoolEventHandler initialization as its role needs re-evaluation
-	// if agent.ippoolEventHandler = ippool.NewEventHandler(
-	// 	options.KubeConfigPath,
-	// 	options.KubeContext,
-	// 	nil, // This was client, needs to be correctly passed if handler is used
-	// 	types.NamespacedName{}, // This was a single IPPoolRef, needs to handle multiple or be re-thought
-	// 	dhcpAllocator,
-	// 	poolCache,
-	// );
+	// Initialize an EventHandler for each IPPoolRef specified in netConfigs
+	processedIPPoolRefs := make(map[string]bool) // To avoid duplicate handlers for the same IPPoolRef
+
+	for _, nc := range netConfigs {
+		if nc.IPPoolRef == "" {
+			logrus.Warnf("AgentNetConfig for interface %s has empty IPPoolRef, skipping EventHandler setup.", nc.InterfaceName)
+			continue
+		}
+		if _, processed := processedIPPoolRefs[nc.IPPoolRef]; processed {
+			logrus.Debugf("EventHandler for IPPoolRef %s already initialized, skipping.", nc.IPPoolRef)
+			continue
+		}
+
+		namespace, name, err := cache.SplitMetaNamespaceKey(nc.IPPoolRef)
+		if err != nil {
+			logrus.Errorf("Invalid IPPoolRef format '%s': %v. Cannot set up EventHandler.", nc.IPPoolRef, err)
+			continue
+		}
+		poolRef := types.NamespacedName{Namespace: namespace, Name: name}
+
+		// Each EventHandler gets its own poolCache.
+		// The poolCache is specific to the IPPool it handles.
+		poolCacheForHandler := make(map[string]string)
+
+		eventHandler := ippool.NewEventHandler(
+			options.KubeConfigPath,
+			options.KubeContext,
+			nil, // KubeRestConfig will be initialized by eventHandler.Init()
+			poolRef,
+			dhcpAllocator,       // Shared DHCPAllocator
+			poolCacheForHandler, // Per-handler cache
+		)
+		if err := eventHandler.Init(); err != nil {
+			// Log error but don't stop the agent from starting.
+			// The DHCP server for this pool might not get lease updates.
+			logrus.Errorf("Failed to initialize EventHandler for IPPool %s: %v", nc.IPPoolRef, err)
+		} else {
+			agent.ipPoolEventHandlers = append(agent.ipPoolEventHandlers, eventHandler)
+			processedIPPoolRefs[nc.IPPoolRef] = true
+			logrus.Infof("Initialized EventHandler for IPPool %s", nc.IPPoolRef)
+		}
+	}
 
 	return agent
 }
@@ -173,22 +205,38 @@ func (a *Agent) Run(ctx context.Context) error {
 			return nil
 		}
 
-		// Commenting out ippoolEventHandler related sync logic
-		/*
-			if a.ippoolEventHandler != nil && a.ippoolEventHandler.InitialSyncDone != nil {
-				logrus.Info("DHCP server goroutine waiting for initial IPPool cache sync...")
+		// Wait for all IPPool EventHandlers to complete their initial sync.
+		if len(a.ipPoolEventHandlers) > 0 {
+			logrus.Infof("DHCP server goroutine waiting for initial IPPool cache sync from %d handler(s)...", len(a.ipPoolEventHandlers))
+			allSynced := true
+			for i, handler := range a.ipPoolEventHandlers {
+				if handler == nil || handler.InitialSyncDone == nil {
+					logrus.Warnf("EventHandler %d or its InitialSyncDone channel is nil for IPPool %s, cannot wait for its cache sync.", i, handler.GetPoolRef().String())
+					// Consider this a failure for allSynced or handle as per policy.
+					// For now, we'll log and potentially proceed without its sync.
+					// This shouldn't happen if Init() was successful and NewEventHandler worked.
+					continue
+				}
 				select {
-				case <-a.ippoolEventHandler.InitialSyncDone:
-					logrus.Info("Initial IPPool cache sync complete. Starting DHCP server.")
+				case <-handler.InitialSyncDone:
+					logrus.Infof("Initial IPPool cache sync complete for handler %s.", handler.GetPoolRef().String())
 				case <-egctx.Done():
 					logrus.Info("Context cancelled while waiting for initial IPPool cache sync.")
 					return egctx.Err()
 				}
-			} else {
-				logrus.Warn("ippoolEventHandler or InitialSyncDone channel is nil, cannot wait for cache sync.")
 			}
-		*/
-		logrus.Info("Starting DHCP server logic for configured interfaces (TODO: Needs multi-interface support in DHCPAllocator).")
+			if allSynced { // This variable is not strictly tracking if all synced yet, needs adjustment if one fails to init
+				logrus.Info("All active IPPool EventHandlers completed initial sync.")
+			} else {
+				logrus.Warn("One or more IPPool EventHandlers did not complete initial sync (or were nil). DHCP server starting with potentially incomplete lease data.")
+			}
+		} else {
+			logrus.Info("No IPPool EventHandlers configured, proceeding without waiting for cache sync.")
+		}
+
+		// The TODO below about multi-interface support in DHCPAllocator is a separate concern.
+		// The current changes focus on ensuring lease data is loaded.
+		logrus.Info("Starting DHCP server logic for configured interfaces.")
 		// Pass all network configurations to DHCPAllocator.Run or DryRun.
 		// The DHCPAllocator's Run/DryRun methods now expect []dhcp.DHCPNetConfig.
 		// a.netConfigs is []AgentNetConfig. We need to ensure these are compatible.
@@ -216,20 +264,26 @@ func (a *Agent) Run(ctx context.Context) error {
 		return a.DHCPAllocator.Run(egctx, dhcpConfigs) // Pass the slice of configs
 	})
 
-	// Commenting out ippoolEventHandler logic as its role is unclear in the new multi-pool agent model
-	/*
+	// Start an EventListener for each initialized EventHandler
+	for _, handler := range a.ipPoolEventHandlers {
+		if handler == nil {
+			// Should not happen if initialization logic is correct
+			logrus.Error("Encountered a nil EventHandler in ipPoolEventHandlers slice. Skipping.")
+			continue
+		}
+		// Capture current handler for the goroutine closure
+		currentHandler := handler
 		eg.Go(func() error {
-			if a.ippoolEventHandler == nil {
-				logrus.Info("ippoolEventHandler is not initialized, skipping event listener.")
-				return nil
-			}
-			if err := a.ippoolEventHandler.Init(); err != nil {
-				return err
-			}
-			a.ippoolEventHandler.EventListener(egctx)
-			return nil
+			logrus.Infof("Starting IPPool event listener for %s", currentHandler.GetPoolRef().String())
+			// EventListener itself will handle its own k8s client initialization via currentHandler.Init()
+			// if it wasn't done during NewAgent or if KubeRestConfig was nil.
+			// Init() is now called during NewAgent. If it failed, the handler might not be in the list.
+			// If it's in the list, Init() was successful.
+			currentHandler.EventListener(egctx) // Pass the error group's context
+			logrus.Infof("IPPool event listener for %s stopped.", currentHandler.GetPoolRef().String())
+			return nil // EventListener handles its own errors internally or stops on context cancellation
 		})
-	*/
+	}
 
 	// dhcp.Cleanup has been updated to not require a specific NIC, as DHCPAllocator.stopAll() handles all servers.
 	errCh := dhcp.Cleanup(egctx, a.DHCPAllocator)

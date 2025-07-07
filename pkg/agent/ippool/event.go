@@ -39,6 +39,11 @@ type EventHandler struct {
 	initialSyncOnce sync.Once
 }
 
+// GetPoolRef returns the string representation of the IPPool an EventHandler is responsible for.
+func (e *EventHandler) GetPoolRef() types.NamespacedName {
+	return e.poolRef
+}
+
 type Event struct {
 	key             string
 	action          string

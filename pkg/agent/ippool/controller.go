@@ -138,72 +138,123 @@ func (c *Controller) Update(ipPool *networkv1.IPPool) error {
 
 	// Let's assume `c.poolCache` stores MAC -> IP for the IPPool being managed.
 	// We should clear these from dhcpAllocator first.
-	for mac := range c.poolCache {
-		// Check if the lease still exists in the new ipPool status. If not, delete.
-		stillExists := false
-		if ipPool.Status.IPv4 != nil && ipPool.Status.IPv4.Allocated != nil {
-			// Check if the MAC from poolCache still exists as a value in the new ipPool.Status.IPv4.Allocated map
-			for _, allocatedMacFromStatus := range ipPool.Status.IPv4.Allocated {
-				if mac == allocatedMacFromStatus {
-					stillExists = true
-					break
-				}
+	// poolRefStr is the "namespace/name" string for the IPPool this controller is responsible for.
+	poolRefStr := c.poolRef.String()
+
+	// Step 1: Identify leases to remove from DHCPAllocator for this specific IPPool.
+	// These are leases present in c.poolCache (MAC -> IP) but not in the new ipPool.Status.IPv4.Allocated.
+	newAllocatedHwAddrs := make(map[string]bool)
+	if ipPool.Status.IPv4 != nil && ipPool.Status.IPv4.Allocated != nil {
+		for _, hwAddr := range ipPool.Status.IPv4.Allocated {
+			if hwAddr != util.ExcludedMark && hwAddr != util.ReservedMark {
+				newAllocatedHwAddrs[hwAddr] = true
 			}
-		}
-		if !stillExists {
-			logrus.Infof("Deleting stale lease for MAC %s from DHCPAllocator", mac)
-			if err := c.dhcpAllocator.DeleteLease(mac); err != nil {
-				logrus.Warnf("Failed to delete lease for MAC %s: %v (may already be gone)", mac, err)
-			}
-			delete(c.poolCache, mac) // Remove from our tracking cache
 		}
 	}
 
+	for hwAddrFromCache := range c.poolCache {
+		if _, stillExists := newAllocatedHwAddrs[hwAddrFromCache]; !stillExists {
+			logrus.Infof("(%s) Deleting stale lease for MAC %s from DHCPAllocator", poolRefStr, hwAddrFromCache)
+			if err := c.dhcpAllocator.DeleteLease(poolRefStr, hwAddrFromCache); err != nil {
+				logrus.Warnf("(%s) Failed to delete lease for MAC %s: %v (may already be gone)", poolRefStr, hwAddrFromCache, err)
+			}
+			delete(c.poolCache, hwAddrFromCache) // Remove from our tracking cache
+		}
+	}
 
-	// Step 2: Add/Update leases from ipPool.Status.IPv4.Allocated
+	// Step 2: Add/Update leases from ipPool.Status.IPv4.Allocated into DHCPAllocator.
 	if ipPool.Status.IPv4 != nil && ipPool.Status.IPv4.Allocated != nil {
 		specConf := ipPool.Spec.IPv4Config
-		var dnsServers []string // IPPool spec doesn't have DNS servers
-		var domainName *string  // IPPool spec doesn't have domain name
-		var domainSearch []string // IPPool spec doesn't have domain search
-		var ntpServers []string   // IPPool spec doesn't have NTP
+		// For DNS, DomainName, DomainSearch, NTPServers:
+		// These are not in the IPPool spec. For now, we'll pass empty/nil values.
+		// A more complete solution might fetch these from a global config or NAD annotations.
+		var dnsServers []string
+		var domainName *string // Already a pointer, can be nil
+		var domainSearch []string
+		var ntpServers []string
 
 		for clientIPStr, hwAddr := range ipPool.Status.IPv4.Allocated {
 			if hwAddr == util.ExcludedMark || hwAddr == util.ReservedMark {
-				continue // Skip special markers
+				// Also, ensure we add the "EXCLUDED" entry to the DHCPAllocator's internal tracking
+				// if it has such a concept, or handle it appropriately so it doesn't grant these IPs.
+				// For now, the DHCPAllocator.AddLease is for actual leases.
+				// We could add a special marker to poolCache if needed.
+				// The current DHCPAllocator doesn't seem to have a direct way to mark IPs as "excluded"
+				// other than them not being available for leasing.
+				// The IPPool CRD status.allocated handles this.
+				// We can add excluded IPs to our local c.poolCache to prevent deletion if logic changes.
+				// c.poolCache[hwAddr] = clientIPStr // e.g. c.poolCache["EXCLUDED"] = "10.102.189.39"
+				// However, the current loop for deletion (Step 1) is based on hwAddr in poolCache vs hwAddr in status.
+				// So, excluded entries from status won't be deleted from cache if they are added to cache.
+				// Let's ensure they are in the cache if not already, so they are not accidentally "stale-deleted".
+				if _, existsInCache := c.poolCache[hwAddr]; !existsInCache && (hwAddr == util.ExcludedMark || hwAddr == util.ReservedMark) {
+					// This might not be the right place, as AddLease is for real leases.
+					// The primary goal is that the DHCP server doesn't hand out these IPs.
+					// The IPPool status itself is the source of truth for exclusions.
+					// The DHCPAllocator's job is to give out leases from the available range,
+					// respecting what's already allocated (including exclusions).
+					// The current AddLease is for *dynamic* leases.
+					// Perhaps we don't need to do anything special for EXCLUDED here in terms of AddLease.
+					// The controller's main job is to sync actual dynamic allocations.
+				}
+				continue // Skip special markers for adding as dynamic DHCP leases
 			}
 
-			// If lease for this MAC already exists, delete it first to allow AddLease to work (as AddLease errors if MAC exists)
-			// This handles updates to existing leases (e.g. if lease time or other params changed, though not stored in IPPool status)
-			existingLease := c.dhcpAllocator.GetLease(hwAddr)
-			if existingLease.ClientIP != nil { // Check if ClientIP is not nil to confirm existence
-				logrus.Debugf("Deleting existing lease for MAC %s (IP: %s) before re-adding/updating.", hwAddr, existingLease.ClientIP.String())
-				if err := c.dhcpAllocator.DeleteLease(hwAddr); err != nil {
-					logrus.Warnf("Failed to delete existing lease for MAC %s during update: %v", hwAddr, err)
-					// Continue, AddLease might still work or fail cleanly
+			// The AddLease function in DHCPAllocator is idempotent if the lease details are identical,
+			// but it errors if the MAC exists with different details.
+			// It's safer to delete then re-add if an update is intended, or ensure AddLease can handle "updates".
+			// Current AddLease errors on existing hwAddr. So, we must delete first if it exists.
+			// This is problematic if we only want to update parameters without changing ClientIP.
+			// Let's refine: GetLease, if exists and IP matches, maybe update params. If IP differs, delete and re-add.
+			// For now, keeping it simple: if it's in the new status, we ensure it's in the allocator.
+			// The previous check for deletion handles MACs no longer in status.
+			// Now, for MACs in status, we add them. If AddLease fails due to "already exists",
+			// it implies our cache or state is desynced, or AddLease needs to be more flexible.
+
+			// Let's use GetLease to see if we need to add or if it's already there and consistent.
+			existingLease, found := c.dhcpAllocator.GetLease(poolRefStr, hwAddr)
+			if found && existingLease.ClientIP.String() == clientIPStr {
+				// Lease exists and IP matches. Potentially update other params if they changed.
+				// For now, assume if IP & MAC match, it's current for this simple sync.
+				// logrus.Debugf("(%s) Lease for MAC %s, IP %s already in DHCPAllocator and matches. Skipping AddLease.", poolRefStr, hwAddr, clientIPStr)
+				// We still need to ensure it's in our local c.poolCache
+				if _, existsInCache := c.poolCache[hwAddr]; !existsInCache {
+					c.poolCache[hwAddr] = clientIPStr
+				}
+				continue
+			}
+			if found && existingLease.ClientIP.String() != clientIPStr {
+				// MAC exists but with a different IP. This is an inconsistent state. Delete the old one.
+				logrus.Warnf("(%s) MAC %s found with different IP %s in DHCPAllocator. Deleting before adding new IP %s.",
+					poolRefStr, hwAddr, existingLease.ClientIP.String(), clientIPStr)
+				if errDel := c.dhcpAllocator.DeleteLease(poolRefStr, hwAddr); errDel != nil {
+					logrus.Errorf("(%s) Failed to delete inconsistent lease for MAC %s: %v", poolRefStr, hwAddr, errDel)
+					// Continue to try AddLease, it will likely fail if delete failed.
 				}
 			}
 
-			// specConf.LeaseTime is *int (based on compiler error)
-			// dhcpAllocator.AddLease expects *int for leaseTime argument.
-			// Pass specConf.LeaseTime directly.
+			// Add the lease.
 			err := c.dhcpAllocator.AddLease(
+				poolRefStr, // Corrected: pass the poolRef string
 				hwAddr,
 				specConf.ServerIP,
 				clientIPStr,
 				specConf.CIDR,
 				specConf.Router,
-				dnsServers,   // Empty or from a global config
-				domainName,   // Nil or from a global config
-				domainSearch, // Empty or from a global config
-				ntpServers,   // Empty or from a global config
+				dnsServers,
+				domainName,
+				domainSearch,
+				ntpServers,
 				specConf.LeaseTime,
 			)
 			if err != nil {
-				logrus.Errorf("Failed to add/update lease for MAC %s, IP %s: %v", hwAddr, clientIPStr, err)
-				// Potentially collect errors and return a summary
+				// Log error, but don't necessarily stop processing other leases.
+				// The requeue mechanism will handle retries for the IPPool update.
+				logrus.Errorf("(%s) Failed to add lease to DHCPAllocator for MAC %s, IP %s: %v", poolRefStr, hwAddr, clientIPStr, err)
+				// Do not return err here, as we want to process all allocations.
+				// The overall sync operation will be retried if there are errors.
 			} else {
-				logrus.Infof("Successfully added/updated lease for MAC %s, IP %s", hwAddr, clientIPStr)
+				logrus.Infof("(%s) Successfully added lease to DHCPAllocator for MAC %s, IP %s", poolRefStr, hwAddr, clientIPStr)
 				c.poolCache[hwAddr] = clientIPStr // Update our tracking cache
 			}
 		}
