@@ -10,9 +10,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	// "k8s.io/apimachinery/pkg/types" // No longer using types.NamespacedName directly here
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 
-	// "github.com/harvester/vm-dhcp-controller/pkg/agent/ippool" // Commented out for now
+	"github.com/harvester/vm-dhcp-controller/pkg/agent/ippool"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/dhcp"
 )
