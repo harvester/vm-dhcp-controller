@@ -194,18 +194,6 @@ func (a *Agent) Run(ctx context.Context) error {
 	eg, egctx := errgroup.WithContext(ctx)
 
 	eg.Go(func() error {
-		// TODO: DHCPAllocator.Run and DryRun need to be adapted for multiple network configurations.
-		// This will likely involve DHCPAllocator being aware of a.netConfigs and running
-		// DHCP server logic for each valid configuration, or a single DHCP server capable
-		// of listening on multiple interfaces and distinguishing traffic.
-		// For now, this is a placeholder and will likely fail or behave unexpectedly.
-		if a.dryRun {
-			logrus.Info("Dry run mode: Skipping actual DHCP server start for multiple interfaces (TODO).")
-			// Placeholder: Old DryRun took a single NIC. This needs to be re-thought for multiple.
-			// return a.DHCPAllocator.DryRun(egctx, "some_representative_nic_or_all_nics")
-			return nil
-		}
-
 		// Wait for all IPPool EventHandlers to complete their initial sync.
 		if len(a.ipPoolEventHandlers) > 0 {
 			logrus.Infof("DHCP server goroutine waiting for initial IPPool cache sync from %d handler(s)...", len(a.ipPoolEventHandlers))

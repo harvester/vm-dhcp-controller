@@ -405,7 +405,7 @@ func (a *DHCPAllocator) Run(ctx context.Context, netConfigs []DHCPNetConfig) (er
 }
 
 // DryRun now accepts a slice of DHCPNetConfig
-func (a *DHCPAllocator) DryRun(ctx context.Context, netConfigs []DHCPNetConfig) (err error) {
+func (a *DHCPAllocator) DryRun(_ context.Context, netConfigs []DHCPNetConfig) (err error) {
 	if len(netConfigs) == 0 {
 		logrus.Info("(dhcp.DryRun) no network configurations provided.")
 		return nil
