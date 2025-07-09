@@ -236,7 +236,8 @@ func (a *DHCPAllocator) dhcpHandlerPerPool(conn net.PacketConn, peer net.Addr, m
 		return
 	}
 
-	logrus.Tracef("(dhcp.dhcpHandlerPerPool) INCOMING PACKET=%s on IPPool: %s", m.Summary(), ipPoolRef)
+	// Enhanced logging for incoming packet
+	logrus.Infof("(dhcp.dhcpHandlerPerPool) INCOMING DHCP PACKET on IPPool %s: %s", ipPoolRef, m.String())
 
 	if m.OpCode != dhcpv4.OpcodeBootRequest {
 		logrus.Errorf("(dhcp.dhcpHandlerPerPool) not a BootRequest! IPPool: %s", ipPoolRef)
@@ -313,6 +314,9 @@ func (a *DHCPAllocator) dhcpHandlerPerPool(conn net.PacketConn, peer net.Addr, m
 		logrus.Warnf("(dhcp.dhcpHandlerPerPool) Unhandled message type for hwaddr [%s] on IPPool %s: %v", m.ClientHWAddr.String(), ipPoolRef, messageType)
 		return
 	}
+
+	// Enhanced logging for outgoing packet
+	logrus.Infof("(dhcp.dhcpHandlerPerPool) OUTGOING DHCP REPLY on IPPool %s: %s", ipPoolRef, reply.String())
 
 	if _, err := conn.WriteTo(reply.ToBytes(), peer); err != nil {
 		logrus.Errorf("(dhcp.dhcpHandlerPerPool) Cannot reply to client for IPPool %s: %v", ipPoolRef, err)
