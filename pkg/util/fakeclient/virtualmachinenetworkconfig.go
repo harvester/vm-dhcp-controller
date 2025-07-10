@@ -20,10 +20,10 @@ func (c VirtualMachineNetworkConfigClient) Update(vmNetCfg *networkv1.VirtualMac
 	return c(vmNetCfg.Namespace).Update(context.TODO(), vmNetCfg, metav1.UpdateOptions{})
 }
 func (c VirtualMachineNetworkConfigClient) Get(namespace, name string, options metav1.GetOptions) (*networkv1.VirtualMachineNetworkConfig, error) {
-	panic("implement me")
+	return c(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
-func (c VirtualMachineNetworkConfigClient) Create(*networkv1.VirtualMachineNetworkConfig) (*networkv1.VirtualMachineNetworkConfig, error) {
-	panic("implement me")
+func (c VirtualMachineNetworkConfigClient) Create(vmNetCfg *networkv1.VirtualMachineNetworkConfig) (*networkv1.VirtualMachineNetworkConfig, error) {
+	return c(vmNetCfg.Namespace).Create(context.TODO(), vmNetCfg, metav1.CreateOptions{})
 }
 func (c VirtualMachineNetworkConfigClient) Delete(namespace, name string, options *metav1.DeleteOptions) error {
 	panic("implement me")

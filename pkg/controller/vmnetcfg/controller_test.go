@@ -44,8 +44,8 @@ const (
 	testMACAddress4 = "44:55:66:77:88:99"
 )
 
-func newTestVmNetCfgBuilder() *vmNetCfgBuilder {
-	return newVmNetCfgBuilder(testVmNetCfgNamespace, testVmNetCfgName)
+func newTestVmNetCfgBuilder() *VmNetCfgBuilder {
+	return NewVmNetCfgBuilder(testVmNetCfgNamespace, testVmNetCfgName)
 }
 
 func newTestVmNetCfgStatusBuilder() *vmNetCfgStatusBuilder {
