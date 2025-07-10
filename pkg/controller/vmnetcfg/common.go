@@ -31,12 +31,12 @@ func setInSyncedCondition(vmNetCfg *networkv1.VirtualMachineNetworkConfig, statu
 	networkv1.InSynced.Message(vmNetCfg, message)
 }
 
-type vmNetCfgBuilder struct {
+type VmNetCfgBuilder struct {
 	vmNetCfg *networkv1.VirtualMachineNetworkConfig
 }
 
-func newVmNetCfgBuilder(namespace, name string) *vmNetCfgBuilder {
-	return &vmNetCfgBuilder{
+func NewVmNetCfgBuilder(namespace, name string) *VmNetCfgBuilder {
+	return &VmNetCfgBuilder{
 		vmNetCfg: &networkv1.VirtualMachineNetworkConfig{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: namespace,
@@ -46,17 +46,38 @@ func newVmNetCfgBuilder(namespace, name string) *vmNetCfgBuilder {
 	}
 }
 
-func (b *vmNetCfgBuilder) Paused() *vmNetCfgBuilder {
+func (b *VmNetCfgBuilder) Label(key, value string) *VmNetCfgBuilder {
+	if b.vmNetCfg.Labels == nil {
+		b.vmNetCfg.Labels = make(map[string]string)
+	}
+	b.vmNetCfg.Labels[key] = value
+	return b
+}
+
+func (b *VmNetCfgBuilder) OwnerRef(owner metav1.OwnerReference) *VmNetCfgBuilder {
+	if b.vmNetCfg.OwnerReferences == nil {
+		b.vmNetCfg.OwnerReferences = []metav1.OwnerReference{}
+	}
+	b.vmNetCfg.OwnerReferences = append(b.vmNetCfg.OwnerReferences, owner)
+	return b
+}
+
+func (b *VmNetCfgBuilder) WithVMName(name string) *VmNetCfgBuilder {
+	b.vmNetCfg.Spec.VMName = name
+	return b
+}
+
+func (b *VmNetCfgBuilder) Paused() *VmNetCfgBuilder {
 	b.vmNetCfg.Spec.Paused = func(b bool) *bool { return &b }(true)
 	return b
 }
 
-func (b *vmNetCfgBuilder) UnPaused() *vmNetCfgBuilder {
+func (b *VmNetCfgBuilder) UnPaused() *VmNetCfgBuilder {
 	b.vmNetCfg.Spec.Paused = func(b bool) *bool { return &b }(false)
 	return b
 }
 
-func (b *vmNetCfgBuilder) WithNetworkConfig(ipAddress, macAddress, networkName string) *vmNetCfgBuilder {
+func (b *VmNetCfgBuilder) WithNetworkConfig(ipAddress, macAddress, networkName string) *VmNetCfgBuilder {
 	var ip *string
 	if ipAddress != "" {
 		ip = &ipAddress
@@ -70,7 +91,7 @@ func (b *vmNetCfgBuilder) WithNetworkConfig(ipAddress, macAddress, networkName s
 	return b
 }
 
-func (b *vmNetCfgBuilder) WithNetworkConfigStatus(ipAddress, macAddress, networkName string, state networkv1.NetworkConfigState) *vmNetCfgBuilder {
+func (b *VmNetCfgBuilder) WithNetworkConfigStatus(ipAddress, macAddress, networkName string, state networkv1.NetworkConfigState) *VmNetCfgBuilder {
 	ncStatus := networkv1.NetworkConfigStatus{
 		AllocatedIPAddress: ipAddress,
 		MACAddress:         macAddress,
@@ -81,22 +102,22 @@ func (b *vmNetCfgBuilder) WithNetworkConfigStatus(ipAddress, macAddress, network
 	return b
 }
 
-func (b *vmNetCfgBuilder) AllocatedCondition(status corev1.ConditionStatus, reason, message string) *vmNetCfgBuilder {
+func (b *VmNetCfgBuilder) AllocatedCondition(status corev1.ConditionStatus, reason, message string) *VmNetCfgBuilder {
 	setAllocatedCondition(b.vmNetCfg, status, reason, message)
 	return b
 }
 
-func (b *vmNetCfgBuilder) DisabledCondition(status corev1.ConditionStatus, reason, message string) *vmNetCfgBuilder {
+func (b *VmNetCfgBuilder) DisabledCondition(status corev1.ConditionStatus, reason, message string) *VmNetCfgBuilder {
 	setDisabledCondition(b.vmNetCfg, status, reason, message)
 	return b
 }
 
-func (b *vmNetCfgBuilder) InSyncedCondition(status corev1.ConditionStatus, reason, message string) *vmNetCfgBuilder {
+func (b *VmNetCfgBuilder) InSyncedCondition(status corev1.ConditionStatus, reason, message string) *VmNetCfgBuilder {
 	setInSyncedCondition(b.vmNetCfg, status, reason, message)
 	return b
 }
 
-func (b *vmNetCfgBuilder) Build() *networkv1.VirtualMachineNetworkConfig {
+func (b *VmNetCfgBuilder) Build() *networkv1.VirtualMachineNetworkConfig {
 	return b.vmNetCfg
 }
 
