@@ -97,12 +97,79 @@ func (c *Controller) sync(event Event) (err error) {
 		}
 		// If update was successful, this is a good place to signal initial sync
 		c.initialSyncOnce.Do(func() {
-			logrus.Infof("Initial sync completed for IPPool %s/%s, signaling DHCP server.", ipPool.Namespace, ipPool.Name)
+			logrus.Infof("Initial sync UPDATE completed for IPPool %s/%s, signaling DHCP server.", ipPool.Namespace, ipPool.Name)
+			close(c.initialSyncDone)
+		})
+	case ADD: // Handle ADD for initial sync signal
+		ipPool, ok := obj.(*networkv1.IPPool)
+		if !ok {
+			logrus.Errorf("(controller.sync) failed to assert obj during ADD for key %s", event.key)
+			return err // Return error to requeue
+		}
+		logrus.Infof("(controller.sync) ADD %s/%s", ipPool.Namespace, ipPool.Name)
+		if err := c.Update(ipPool); err != nil { // Update leases based on this added IPPool
+			logrus.Errorf("(controller.sync) failed to update DHCP lease store for newly added IPPool %s/%s: %s", ipPool.Namespace, ipPool.Name, err.Error())
+			return err // Return error to requeue
+		}
+		// Signal initial sync because our target pool has been added and processed.
+		c.initialSyncOnce.Do(func() {
+			logrus.Infof("Initial sync ADD completed for IPPool %s/%s, signaling DHCP server.", ipPool.Namespace, ipPool.Name)
+			close(c.initialSyncDone)
+		})
+	case DELETE:
+		// If our target IPPool is deleted.
+		// If cache.WaitForCacheSync is done, and then we get a DELETE for our pool,
+		// it means it *was* there.
+		// If the pool is *not* found by GetByKey (exists == false) and action is DELETE,
+		// it implies it was already deleted from the cache by the informer.
+		poolNamespace, poolNameFromKey, keyErr := cache.SplitMetaNamespaceKey(event.key)
+		if keyErr != nil {
+			logrus.Errorf("(controller.sync) failed to split key %s for DELETE: %v", event.key, keyErr)
+			return keyErr
+		}
+
+		// Ensure this delete event is for the specific pool this controller instance is managing.
+		// This check is already done above with `event.poolName != c.poolRef.Name`,
+		// but double-checking with `event.key` against `c.poolRef` is more robust for DELETE.
+		if !(poolNamespace == c.poolRef.Namespace && poolNameFromKey == c.poolRef.Name) {
+			logrus.Debugf("(controller.sync) DELETE event for key %s is not for our target pool %s. Skipping.", event.key, c.poolRef.String())
+			return nil
+		}
+
+		logrus.Infof("(controller.sync) DELETE %s. Clearing leases.", event.key)
+		c.clearLeasesForPool(c.poolRef.String()) // poolRefString is "namespace/name"
+
+		// After deletion processing, if this was our target pool, it's now "synced" (as deleted/absent).
+		c.initialSyncOnce.Do(func() {
+			logrus.Infof("Initial sync DELETE (target processed for deletion) completed for IPPool %s, signaling DHCP server.", event.key)
 			close(c.initialSyncDone)
 		})
 	}
 
 	return
+}
+
+// clearLeasesForPool clears all leases for a specific IPPool from the DHCPAllocator and local cache.
+func (c *Controller) clearLeasesForPool(poolRefStr string) {
+	logrus.Infof("(%s) Clearing all leases from DHCPAllocator and local cache due to IPPool deletion or full resync.", poolRefStr)
+	// Iterate over a copy of keys if modifying map during iteration, or collect keys first
+	hwAddrsToDelete := []string{}
+	for hwAddr := range c.poolCache {
+		// Assuming c.poolCache only contains MACs for *this* controller's poolRef.
+		// This assumption needs to be true for this to work correctly.
+		// If c.poolCache could contain MACs from other pools (e.g. if it was shared, which it isn't here),
+		// we would need to verify that the lease belongs to this poolRefStr before deleting.
+		// However, since each EventHandler/Controller has its own poolCache for its specific poolRef, this is safe.
+		hwAddrsToDelete = append(hwAddrsToDelete, hwAddr)
+	}
+
+	for _, hwAddr := range hwAddrsToDelete {
+		if err := c.dhcpAllocator.DeleteLease(poolRefStr, hwAddr); err != nil {
+			logrus.Warnf("(%s) Failed to delete lease for MAC %s during clear: %v (may already be gone or belong to a different pool if logic changes)", poolRefStr, hwAddr, err)
+		}
+		delete(c.poolCache, hwAddr)
+	}
+	logrus.Infof("(%s) Finished clearing leases.", poolRefStr)
 }
 
 // Update processes the IPPool and updates the DHCPAllocator's leases.
