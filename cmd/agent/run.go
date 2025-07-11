@@ -42,9 +42,19 @@ func run(options *config.AgentOptions) error {
 
 	callback := func(ctx context.Context) {
 		if err := agent.Run(ctx); err != nil {
-			panic(err)
+			// Check if the error is context.Canceled, which is expected on graceful shutdown.
+			if errors.Is(err, context.Canceled) {
+				logrus.Info("Agent run completed due to context cancellation.")
+			} else {
+				// For any other error, it's unexpected, so panic.
+				logrus.Errorf("Agent run failed with unexpected error: %v", err)
+				panic(err)
+			}
 		}
+		// Wait for the context to be done, ensuring the leader election logic
+		// holds the leadership until the context is fully cancelled.
 		<-ctx.Done()
+		logrus.Info("Leader election callback completed as context is done.")
 	}
 
 	httpServerOptions := config.HTTPServerOptions{
