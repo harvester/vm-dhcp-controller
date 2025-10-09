@@ -19,7 +19,7 @@ import (
 type Controller struct {
 	stopCh   chan struct{}
 	indexer  cache.Indexer
-	queue    workqueue.RateLimitingInterface
+	queue    workqueue.TypedRateLimitingInterface[Event]
 	informer cache.Controller
 
 	poolRef       types.NamespacedName
@@ -31,7 +31,7 @@ type Controller struct {
 }
 
 func NewController(
-	queue workqueue.RateLimitingInterface,
+	queue workqueue.TypedRateLimitingInterface[Event],
 	indexer cache.Indexer,
 	informer cache.Controller,
 	poolRef types.NamespacedName,
@@ -61,7 +61,7 @@ func (c *Controller) processNextItem() bool {
 
 	defer c.queue.Done(event)
 
-	err := c.sync(event.(Event))
+	err := c.sync(event)
 	c.handleErr(err, event)
 
 	return true
@@ -332,20 +332,20 @@ func (c *Controller) Update(ipPool *networkv1.IPPool) error {
 
 func (c *Controller) handleErr(err error, key interface{}) {
 	if err == nil {
-		c.queue.Forget(key)
+		c.queue.Forget(key.(Event))
 
 		return
 	}
 
-	if c.queue.NumRequeues(key) < 5 {
+	if c.queue.NumRequeues(key.(Event)) < 5 {
 		logrus.Errorf("(controller.handleErr) syncing IPPool %v: %v", key, err)
 
-		c.queue.AddRateLimited(key)
+		c.queue.AddRateLimited(key.(Event))
 
 		return
 	}
 
-	c.queue.Forget(key)
+	c.queue.Forget(key.(Event))
 
 	logrus.Errorf("(controller.handleErr) dropping IPPool %q out of the queue: %v", key, err)
 }

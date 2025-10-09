@@ -109,7 +109,7 @@ func (e *EventHandler) EventListener(ctx context.Context) {
 	nameSelector := fields.OneTermEqualSelector("metadata.name", e.poolRef.Name)
 	watcher := cache.NewListWatchFromClient(e.k8sClientset.NetworkV1alpha1().RESTClient(), "ippools", e.poolRef.Namespace, nameSelector)
 
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[Event]())
 
 	indexer, informer := cache.NewIndexerInformer(watcher, &networkv1.IPPool{}, 0, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {

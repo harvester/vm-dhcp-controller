@@ -6,9 +6,9 @@ import (
 
 	harvesterv1 "github.com/harvester/harvester/pkg/apis/harvesterhci.io/v1beta1"
 	"github.com/rancher/lasso/pkg/controller"
-	"github.com/rancher/wrangler/pkg/generic"
-	"github.com/rancher/wrangler/pkg/schemes"
-	"github.com/rancher/wrangler/pkg/start"
+	"github.com/rancher/wrangler/v3/pkg/generic"
+	"github.com/rancher/wrangler/v3/pkg/schemes"
+	"github.com/rancher/wrangler/v3/pkg/start"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"

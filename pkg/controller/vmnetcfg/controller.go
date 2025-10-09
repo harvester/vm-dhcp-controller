@@ -6,7 +6,7 @@ import (
 	"net"
 	"reflect"
 
-	"github.com/rancher/wrangler/pkg/kv"
+	"github.com/rancher/wrangler/v3/pkg/kv"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -212,6 +212,11 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 				return status, err
 			}
 		}
+	}
+
+	if len(ncStatuses) == 0 {
+		logrus.Infof("(vmnetcfg.Allocate) no network configs found for vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
+		return status, fmt.Errorf("no network configs found for vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
 	}
 
 	status.NetworkConfigs = ncStatuses

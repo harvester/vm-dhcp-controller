@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	// "github.com/rancher/wrangler/pkg/kv" // No longer needed for ippoolRef parsing
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	// "k8s.io/apimachinery/pkg/types" // No longer needed for IPPoolRef

@@ -6,14 +6,11 @@ import (
 	"path/filepath"
 
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	controllergen "github.com/rancher/wrangler/pkg/controller-gen"
-	"github.com/rancher/wrangler/pkg/controller-gen/args"
+	controllergen "github.com/rancher/wrangler/v3/pkg/controller-gen"
+	"github.com/rancher/wrangler/v3/pkg/controller-gen/args"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-
-	// Ensure gvk gets loaded in wrangler/pkg/gvk cache
-	_ "github.com/rancher/wrangler/pkg/generated/controllers/apiextensions.k8s.io/v1"
 )
 
 func nadControllerInterfaceRefactor() {
@@ -23,7 +20,7 @@ func nadControllerInterfaceRefactor() {
 		logrus.Fatalf("failed to read the network-attachment-definition file: %v", err)
 	}
 
-	output := bytes.Replace(input, []byte("networkattachmentdefinitions"), []byte("network-attachment-definitions"), -1)
+	output := bytes.ReplaceAll(input, []byte("networkattachmentdefinitions"), []byte("network-attachment-definitions"))
 
 	if err = os.WriteFile(absPath, output, 0644); err != nil {
 		logrus.Fatalf("failed to update the network-attachment-definition file: %v", err)
@@ -31,7 +28,9 @@ func nadControllerInterfaceRefactor() {
 }
 
 func main() {
-	os.Unsetenv("GOPATH")
+	if err := os.Unsetenv("GOPATH"); err != nil {
+		logrus.Fatalf("failed to unset GOPATH: %v", err)
+	}
 	controllergen.Run(args.Options{
 		OutputPackage: "github.com/harvester/vm-dhcp-controller/pkg/generated",
 		Boilerplate:   "scripts/boilerplate.go.txt",
@@ -48,9 +47,6 @@ func main() {
 					corev1.Node{},
 					corev1.Pod{},
 				},
-				InformersPackage: "k8s.io/client-go/informers",
-				ClientSetPackage: "k8s.io/client-go/kubernetes",
-				ListersPackage:   "k8s.io/client-go/listers",
 			},
 			cniv1.SchemeGroupVersion.Group: {
 				Types: []interface{}{

@@ -7,8 +7,6 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
@@ -69,7 +67,7 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 
 	// Update network name for each network config if it's of type Multus
 	for _, network := range vm.Spec.Template.Spec.Networks {
-		if network.NetworkSource.Multus == nil {
+		if network.Multus == nil {
 			continue
 		}
 		nc, ok := ncm[network.Name]
@@ -85,6 +83,12 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 		if nc.NetworkName == "" {
 			delete(ncm, i)
 		}
+	}
+
+	// If no network config is found, return early
+	if len(ncm) == 0 {
+		logrus.Infof("(vm.OnChange) no effective network configs found for vm %s, skipping", key)
+		return vm, nil
 	}
 
 	vmNetCfg := prepareVmNetCfg(vm, ncm)
@@ -136,35 +140,4 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 	}
 
 	return vm, nil
-}
-
-func prepareVmNetCfg(vm *kubevirtv1.VirtualMachine, ncm map[string]networkv1.NetworkConfig) *networkv1.VirtualMachineNetworkConfig {
-	sets := labels.Set{
-		vmLabelKey: vm.Name,
-	}
-
-	ncs := make([]networkv1.NetworkConfig, 0, len(ncm))
-	for _, nc := range ncm {
-		ncs = append(ncs, nc)
-	}
-
-	return &networkv1.VirtualMachineNetworkConfig{
-		ObjectMeta: metav1.ObjectMeta{
-			Labels:    sets,
-			Name:      vm.Name,
-			Namespace: vm.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: vm.APIVersion,
-					Kind:       vm.Kind,
-					Name:       vm.Name,
-					UID:        vm.UID,
-				},
-			},
-		},
-		Spec: networkv1.VirtualMachineNetworkConfigSpec{
-			VMName:         vm.Name,
-			NetworkConfigs: ncs,
-		},
-	}
 }

@@ -1,6 +1,6 @@
-# syntax=docker/dockerfile:1.7.0
+# syntax=docker/dockerfile:1.18.0
 
-FROM registry.suse.com/bci/bci-base:15.6
+FROM registry.suse.com/bci/bci-base:15.7
 
 # Proxy configuration
 ARG http_proxy
