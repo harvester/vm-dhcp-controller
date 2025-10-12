@@ -184,7 +184,8 @@ func (e *EventHandler) EventListener(ctx context.Context) {
 				}
 			}
 		},
-	}, cache.Indexers{})
+		Indexers: cache.Indexers{},
+	})
 
 	controller := NewController(queue, indexer, informer, e.poolRef, e.dhcpAllocator, e.poolCache, e.InitialSyncDone, &e.initialSyncOnce)
 
