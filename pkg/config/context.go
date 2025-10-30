@@ -2,7 +2,7 @@ package config
 
 import (
 	"context"
-	"fmt"
+	// "fmt" // No longer used after Image struct removal
 
 	harvesterv1 "github.com/harvester/harvester/pkg/apis/harvesterhci.io/v1beta1"
 	"github.com/rancher/lasso/pkg/controller"
@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	// "k8s.io/apimachinery/pkg/types" // No longer used directly in this file
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -49,36 +49,18 @@ func init() {
 
 type RegisterFunc func(context.Context, *Management) error
 
-type Image struct {
-	Repository string
-	Tag        string
-}
-
-func NewImage(repo, tag string) *Image {
-	i := new(Image)
-	i.Repository = repo
-	i.Tag = tag
-	return i
-}
-
-func (i *Image) String() string {
-	return fmt.Sprintf("%s:%s", i.Repository, i.Tag)
-}
-
+// type Image struct { // Removed
+// 	Repository string // Removed
 type ControllerOptions struct {
-	NoAgent                 bool
-	AgentNamespace          string
-	AgentImage              *Image
-	AgentServiceAccountName string
-	NoDHCP                  bool
+	Namespace string // Namespace where the controller is running
 }
 
 type AgentOptions struct {
-	DryRun         bool
-	Nic            string
-	KubeConfigPath string
-	KubeContext    string
-	IPPoolRef      types.NamespacedName
+	DryRun                  bool
+	KubeConfigPath          string
+	KubeContext             string
+	AgentNetworkConfigsJSON string // JSON string of []AgentNetConfig
+	IPPoolRefsJSON          string // JSON string of []string (Namespaced IPPool names)
 }
 
 type HTTPServerOptions struct {
@@ -101,6 +83,8 @@ type Management struct {
 	KubeVirtFactory *ctlkubevirt.Factory
 
 	ClientSet *kubernetes.Clientset
+	KubeClient kubernetes.Interface // Alias or can use ClientSet directly
+	Namespace  string             // Namespace where the controller is running
 
 	CacheAllocator   *cache.CacheAllocator
 	IPAllocator      *ipam.IPAllocator
@@ -187,6 +171,8 @@ func SetupManagement(ctx context.Context, restConfig *rest.Config, options *Cont
 	if err != nil {
 		return nil, err
 	}
+	management.KubeClient = management.ClientSet // Set KubeClient
+	management.Namespace = options.Namespace     // Set Namespace
 
 	return management, nil
 }

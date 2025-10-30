@@ -1,0 +1,24 @@
+{{- if .Values.agent.enabled -}}
+{{- if .Values.agent.rbac.create -}}
+apiVersion: {{ template "harvester-vm-dhcp-controller.rbac.apiVersion" . }}
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-dhcp-agent-clusterrole
+  labels:
+    {{- include "harvester-vm-dhcp-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent # Override component to agent
+rules:
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""] # Core API group
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""] # Core API group
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: ["network.harvesterhci.io"]
+  resources: ["ippools"]
+  verbs: ["get", "list", "watch"]
+{{- end -}}
+{{- end -}}
