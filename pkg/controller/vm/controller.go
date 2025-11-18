@@ -2,8 +2,10 @@ package vm
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 
+	"github.com/harvester/harvester/pkg/util"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -55,7 +57,28 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 
 	ncm := make(map[string]networkv1.NetworkConfig, 1)
 
-	// Construct initial network config map
+	// Construct initial network config map from annotation
+	if vm.Annotations != nil && vm.Annotations[util.AnnotationMacAddressName] != "" {
+		nicToMacAddress := map[string]string{}
+		if err := json.Unmarshal([]byte(vm.Annotations[util.AnnotationMacAddressName]), &nicToMacAddress); err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"name":      vm.Name,
+				"namespace": vm.Namespace,
+				"macs":      vm.Annotations[util.AnnotationMacAddressName],
+			}).Error("failed to unmarshal mac-address from vm annotation")
+			return nil, nil
+		}
+		for nic, macaddress := range nicToMacAddress {
+			if macaddress == "" {
+				continue
+			}
+			ncm[nic] = networkv1.NetworkConfig{
+				MACAddress: macaddress,
+			}
+		}
+	}
+
+	// Construct initial network config map from spec
 	for _, nic := range vm.Spec.Template.Spec.Domain.Devices.Interfaces {
 		if nic.MacAddress == "" {
 			continue

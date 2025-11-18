@@ -41,7 +41,8 @@ func newTestVmNetCfgBuilder() *vmnetcfg.VmNetCfgBuilder {
 func TestHandler_OnChange(t *testing.T) {
 	t.Run("new vm without mac", func(t *testing.T) {
 		givenVM := newTestVMBuilder().
-			WithInterface("", testNICName).
+			WithInterfaceInAnnotation("", testNICName).
+			WithInterfaceInSpec("", testNICName).
 			WithNetwork(testNICName, testNetworkName).Build()
 
 		clientset := fake.NewSimpleClientset()
@@ -62,9 +63,9 @@ func TestHandler_OnChange(t *testing.T) {
 		assert.NotNil(t, err, "expected error when getting vmnetcfg")
 	})
 
-	t.Run("new vm with mac", func(t *testing.T) {
+	t.Run("new vm with mac in annotation", func(t *testing.T) {
 		givenVM := newTestVMBuilder().
-			WithInterface(testMACAddress1, testNICName).
+			WithInterfaceInAnnotation(testMACAddress1, testNICName).
 			WithNetwork(testNICName, testNetworkName).Build()
 
 		expectedVmNetCfg := newTestVmNetCfgBuilder().
@@ -94,9 +95,74 @@ func TestHandler_OnChange(t *testing.T) {
 		assert.Equal(t, expectedVmNetCfg, vmNetCfg)
 	})
 
+	t.Run("new vm with mac in spec", func(t *testing.T) {
+		givenVM := newTestVMBuilder().
+			WithInterfaceInSpec(testMACAddress1, testNICName).
+			WithNetwork(testNICName, testNetworkName).Build()
+
+		expectedVmNetCfg := newTestVmNetCfgBuilder().
+			Label(vmLabelKey, testVMName).
+			OwnerRef(metav1.OwnerReference{
+				Name: testVMName,
+			}).
+			WithVMName(testVMName).
+			WithNetworkConfig("", testMACAddress1, testNetworkName).Build()
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Add(givenVM)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		handler := Handler{
+			vmnetcfgCache:  fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+			vmnetcfgClient: fakeclient.VirtualMachineNetworkConfigClient(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+		}
+
+		_, err = handler.OnChange(testKey, givenVM)
+		assert.Nil(t, err)
+
+		vmNetCfg, err := handler.vmnetcfgClient.Get(testVmNetCfgNamespace, testVmNetCfgName, metav1.GetOptions{})
+		assert.Nil(t, err)
+		assert.Equal(t, expectedVmNetCfg, vmNetCfg)
+	})
+
+	t.Run("new vm with different mac address in both annotation and spec", func(t *testing.T) {
+		givenVM := newTestVMBuilder().
+			WithInterfaceInAnnotation(testMACAddress1, testNICName).
+			WithInterfaceInSpec(testMACAddress2, testNICName).
+			WithNetwork(testNICName, testNetworkName).Build()
+
+		expectedVmNetCfg := newTestVmNetCfgBuilder().
+			Label(vmLabelKey, testVMName).
+			OwnerRef(metav1.OwnerReference{
+				Name: testVMName,
+			}).
+			WithVMName(testVMName).
+			WithNetworkConfig("", testMACAddress2, testNetworkName).Build()
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Add(givenVM)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		handler := Handler{
+			vmnetcfgCache:  fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+			vmnetcfgClient: fakeclient.VirtualMachineNetworkConfigClient(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+		}
+
+		_, err = handler.OnChange(testKey, givenVM)
+		assert.Nil(t, err)
+
+		vmNetCfg, err := handler.vmnetcfgClient.Get(testVmNetCfgNamespace, testVmNetCfgName, metav1.GetOptions{})
+		assert.Nil(t, err)
+		assert.Equal(t, expectedVmNetCfg, vmNetCfg)
+	})
+
 	t.Run("new vm attaching to pod network", func(t *testing.T) {
 		givenVM := newTestVMBuilder().
-			WithInterface(testMACAddress1, testNICName).
+			WithInterfaceInAnnotation(testMACAddress1, testNICName).
 			WithNetwork(testNICName, "").Build()
 
 		clientset := fake.NewSimpleClientset()
@@ -119,7 +185,7 @@ func TestHandler_OnChange(t *testing.T) {
 
 	t.Run("vm and vmnetcfg network configs are in-sync", func(t *testing.T) {
 		givenVM := newTestVMBuilder().
-			WithInterface(testMACAddress1, testNICName).
+			WithInterfaceInAnnotation(testMACAddress1, testNICName).
 			WithNetwork(testNICName, testNetworkName).Build()
 		givenVmNetCfg := newTestVmNetCfgBuilder().
 			Label(vmLabelKey, testVMName).
@@ -151,7 +217,7 @@ func TestHandler_OnChange(t *testing.T) {
 
 	t.Run("vm and vmnetcfg found inconsistent in network configs should be flagged (first iteration)", func(t *testing.T) {
 		givenVM := newTestVMBuilder().
-			WithInterface(testMACAddress2, testNICName).
+			WithInterfaceInAnnotation(testMACAddress2, testNICName).
 			WithNetwork(testNICName, testNetworkName).Build()
 		givenVmNetCfg := newTestVmNetCfgBuilder().
 			Label(vmLabelKey, testVMName).
@@ -194,7 +260,7 @@ func TestHandler_OnChange(t *testing.T) {
 
 	t.Run("flagged vm and vmnetcfg network configs inconsistency should be synced (second iteration)", func(t *testing.T) {
 		givenVM := newTestVMBuilder().
-			WithInterface(testMACAddress2, testNICName).
+			WithInterfaceInAnnotation(testMACAddress2, testNICName).
 			WithNetwork(testNICName, testNetworkName).Build()
 		givenVmNetCfg := newTestVmNetCfgBuilder().
 			Label(vmLabelKey, testVMName).

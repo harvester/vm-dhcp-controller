@@ -1,10 +1,13 @@
 package vm
 
 import (
+	"encoding/json"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
+	"github.com/harvester/harvester/pkg/util"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 )
 
@@ -40,7 +43,8 @@ func prepareVmNetCfg(vm *kubevirtv1.VirtualMachine, ncm map[string]networkv1.Net
 }
 
 type vmBuilder struct {
-	vm *kubevirtv1.VirtualMachine
+	vm              *kubevirtv1.VirtualMachine
+	nicToMacAddress map[string]string
 }
 
 func newVMBuilder(namespace, name string) *vmBuilder {
@@ -51,11 +55,24 @@ func newVMBuilder(namespace, name string) *vmBuilder {
 				Name:      name,
 			},
 		},
+		nicToMacAddress: map[string]string{},
 	}
 }
 
-// WithInterface adds a network interface to the VM with the specified MAC address, NIC name, and network name.
-func (b *vmBuilder) WithInterface(macAddress, nicName string) *vmBuilder {
+// WithInterfaceInAnnotation adds a network interface to the VM annotation with the specified MAC address, NIC name, and network name.
+func (b *vmBuilder) WithInterfaceInAnnotation(macAddress, nicName string) *vmBuilder {
+	b.nicToMacAddress[nicName] = macAddress
+	if b.vm.Annotations == nil {
+		b.vm.Annotations = make(map[string]string)
+	}
+
+	macAddressBytes, _ := json.Marshal(b.nicToMacAddress)
+	b.vm.Annotations[util.AnnotationMacAddressName] = string(macAddressBytes)
+	return b
+}
+
+// WithInterfaceInSpec adds a network interface to the VM spec with the specified MAC address, NIC name, and network name.
+func (b *vmBuilder) WithInterfaceInSpec(macAddress, nicName string) *vmBuilder {
 	if b.vm.Spec.Template == nil {
 		b.vm.Spec.Template = &kubevirtv1.VirtualMachineInstanceTemplateSpec{}
 	}
