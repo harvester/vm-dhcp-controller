@@ -10,11 +10,37 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: "main-head"
 
+# Agent configuration
 agent:
+  enabled: true # Controls whether agent deployment and related resources are created
+  replicaCount: 2
   image:
-    repository: rancher/harvester-vm-dhcp-agent
+    repository: rancher/harvester-vm-dhcp-agent # Specific agent image
     pullPolicy: IfNotPresent
-    tag: "main-head"
+    tag: "main-head" # Or specific version for agent
+  # Flag to disable leader election within the agent pods
+  noLeaderElection: false
+  serviceAccount:
+    # Specifies whether a service account should be created for the agent
+    create: true
+    # Annotations to add to the agent service account
+    annotations: {}
+    # The name of the service account to use for the agent.
+    # If not set and create is true, a name is generated using the fullname template + "-agent"
+    name: ""
+  rbac:
+    # Specifies whether RBAC resources (ClusterRole, ClusterRoleBinding) should be created for the agent
+    create: true
+  # Pod security context for agent pods
+  podSecurityContext: {}
+  # Security context for agent containers
+  securityContext: {}
+  # Resources requests and limits for agent pods
+  resources: {}
+  # Node selector, affinity, tolerations for agent pods
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
 
 webhook:
   replicaCount: 1
