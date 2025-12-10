@@ -74,7 +74,7 @@ func run(ctx context.Context, cfg *rest.Config, options *config.Options) error {
 
 	if err := webhookServer.RegisterValidators(
 		ippool.NewValidator(serviceCIDR, c.nadCache, c.vmnetcfgCache),
-		vmnetcfg.NewValidator(c.ippoolCache),
+		vmnetcfg.NewValidator(c.ippoolCache, c.nadCache),
 	); err != nil {
 		return err
 	}
