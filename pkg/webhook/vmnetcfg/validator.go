@@ -7,7 +7,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
+	"github.com/harvester/vm-dhcp-controller/pkg/util"
 	"github.com/harvester/vm-dhcp-controller/pkg/webhook"
 	"github.com/harvester/webhook/pkg/server/admission"
 	"github.com/rancher/wrangler/v3/pkg/kv"
@@ -18,11 +20,13 @@ type Validator struct {
 	admission.DefaultValidator
 
 	ippoolCache ctlnetworkv1.IPPoolCache
+	nadCache    ctlcniv1.NetworkAttachmentDefinitionCache
 }
 
-func NewValidator(ippoolCache ctlnetworkv1.IPPoolCache) *Validator {
+func NewValidator(ippoolCache ctlnetworkv1.IPPoolCache, nadCache ctlcniv1.NetworkAttachmentDefinitionCache) *Validator {
 	return &Validator{
 		ippoolCache: ippoolCache,
+		nadCache:    nadCache,
 	}
 }
 
@@ -31,9 +35,26 @@ func (v *Validator) Create(request *admission.Request, newObj runtime.Object) er
 	logrus.Infof("create vmnetcfg %s/%s", vmNetCfg.Namespace, vmNetCfg.Name)
 
 	for _, nc := range vmNetCfg.Spec.NetworkConfigs {
-		ipPoolNamespace, ipPoolName := kv.RSplit(nc.NetworkName, "/")
-		if ipPoolNamespace == "" {
-			ipPoolNamespace = "default"
+		nadNamespace, nadName := kv.RSplit(nc.NetworkName, "/")
+		if nadNamespace == "" {
+			nadNamespace = "default"
+		}
+		nad, err := v.nadCache.Get(nadNamespace, nadName)
+		if err != nil {
+			return fmt.Errorf(webhook.CreateErr, vmNetCfg.Kind, vmNetCfg.Namespace, vmNetCfg.Name, err)
+		}
+		ipPoolNamespace, ok := nad.Labels[util.IPPoolNamespaceLabelKey]
+		if !ok {
+			ipPoolNamespace = nadNamespace
+		}
+		ipPoolName, ok := nad.Labels[util.IPPoolNameLabelKey]
+		if !ok {
+			return fmt.Errorf(
+				webhook.CreateErr,
+				vmNetCfg.Kind,
+				vmNetCfg.Namespace,
+				vmNetCfg.Name, fmt.Errorf("%s label not found", util.IPPoolNameLabelKey),
+			)
 		}
 		if _, err := v.ippoolCache.Get(ipPoolNamespace, ipPoolName); err != nil {
 			return fmt.Errorf(webhook.CreateErr, vmNetCfg.Kind, vmNetCfg.Namespace, vmNetCfg.Name, err)
