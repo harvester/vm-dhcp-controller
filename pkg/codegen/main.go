@@ -9,6 +9,7 @@ import (
 	controllergen "github.com/rancher/wrangler/v3/pkg/controller-gen"
 	"github.com/rancher/wrangler/v3/pkg/controller-gen/args"
 	"github.com/sirupsen/logrus"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
@@ -46,6 +47,11 @@ func main() {
 				Types: []interface{}{
 					corev1.Node{},
 					corev1.Pod{},
+				},
+			},
+			appsv1.SchemeGroupVersion.Group: {
+				Types: []interface{}{
+					appsv1.Deployment{},
 				},
 			},
 			cniv1.SchemeGroupVersion.Group: {

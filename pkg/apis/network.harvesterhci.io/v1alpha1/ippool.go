@@ -119,7 +119,7 @@ type IPPoolStatus struct {
 
 	// +optional
 	// +kubebuilder:validation:Optional
-	AgentPodRef *PodReference `json:"agentPodRef,omitempty"`
+	AgentDeploymentRef *DeploymentReference `json:"agentDeploymentRef,omitempty"`
 
 	// +optional
 	// +kubebuilder:validation:Optional
@@ -132,7 +132,7 @@ type IPv4Status struct {
 	Available int               `json:"available"`
 }
 
-type PodReference struct {
+type DeploymentReference struct {
 	Namespace string    `json:"namespace,omitempty"`
 	Name      string    `json:"name,omitempty"`
 	Image     string    `json:"image,omitempty"`

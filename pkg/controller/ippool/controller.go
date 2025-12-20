@@ -8,7 +8,7 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/kv"
 	"github.com/rancher/wrangler/v3/pkg/relatedresource"
 	"github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -18,7 +18,7 @@ import (
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/cache"
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
-	ctlcorev1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core/v1"
+	ctlappsv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/apps/v1"
 	ctlcniv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io/v1"
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
 	"github.com/harvester/vm-dhcp-controller/pkg/ipam"
@@ -69,15 +69,15 @@ type Handler struct {
 	ippoolController ctlnetworkv1.IPPoolController
 	ippoolClient     ctlnetworkv1.IPPoolClient
 	ippoolCache      ctlnetworkv1.IPPoolCache
-	podClient        ctlcorev1.PodClient
-	podCache         ctlcorev1.PodCache
+	deploymentClient ctlappsv1.DeploymentClient
+	deploymentCache  ctlappsv1.DeploymentCache
 	nadClient        ctlcniv1.NetworkAttachmentDefinitionClient
 	nadCache         ctlcniv1.NetworkAttachmentDefinitionCache
 }
 
 func Register(ctx context.Context, management *config.Management) error {
 	ippools := management.HarvesterNetworkFactory.Network().V1alpha1().IPPool()
-	pods := management.CoreFactory.Core().V1().Pod()
+	deployments := management.AppsFactory.Apps().V1().Deployment()
 	nads := management.CniFactory.K8s().V1().NetworkAttachmentDefinition()
 
 	handler := &Handler{
@@ -94,8 +94,8 @@ func Register(ctx context.Context, management *config.Management) error {
 		ippoolController: ippools,
 		ippoolClient:     ippools,
 		ippoolCache:      ippools.Cache(),
-		podClient:        pods,
-		podCache:         pods.Cache(),
+		deploymentClient: deployments,
+		deploymentCache:  deployments.Cache(),
 		nadClient:        nads,
 		nadCache:         nads.Cache(),
 	}
@@ -125,21 +125,21 @@ func Register(ctx context.Context, management *config.Management) error {
 	relatedresource.Watch(ctx, "ippool-trigger", func(namespace, name string, obj runtime.Object) ([]relatedresource.Key, error) {
 		var keys []relatedresource.Key
 		sets := labels.Set{
-			"network.harvesterhci.io/vm-dhcp-controller": "agent",
+			vmDHCPControllerLabelKey: "agent",
 		}
-		pods, err := handler.podCache.List(namespace, sets.AsSelector())
+		deployments, err := handler.deploymentCache.List(namespace, sets.AsSelector())
 		if err != nil {
 			return nil, err
 		}
-		for _, pod := range pods {
+		for _, deployment := range deployments {
 			key := relatedresource.Key{
-				Namespace: pod.Labels[util.IPPoolNamespaceLabelKey],
-				Name:      pod.Labels[util.IPPoolNameLabelKey],
+				Namespace: deployment.Labels[util.IPPoolNamespaceLabelKey],
+				Name:      deployment.Labels[util.IPPoolNameLabelKey],
 			}
 			keys = append(keys, key)
 		}
 		return keys, nil
-	}, ippools, pods)
+	}, ippools, deployments)
 
 	ippools.OnChange(ctx, controllerName, handler.OnChange)
 	ippools.OnRemove(ctx, controllerName, handler.OnRemove)
@@ -167,7 +167,7 @@ func (h *Handler) OnChange(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 		if err := h.cleanup(ipPool); err != nil {
 			return ipPool, err
 		}
-		ipPoolCpy.Status.AgentPodRef = nil
+		ipPoolCpy.Status.AgentDeploymentRef = nil
 		networkv1.Stopped.True(ipPoolCpy)
 		if !reflect.DeepEqual(ipPoolCpy, ipPool) {
 			return h.ippoolClient.UpdateStatus(ipPoolCpy)
@@ -266,8 +266,8 @@ func (h *Handler) OnRemove(key string, ipPool *networkv1.IPPool) (*networkv1.IPP
 	return ipPool, nil
 }
 
-// DeployAgent reconciles ipPool and ensures there's an agent pod for it. The
-// returned status reports whether an agent pod is registered.
+// DeployAgent reconciles ipPool and ensures there's an agent deployment for it. The
+// returned status reports whether an agent deployment is registered.
 func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
 	logrus.Debugf("(ippool.DeployAgent) deploy agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
@@ -294,40 +294,99 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 		return status, fmt.Errorf("could not find clusternetwork for nad %s", ipPool.Spec.NetworkName)
 	}
 
-	if ipPool.Status.AgentPodRef != nil {
-		status.AgentPodRef.Image = h.getAgentImage(ipPool)
-		pod, err := h.podCache.Get(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name)
+	desiredImage := h.getAgentImage(ipPool)
+
+	if ipPool.Status.AgentDeploymentRef != nil {
+		status.AgentDeploymentRef.Image = desiredImage
+		deployment, err := h.deploymentCache.Get(ipPool.Status.AgentDeploymentRef.Namespace, ipPool.Status.AgentDeploymentRef.Name)
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
 				return status, err
 			}
 
-			logrus.Warningf("(ippool.DeployAgent) agent pod %s missing, redeploying", ipPool.Status.AgentPodRef.Name)
+			logrus.Warningf("(ippool.DeployAgent) agent deployment %s missing, redeploying", ipPool.Status.AgentDeploymentRef.Name)
 		} else {
-			if pod.DeletionTimestamp != nil {
-				return status, fmt.Errorf("agent pod %s marked for deletion", ipPool.Status.AgentPodRef.Name)
+			if deployment.DeletionTimestamp != nil {
+				return status, fmt.Errorf("agent deployment %s marked for deletion", deployment.Name)
 			}
 
-			if pod.GetUID() != ipPool.Status.AgentPodRef.UID {
-				return status, fmt.Errorf("agent pod %s uid mismatch", ipPool.Status.AgentPodRef.Name)
+			if deployment.GetUID() != ipPool.Status.AgentDeploymentRef.UID {
+				return status, fmt.Errorf("agent deployment %s uid mismatch", deployment.Name)
 			}
+
+			desiredDeployment, err := prepareAgentDeployment(ipPool, h.noDHCP, h.agentNamespace, clusterNetwork, h.agentServiceAccountName, desiredImage)
+			if err != nil {
+				return status, err
+			}
+
+			updated := false
+			deploymentCpy := deployment.DeepCopy()
+			if !reflect.DeepEqual(deploymentCpy.Labels, desiredDeployment.Labels) {
+				deploymentCpy.Labels = desiredDeployment.Labels
+				updated = true
+			}
+			if !reflect.DeepEqual(deploymentCpy.Spec.Strategy, desiredDeployment.Spec.Strategy) {
+				deploymentCpy.Spec.Strategy = desiredDeployment.Spec.Strategy
+				updated = true
+			}
+			if deploymentCpy.Spec.Replicas == nil || desiredDeployment.Spec.Replicas == nil || *deploymentCpy.Spec.Replicas != *desiredDeployment.Spec.Replicas {
+				deploymentCpy.Spec.Replicas = desiredDeployment.Spec.Replicas
+				updated = true
+			}
+			if !reflect.DeepEqual(deploymentCpy.Spec.Selector, desiredDeployment.Spec.Selector) {
+				return status, fmt.Errorf("agent deployment %s selector mismatch", deployment.Name)
+			}
+			if !reflect.DeepEqual(deploymentCpy.Spec.Template.Labels, desiredDeployment.Spec.Template.Labels) {
+				deploymentCpy.Spec.Template.Labels = desiredDeployment.Spec.Template.Labels
+				updated = true
+			}
+			if !reflect.DeepEqual(deploymentCpy.Spec.Template.Annotations, desiredDeployment.Spec.Template.Annotations) {
+				deploymentCpy.Spec.Template.Annotations = desiredDeployment.Spec.Template.Annotations
+				updated = true
+			}
+			if deploymentCpy.Spec.Template.Spec.ServiceAccountName != desiredDeployment.Spec.Template.Spec.ServiceAccountName {
+				deploymentCpy.Spec.Template.Spec.ServiceAccountName = desiredDeployment.Spec.Template.Spec.ServiceAccountName
+				updated = true
+			}
+			if !reflect.DeepEqual(deploymentCpy.Spec.Template.Spec.Affinity, desiredDeployment.Spec.Template.Spec.Affinity) {
+				deploymentCpy.Spec.Template.Spec.Affinity = desiredDeployment.Spec.Template.Spec.Affinity
+				updated = true
+			}
+			if !reflect.DeepEqual(deploymentCpy.Spec.Template.Spec.InitContainers, desiredDeployment.Spec.Template.Spec.InitContainers) {
+				deploymentCpy.Spec.Template.Spec.InitContainers = desiredDeployment.Spec.Template.Spec.InitContainers
+				updated = true
+			}
+			if !reflect.DeepEqual(deploymentCpy.Spec.Template.Spec.Containers, desiredDeployment.Spec.Template.Spec.Containers) {
+				deploymentCpy.Spec.Template.Spec.Containers = desiredDeployment.Spec.Template.Spec.Containers
+				updated = true
+			}
+
+			if updated {
+				if _, err := h.deploymentClient.Update(deploymentCpy); err != nil {
+					return status, err
+				}
+			}
+
+			status.AgentDeploymentRef.Namespace = deployment.Namespace
+			status.AgentDeploymentRef.Name = deployment.Name
+			status.AgentDeploymentRef.UID = deployment.GetUID()
 
 			return status, nil
 		}
 	}
 
-	agent, err := prepareAgentPod(ipPool, h.noDHCP, h.agentNamespace, clusterNetwork, h.agentServiceAccountName, h.agentImage)
+	agent, err := prepareAgentDeployment(ipPool, h.noDHCP, h.agentNamespace, clusterNetwork, h.agentServiceAccountName, desiredImage)
 	if err != nil {
 		return status, err
 	}
 
-	if status.AgentPodRef == nil {
-		status.AgentPodRef = new(networkv1.PodReference)
+	if status.AgentDeploymentRef == nil {
+		status.AgentDeploymentRef = new(networkv1.DeploymentReference)
 	}
 
-	status.AgentPodRef.Image = h.agentImage.String()
+	status.AgentDeploymentRef.Image = desiredImage
 
-	agentPod, err := h.podClient.Create(agent)
+	agentDeployment, err := h.deploymentClient.Create(agent)
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			return status, nil
@@ -337,18 +396,13 @@ func (h *Handler) DeployAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolS
 
 	logrus.Infof("(ippool.DeployAgent) agent for ippool %s/%s has been deployed", ipPool.Namespace, ipPool.Name)
 
-	status.AgentPodRef.Namespace = agentPod.Namespace
-	status.AgentPodRef.Name = agentPod.Name
-	status.AgentPodRef.UID = agentPod.GetUID()
+	status.AgentDeploymentRef.Namespace = agentDeployment.Namespace
+	status.AgentDeploymentRef.Name = agentDeployment.Name
+	status.AgentDeploymentRef.UID = agentDeployment.GetUID()
 
 	return status, nil
 }
 
-// BuildCache reconciles ipPool and initializes the IPAM and MAC caches for it.
-// The source information comes from both ipPool's spec and status. Since
-// IPPool objects are deemed source of truths, BuildCache honors the state and
-// use it to load up internal caches. The returned status reports whether both
-// caches are fully initialized.
 func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
 	logrus.Debugf("(ippool.BuildCache) build ipam for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
@@ -416,10 +470,10 @@ func (h *Handler) BuildCache(ipPool *networkv1.IPPool, status networkv1.IPPoolSt
 	return status, nil
 }
 
-// MonitorAgent reconciles ipPool and keeps an eye on the agent pod. If the
-// running agent pod does not match to the one record in ipPool's status,
-// MonitorAgent tries to delete it. The returned status reports whether the
-// agent pod is ready.
+// MonitorAgent reconciles ipPool and keeps an eye on the agent deployment. If the
+// running agent deployment does not match the one recorded in ipPool's status,
+// MonitorAgent reports the mismatch. The returned status reports whether the
+// agent deployment is ready.
 func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPoolStatus) (networkv1.IPPoolStatus, error) {
 	logrus.Debugf("(ippool.MonitorAgent) monitor agent for ippool %s/%s", ipPool.Namespace, ipPool.Name)
 
@@ -431,58 +485,68 @@ func (h *Handler) MonitorAgent(ipPool *networkv1.IPPool, status networkv1.IPPool
 		return status, nil
 	}
 
-	if ipPool.Status.AgentPodRef == nil {
+	if ipPool.Status.AgentDeploymentRef == nil {
 		return status, fmt.Errorf("agent for ippool %s/%s is not deployed", ipPool.Namespace, ipPool.Name)
 	}
 
-	agentPod, err := h.podCache.Get(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name)
+	agentDeployment, err := h.deploymentCache.Get(ipPool.Status.AgentDeploymentRef.Namespace, ipPool.Status.AgentDeploymentRef.Name)
 	if err != nil {
 		return status, err
 	}
 
-	if agentPod.GetUID() != ipPool.Status.AgentPodRef.UID || agentPod.Spec.Containers[0].Image != ipPool.Status.AgentPodRef.Image {
-		if agentPod.DeletionTimestamp != nil {
-			return status, fmt.Errorf("agent pod %s marked for deletion", agentPod.Name)
-		}
-
-		if err := h.podClient.Delete(agentPod.Namespace, agentPod.Name, &metav1.DeleteOptions{}); err != nil {
-			return status, err
-		}
-
-		return status, fmt.Errorf("agent pod %s obsolete and purged", agentPod.Name)
+	if agentDeployment.DeletionTimestamp != nil {
+		return status, fmt.Errorf("agent deployment %s marked for deletion", agentDeployment.Name)
 	}
 
-	if !isPodReady(agentPod) {
-		return status, fmt.Errorf("agent pod %s not ready", agentPod.Name)
+	if agentDeployment.GetUID() != ipPool.Status.AgentDeploymentRef.UID {
+		return status, fmt.Errorf("agent deployment %s uid mismatch", agentDeployment.Name)
+	}
+
+	if len(agentDeployment.Spec.Template.Spec.Containers) == 0 || agentDeployment.Spec.Template.Spec.Containers[0].Image != ipPool.Status.AgentDeploymentRef.Image {
+		return status, fmt.Errorf("agent deployment %s image mismatch", agentDeployment.Name)
+	}
+
+	if !isDeploymentReady(agentDeployment) {
+		return status, fmt.Errorf("agent deployment %s not ready", agentDeployment.Name)
 	}
 
 	return status, nil
 }
 
-func isPodReady(pod *corev1.Pod) bool {
-	for _, c := range pod.Status.Conditions {
-		if c.Type == corev1.PodReady {
-			return c.Status == corev1.ConditionTrue
-		}
+func isDeploymentReady(deployment *appsv1.Deployment) bool {
+	desired := int32(1)
+	if deployment.Spec.Replicas != nil {
+		desired = *deployment.Spec.Replicas
 	}
-	return false
+	if deployment.Status.ObservedGeneration < deployment.Generation {
+		return false
+	}
+	if deployment.Status.UpdatedReplicas < desired {
+		return false
+	}
+	if deployment.Status.AvailableReplicas < desired {
+		return false
+	}
+	return true
 }
 
 func (h *Handler) getAgentImage(ipPool *networkv1.IPPool) string {
 	_, ok := ipPool.Annotations[holdIPPoolAgentUpgradeAnnotationKey]
 	if ok {
-		return ipPool.Status.AgentPodRef.Image
+		if ipPool.Status.AgentDeploymentRef != nil && ipPool.Status.AgentDeploymentRef.Image != "" {
+			return ipPool.Status.AgentDeploymentRef.Image
+		}
 	}
 	return h.agentImage.String()
 }
 
 func (h *Handler) cleanup(ipPool *networkv1.IPPool) error {
-	if ipPool.Status.AgentPodRef == nil {
+	if ipPool.Status.AgentDeploymentRef == nil {
 		return nil
 	}
 
-	logrus.Infof("(ippool.cleanup) remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, ipPool.Namespace, ipPool.Name)
-	if err := h.podClient.Delete(ipPool.Status.AgentPodRef.Namespace, ipPool.Status.AgentPodRef.Name, &metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+	logrus.Infof("(ippool.cleanup) remove the backing agent %s/%s for ippool %s/%s", ipPool.Status.AgentDeploymentRef.Namespace, ipPool.Status.AgentDeploymentRef.Name, ipPool.Namespace, ipPool.Name)
+	if err := h.deploymentClient.Delete(ipPool.Status.AgentDeploymentRef.Namespace, ipPool.Status.AgentDeploymentRef.Name, &metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
 

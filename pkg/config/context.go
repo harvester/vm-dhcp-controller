@@ -24,6 +24,7 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/cache"
 	"github.com/harvester/vm-dhcp-controller/pkg/crd"
 	"github.com/harvester/vm-dhcp-controller/pkg/dhcp"
+	ctlapps "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/apps"
 	ctlcore "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/core"
 	ctlcni "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/k8s.cni.cncf.io"
 	ctlkubevirt "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/kubevirt.io"
@@ -96,6 +97,7 @@ type Management struct {
 
 	HarvesterNetworkFactory *ctlnetwork.Factory
 
+	AppsFactory     *ctlapps.Factory
 	CniFactory      *ctlcni.Factory
 	CoreFactory     *ctlcore.Factory
 	KubeVirtFactory *ctlkubevirt.Factory
@@ -168,6 +170,13 @@ func SetupManagement(ctx context.Context, restConfig *rest.Config, options *Cont
 	}
 	management.CoreFactory = core
 	management.starters = append(management.starters, core)
+
+	apps, err := ctlapps.NewFactoryFromConfigWithOptions(restConfig, opts)
+	if err != nil {
+		return nil, err
+	}
+	management.AppsFactory = apps
+	management.starters = append(management.starters, apps)
 
 	cni, err := ctlcni.NewFactoryFromConfigWithOptions(restConfig, opts)
 	if err != nil {

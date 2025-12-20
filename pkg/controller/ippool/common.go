@@ -8,6 +8,7 @@ import (
 
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/rancher/wrangler/v3/pkg/kv"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -15,18 +16,17 @@ import (
 
 	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
-	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
-func prepareAgentPod(
+func prepareAgentDeployment(
 	ipPool *networkv1.IPPool,
 	noDHCP bool,
 	agentNamespace string,
 	clusterNetwork string,
 	agentServiceAccountName string,
-	agentImage *config.Image,
-) (*corev1.Pod, error) {
+	agentImage string,
+) (*appsv1.Deployment, error) {
 	name := util.SafeAgentConcatName(ipPool.Namespace, ipPool.Name)
 
 	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
@@ -56,94 +56,122 @@ func prepareAgentPod(
 		args = append(args, "--dry-run")
 	}
 
-	return &corev1.Pod{
+	labels := map[string]string{
+		vmDHCPControllerLabelKey:     "agent",
+		util.IPPoolNamespaceLabelKey: ipPool.Namespace,
+		util.IPPoolNameLabelKey:      ipPool.Name,
+	}
+	replicas := int32(1)
+	maxUnavailable := intstr.FromInt(0)
+	maxSurge := intstr.FromInt(1)
+
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Annotations: map[string]string{
-				multusNetworksAnnotationKey: string(networksStr),
-			},
-			Labels: map[string]string{
-				vmDHCPControllerLabelKey:     "agent",
-				util.IPPoolNamespaceLabelKey: ipPool.Namespace,
-				util.IPPoolNameLabelKey:      ipPool.Name,
-			},
+			Labels:    labels,
 			Name:      name,
 			Namespace: agentNamespace,
 		},
-		Spec: corev1.PodSpec{
-			Affinity: &corev1.Affinity{
-				NodeAffinity: &corev1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-						NodeSelectorTerms: []corev1.NodeSelectorTerm{
-							{
-								MatchExpressions: []corev1.NodeSelectorRequirement{
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateDeployment{
+					MaxUnavailable: &maxUnavailable,
+					MaxSurge:       &maxSurge,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						multusNetworksAnnotationKey: string(networksStr),
+					},
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					Affinity: &corev1.Affinity{
+						NodeAffinity: &corev1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+								NodeSelectorTerms: []corev1.NodeSelectorTerm{
 									{
-										Key:      network.GroupName + "/" + clusterNetwork,
-										Operator: corev1.NodeSelectorOpIn,
-										Values: []string{
-											"true",
+										MatchExpressions: []corev1.NodeSelectorRequirement{
+											{
+												Key:      network.GroupName + "/" + clusterNetwork,
+												Operator: corev1.NodeSelectorOpIn,
+												Values: []string{
+													"true",
+												},
+											},
 										},
 									},
 								},
 							},
 						},
 					},
-				},
-			},
-			ServiceAccountName: agentServiceAccountName,
-			InitContainers: []corev1.Container{
-				{
-					Name:            "ip-setter",
-					Image:           agentImage.String(),
-					ImagePullPolicy: corev1.PullIfNotPresent,
-					Command: []string{
-						"/bin/sh",
-						"-c",
-						fmt.Sprintf(setIPAddrScript, ipPool.Spec.IPv4Config.ServerIP, prefixLength),
-					},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser:  &runAsUserID,
-						RunAsGroup: &runAsGroupID,
-						Capabilities: &corev1.Capabilities{
-							Add: []corev1.Capability{
-								"NET_ADMIN",
-							},
-						},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "agent",
-					Image: agentImage.String(),
-					Args:  args,
-					Env: []corev1.EnvVar{
+					ServiceAccountName: agentServiceAccountName,
+					InitContainers: []corev1.Container{
 						{
-							Name:  "VM_DHCP_AGENT_NAME",
-							Value: name,
-						},
-					},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser:  &runAsUserID,
-						RunAsGroup: &runAsGroupID,
-						Capabilities: &corev1.Capabilities{
-							Add: []corev1.Capability{
-								"NET_ADMIN",
+							Name:                     "ip-setter",
+							Image:                    agentImage,
+							ImagePullPolicy:          corev1.PullIfNotPresent,
+							TerminationMessagePath:   corev1.TerminationMessagePathDefault,
+							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+							Command: []string{
+								"/bin/sh",
+								"-c",
+								fmt.Sprintf(setIPAddrScript, ipPool.Spec.IPv4Config.ServerIP, prefixLength),
+							},
+							SecurityContext: &corev1.SecurityContext{
+								RunAsUser:  &runAsUserID,
+								RunAsGroup: &runAsGroupID,
+								Capabilities: &corev1.Capabilities{
+									Add: []corev1.Capability{
+										"NET_ADMIN",
+									},
+								},
 							},
 						},
 					},
-					LivenessProbe: &corev1.Probe{
-						ProbeHandler: corev1.ProbeHandler{
-							HTTPGet: &corev1.HTTPGetAction{
-								Path: "/healthz",
-								Port: intstr.FromInt(8080),
+					Containers: []corev1.Container{
+						{
+							Name:                     "agent",
+							Image:                    agentImage,
+							ImagePullPolicy:          corev1.PullIfNotPresent,
+							TerminationMessagePath:   corev1.TerminationMessagePathDefault,
+							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+							Args:                     args,
+							Env: []corev1.EnvVar{
+								{
+									Name:  "VM_DHCP_AGENT_NAME",
+									Value: name,
+								},
 							},
-						},
-					},
-					ReadinessProbe: &corev1.Probe{
-						ProbeHandler: corev1.ProbeHandler{
-							HTTPGet: &corev1.HTTPGetAction{
-								Path: "/readyz",
-								Port: intstr.FromInt(8080),
+							SecurityContext: &corev1.SecurityContext{
+								RunAsUser:  &runAsUserID,
+								RunAsGroup: &runAsGroupID,
+								Capabilities: &corev1.Capabilities{
+									Add: []corev1.Capability{
+										"NET_ADMIN",
+									},
+								},
+							},
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/healthz",
+										Port: intstr.FromInt(8080),
+									},
+								},
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path: "/readyz",
+										Port: intstr.FromInt(8080),
+									},
+								},
 							},
 						},
 					},
@@ -243,14 +271,14 @@ func (b *IPPoolBuilder) Exclude(ipAddressList ...string) *IPPoolBuilder {
 	return b
 }
 
-func (b *IPPoolBuilder) AgentPodRef(namespace, name, image, uid string) *IPPoolBuilder {
-	if b.ipPool.Status.AgentPodRef == nil {
-		b.ipPool.Status.AgentPodRef = new(networkv1.PodReference)
+func (b *IPPoolBuilder) AgentDeploymentRef(namespace, name, image, uid string) *IPPoolBuilder {
+	if b.ipPool.Status.AgentDeploymentRef == nil {
+		b.ipPool.Status.AgentDeploymentRef = new(networkv1.DeploymentReference)
 	}
-	b.ipPool.Status.AgentPodRef.Namespace = namespace
-	b.ipPool.Status.AgentPodRef.Name = name
-	b.ipPool.Status.AgentPodRef.Image = image
-	b.ipPool.Status.AgentPodRef.UID = types.UID(uid)
+	b.ipPool.Status.AgentDeploymentRef.Namespace = namespace
+	b.ipPool.Status.AgentDeploymentRef.Name = name
+	b.ipPool.Status.AgentDeploymentRef.Image = image
+	b.ipPool.Status.AgentDeploymentRef.UID = types.UID(uid)
 	return b
 }
 
@@ -315,14 +343,14 @@ func newIPPoolStatusBuilder() *ipPoolStatusBuilder {
 	}
 }
 
-func (b *ipPoolStatusBuilder) AgentPodRef(namespace, name, image, uid string) *ipPoolStatusBuilder {
-	if b.ipPoolStatus.AgentPodRef == nil {
-		b.ipPoolStatus.AgentPodRef = new(networkv1.PodReference)
+func (b *ipPoolStatusBuilder) AgentDeploymentRef(namespace, name, image, uid string) *ipPoolStatusBuilder {
+	if b.ipPoolStatus.AgentDeploymentRef == nil {
+		b.ipPoolStatus.AgentDeploymentRef = new(networkv1.DeploymentReference)
 	}
-	b.ipPoolStatus.AgentPodRef.Namespace = namespace
-	b.ipPoolStatus.AgentPodRef.Name = name
-	b.ipPoolStatus.AgentPodRef.Image = image
-	b.ipPoolStatus.AgentPodRef.UID = types.UID(uid)
+	b.ipPoolStatus.AgentDeploymentRef.Namespace = namespace
+	b.ipPoolStatus.AgentDeploymentRef.Name = name
+	b.ipPoolStatus.AgentDeploymentRef.Image = image
+	b.ipPoolStatus.AgentDeploymentRef.UID = types.UID(uid)
 	return b
 }
 
@@ -358,52 +386,55 @@ func (b *ipPoolStatusBuilder) Build() networkv1.IPPoolStatus {
 	return b.ipPoolStatus
 }
 
-type podBuilder struct {
-	pod *corev1.Pod
+type deploymentBuilder struct {
+	deployment *appsv1.Deployment
 }
 
-func newPodBuilder(namespace, name string) *podBuilder {
-	return &podBuilder{
-		pod: &corev1.Pod{
+func newDeploymentBuilder(namespace, name string) *deploymentBuilder {
+	replicas := int32(1)
+	return &deploymentBuilder{
+		deployment: &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: namespace,
 				Name:      name,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Template: corev1.PodTemplateSpec{},
 			},
 		},
 	}
 }
 
-func (b *podBuilder) Container(name, repository, tag string) *podBuilder {
+func (b *deploymentBuilder) Container(name, repository, tag string) *deploymentBuilder {
 	container := corev1.Container{
 		Name:  name,
 		Image: repository + ":" + tag,
 	}
-	b.pod.Spec.Containers = append(b.pod.Spec.Containers, container)
+	b.deployment.Spec.Template.Spec.Containers = append(b.deployment.Spec.Template.Spec.Containers, container)
 	return b
 }
 
-func (b *podBuilder) PodReady(ready corev1.ConditionStatus) *podBuilder {
-	var found bool
-	if b.pod.Status.Conditions == nil {
-		b.pod.Status.Conditions = make([]corev1.PodCondition, 0, 1)
+func (b *deploymentBuilder) DeploymentReady(ready bool) *deploymentBuilder {
+	if !ready {
+		return b
 	}
-	for i := range b.pod.Status.Conditions {
-		if b.pod.Status.Conditions[i].Type == corev1.PodReady {
-			b.pod.Status.Conditions[i].Status = corev1.ConditionTrue
-			break
-		}
+	if b.deployment.Generation == 0 {
+		b.deployment.Generation = 1
 	}
-	if !found {
-		b.pod.Status.Conditions = append(b.pod.Status.Conditions, corev1.PodCondition{
-			Type:   corev1.PodReady,
-			Status: corev1.ConditionTrue,
-		})
+	desired := int32(1)
+	if b.deployment.Spec.Replicas != nil {
+		desired = *b.deployment.Spec.Replicas
 	}
+	b.deployment.Status.UpdatedReplicas = desired
+	b.deployment.Status.AvailableReplicas = desired
+	b.deployment.Status.ReadyReplicas = desired
+	b.deployment.Status.ObservedGeneration = b.deployment.Generation
 	return b
 }
 
-func (b *podBuilder) Build() *corev1.Pod {
-	return b.pod
+func (b *deploymentBuilder) Build() *appsv1.Deployment {
+	return b.deployment
 }
 
 type NetworkAttachmentDefinitionBuilder struct {
