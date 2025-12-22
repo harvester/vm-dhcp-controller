@@ -1,0 +1,69 @@
+package fakeclient
+
+import (
+	"context"
+
+	"github.com/rancher/wrangler/v3/pkg/generic"
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
+	typeappsv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
+	"k8s.io/client-go/rest"
+)
+
+type DeploymentClient func(string) typeappsv1.DeploymentInterface
+
+func (c DeploymentClient) Update(deployment *appsv1.Deployment) (*appsv1.Deployment, error) {
+	return c(deployment.Namespace).Update(context.TODO(), deployment, metav1.UpdateOptions{})
+}
+func (c DeploymentClient) Get(namespace, name string, options metav1.GetOptions) (*appsv1.Deployment, error) {
+	return c(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+}
+func (c DeploymentClient) Create(deployment *appsv1.Deployment) (*appsv1.Deployment, error) {
+	return c(deployment.Namespace).Create(context.TODO(), deployment, metav1.CreateOptions{})
+}
+func (c DeploymentClient) Delete(namespace, name string, options *metav1.DeleteOptions) error {
+	return c(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+}
+func (c DeploymentClient) List(namespace string, opts metav1.ListOptions) (*appsv1.DeploymentList, error) {
+	panic("implement me")
+}
+func (c DeploymentClient) UpdateStatus(deployment *appsv1.Deployment) (*appsv1.Deployment, error) {
+	return c(deployment.Namespace).UpdateStatus(context.TODO(), deployment, metav1.UpdateOptions{})
+}
+func (c DeploymentClient) Watch(namespace string, opts metav1.ListOptions) (watch.Interface, error) {
+	panic("implement me")
+}
+func (c DeploymentClient) Patch(namespace, name string, pt types.PatchType, data []byte, subresources ...string) (result *appsv1.Deployment, err error) {
+	panic("implement me")
+}
+
+func (c DeploymentClient) WithImpersonation(config rest.ImpersonationConfig) (generic.ClientInterface[*appsv1.Deployment, *appsv1.DeploymentList], error) {
+	panic("implement me")
+}
+
+type DeploymentCache func(string) typeappsv1.DeploymentInterface
+
+func (c DeploymentCache) Get(namespace, name string) (*appsv1.Deployment, error) {
+	return c(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+}
+func (c DeploymentCache) List(namespace string, selector labels.Selector) ([]*appsv1.Deployment, error) {
+	list, err := c(namespace).List(context.TODO(), metav1.ListOptions{LabelSelector: selector.String()})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*appsv1.Deployment, 0, len(list.Items))
+	for _, deployment := range list.Items {
+		dep := deployment
+		result = append(result, &dep)
+	}
+	return result, err
+}
+func (c DeploymentCache) AddIndexer(indexName string, indexer generic.Indexer[*appsv1.Deployment]) {
+	panic("implement me")
+}
+func (c DeploymentCache) GetByIndex(indexName, key string) ([]*appsv1.Deployment, error) {
+	panic("implement me")
+}

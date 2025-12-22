@@ -150,7 +150,7 @@ spec:
             type: object
           status:
             properties:
-              agentPodRef:
+              agentDeploymentRef:
                 properties:
                   image:
                     type: string

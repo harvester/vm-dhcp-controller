@@ -20,33 +20,33 @@ import (
 )
 
 const (
-	testNADNamespace       = "default"
-	testNADName            = "net-1"
-	testNADNameLong        = "fi6cx9ca1kt1faq80k3ro9cowyumyjb67qdmg8fb9ydmz27rbk5btlg2m5avv3n"
-	testIPPoolNamespace    = testNADNamespace
-	testIPPoolName         = testNADName
-	testIPPoolNameLong     = testNADNameLong
-	testKey                = testIPPoolNamespace + "/" + testIPPoolName
-	testPodNamespace       = "harvester-system"
-	testPodName            = testNADNamespace + "-" + testNADName + "-agent"
-	testUID                = "3a955369-9eaa-43db-94f3-9153289d7dc2"
-	testClusterNetwork     = "provider"
-	testServerIP1          = "192.168.0.2"
-	testServerIP2          = "192.168.0.110"
-	testNetworkName        = testNADNamespace + "/" + testNADName
-	testNetworkNameLong    = testNADNamespace + "/" + testNADNameLong
-	testCIDR               = "192.168.0.0/24"
-	testRouter1            = "192.168.0.1"
-	testRouter2            = "192.168.0.120"
-	testStartIP            = "192.168.0.101"
-	testEndIP              = "192.168.0.200"
-	testServiceAccountName = "vdca"
-	testImageRepository    = "rancher/harvester-vm-dhcp-agent"
-	testImageTag           = "main"
-	testImageTagNew        = "dev"
-	testImage              = testImageRepository + ":" + testImageTag
-	testImageNew           = testImageRepository + ":" + testImageTagNew
-	testContainerName      = "agent"
+	testNADNamespace        = "default"
+	testNADName             = "net-1"
+	testNADNameLong         = "fi6cx9ca1kt1faq80k3ro9cowyumyjb67qdmg8fb9ydmz27rbk5btlg2m5avv3n"
+	testIPPoolNamespace     = testNADNamespace
+	testIPPoolName          = testNADName
+	testIPPoolNameLong      = testNADNameLong
+	testKey                 = testIPPoolNamespace + "/" + testIPPoolName
+	testDeploymentNamespace = "harvester-system"
+	testDeploymentName      = testNADNamespace + "-" + testNADName + "-agent"
+	testUID                 = "3a955369-9eaa-43db-94f3-9153289d7dc2"
+	testClusterNetwork      = "provider"
+	testServerIP1           = "192.168.0.2"
+	testServerIP2           = "192.168.0.110"
+	testNetworkName         = testNADNamespace + "/" + testNADName
+	testNetworkNameLong     = testNADNamespace + "/" + testNADNameLong
+	testCIDR                = "192.168.0.0/24"
+	testRouter1             = "192.168.0.1"
+	testRouter2             = "192.168.0.120"
+	testStartIP             = "192.168.0.101"
+	testEndIP               = "192.168.0.200"
+	testServiceAccountName  = "vdca"
+	testImageRepository     = "rancher/harvester-vm-dhcp-agent"
+	testImageTag            = "main"
+	testImageTagNew         = "dev"
+	testImage               = testImageRepository + ":" + testImageTag
+	testImageNew            = testImageRepository + ":" + testImageTagNew
+	testContainerName       = "agent"
 
 	testExcludedIP1 = "192.168.0.150"
 	testExcludedIP2 = "192.168.0.187"
@@ -60,7 +60,7 @@ const (
 )
 
 var (
-	testPodNameLong = util.SafeAgentConcatName(testNADNamespace, testNADNameLong)
+	testDeploymentNameLong = util.SafeAgentConcatName(testNADNamespace, testNADNameLong)
 )
 
 func newTestCacheAllocatorBuilder() *cache.CacheAllocatorBuilder {
@@ -75,8 +75,8 @@ func newTestIPPoolBuilder() *IPPoolBuilder {
 	return NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName)
 }
 
-func newTestPodBuilder() *podBuilder {
-	return newPodBuilder(testPodNamespace, testPodName)
+func newTestDeploymentBuilder() *deploymentBuilder {
+	return newDeploymentBuilder(testDeploymentNamespace, testDeploymentName)
 }
 
 func newTestIPPoolStatusBuilder() *ipPoolStatusBuilder {
@@ -210,8 +210,8 @@ func TestHandler_OnChange(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
 			NetworkName(testNetworkName).
 			Paused().
-			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
-		givenPod := newTestPodBuilder().Build()
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, "").Build()
+		givenDeployment := newTestDeploymentBuilder().Build()
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().Build()
 
 		expectedIPAllocator := newTestIPAllocatorBuilder().Build()
@@ -236,7 +236,7 @@ func TestHandler_OnChange(t *testing.T) {
 		}
 
 		k8sclientset := k8sfake.NewSimpleClientset()
-		err = k8sclientset.Tracker().Add(givenPod)
+		err = k8sclientset.Tracker().Add(givenDeployment)
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		handler := Handler{
@@ -249,7 +249,7 @@ func TestHandler_OnChange(t *testing.T) {
 			cacheAllocator:   cache.New(),
 			metricsAllocator: metrics.New(),
 			ippoolClient:     fakeclient.IPPoolClient(clientset.NetworkV1alpha1().IPPools),
-			podClient:        fakeclient.PodClient(k8sclientset.CoreV1().Pods),
+			deploymentClient: fakeclient.DeploymentClient(k8sclientset.AppsV1().Deployments),
 			nadClient:        fakeclient.NetworkAttachmentDefinitionClient(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
 			nadCache:         fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
 		}
@@ -264,8 +264,9 @@ func TestHandler_OnChange(t *testing.T) {
 
 		assert.Equal(t, expectedIPAllocator, handler.ipAllocator)
 
-		_, err = handler.podClient.Get(testPodNamespace, testPodName, metav1.GetOptions{})
-		assert.Equal(t, fmt.Sprintf("pods \"%s\" not found", testPodName), err.Error())
+		_, err = handler.deploymentClient.Get(testDeploymentNamespace, testDeploymentName, metav1.GetOptions{})
+		assert.Equal(t, fmt.Sprintf("deployments.apps \"%s\" not found", testDeploymentName), err.Error())
+
 	})
 
 	t.Run("resume ippool", func(t *testing.T) {
@@ -335,20 +336,17 @@ func TestHandler_DeployAgent(t *testing.T) {
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 
 		expectedStatus := newTestIPPoolStatusBuilder().
-			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
-		expectedPod, _ := prepareAgentPod(
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, "").Build()
+		expectedDeployment, _ := prepareAgentDeployment(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
-			testPodNamespace,
+			testDeploymentNamespace,
 			testClusterNetwork,
 			testServiceAccountName,
-			&config.Image{
-				Repository: testImageRepository,
-				Tag:        testImageTag,
-			},
+			testImage,
 		)
 
 		nadGVR := schema.GroupVersionResource{
@@ -364,24 +362,25 @@ func TestHandler_DeployAgent(t *testing.T) {
 		k8sclientset := k8sfake.NewSimpleClientset()
 
 		handler := Handler{
-			agentNamespace: testPodNamespace,
+			agentNamespace: testDeploymentNamespace,
 			agentImage: &config.Image{
 				Repository: testImageRepository,
 				Tag:        testImageTag,
 			},
 			agentServiceAccountName: testServiceAccountName,
 			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
-			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
-			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+			deploymentClient:        fakeclient.DeploymentClient(k8sclientset.AppsV1().Deployments),
+			deploymentCache:         fakeclient.DeploymentCache(k8sclientset.AppsV1().Deployments),
 		}
 
 		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedStatus, status)
 
-		pod, err := handler.podClient.Get(testPodNamespace, testPodName, metav1.GetOptions{})
+		deployment, err := handler.deploymentClient.Get(testDeploymentNamespace, testDeploymentName, metav1.GetOptions{})
 		assert.Nil(t, err)
-		assert.Equal(t, expectedPod, pod)
+
+		assert.Equal(t, expectedDeployment, deployment)
 	})
 
 	t.Run("ippool paused", func(t *testing.T) {
@@ -389,7 +388,7 @@ func TestHandler_DeployAgent(t *testing.T) {
 			Paused().Build()
 
 		handler := Handler{
-			agentNamespace: testPodNamespace,
+			agentNamespace: testDeploymentNamespace,
 			agentImage: &config.Image{
 				Repository: testImageRepository,
 				Tag:        testImageTag,
@@ -425,44 +424,38 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf("network-attachment-definitions.k8s.cni.cncf.io \"%s\" not found", "you-cant-find-me"), err.Error())
 	})
 
-	t.Run("agent pod already exists", func(t *testing.T) {
+	t.Run("agent deployment already exists", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
 			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			NetworkName(testNetworkName).
-			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, "").Build()
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
-		givenPod, _ := prepareAgentPod(
+		givenDeployment, _ := prepareAgentDeployment(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
-			testPodNamespace,
+			testDeploymentNamespace,
 			testClusterNetwork,
 			testServiceAccountName,
-			&config.Image{
-				Repository: testImageRepository,
-				Tag:        testImageTag,
-			},
+			testImage,
 		)
 
 		expectedStatus := newTestIPPoolStatusBuilder().
-			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
-		expectedPod, _ := prepareAgentPod(
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, "").Build()
+		expectedDeployment, _ := prepareAgentDeployment(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
-			testPodNamespace,
+			testDeploymentNamespace,
 			testClusterNetwork,
 			testServiceAccountName,
-			&config.Image{
-				Repository: testImageRepository,
-				Tag:        testImageTag,
-			},
+			testImage,
 		)
 
 		nadGVR := schema.GroupVersionResource{
@@ -476,28 +469,29 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		k8sclientset := k8sfake.NewSimpleClientset()
-		err = k8sclientset.Tracker().Add(givenPod)
+		err = k8sclientset.Tracker().Add(givenDeployment)
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		handler := Handler{
-			agentNamespace: testPodNamespace,
+			agentNamespace: testDeploymentNamespace,
 			agentImage: &config.Image{
 				Repository: testImageRepository,
 				Tag:        testImageTag,
 			},
 			agentServiceAccountName: testServiceAccountName,
 			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
-			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
-			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+			deploymentClient:        fakeclient.DeploymentClient(k8sclientset.AppsV1().Deployments),
+			deploymentCache:         fakeclient.DeploymentCache(k8sclientset.AppsV1().Deployments),
 		}
 
 		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedStatus, status)
 
-		pod, err := handler.podClient.Get(testPodNamespace, testPodName, metav1.GetOptions{})
+		deployment, err := handler.deploymentClient.Get(testDeploymentNamespace, testDeploymentName, metav1.GetOptions{})
 		assert.Nil(t, err)
-		assert.Equal(t, expectedPod, pod)
+
+		assert.Equal(t, expectedDeployment, deployment)
 	})
 
 	t.Run("very long name ippool created", func(t *testing.T) {
@@ -509,20 +503,17 @@ func TestHandler_DeployAgent(t *testing.T) {
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
 
 		expectedStatus := newTestIPPoolStatusBuilder().
-			AgentPodRef(testPodNamespace, testPodNameLong, testImage, "").Build()
-		expectedPod, _ := prepareAgentPod(
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentNameLong, testImage, "").Build()
+		expectedDeployment, _ := prepareAgentDeployment(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolNameLong).
 				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkNameLong).Build(),
 			false,
-			testPodNamespace,
+			testDeploymentNamespace,
 			testClusterNetwork,
 			testServiceAccountName,
-			&config.Image{
-				Repository: testImageRepository,
-				Tag:        testImageTag,
-			},
+			testImage,
 		)
 
 		nadGVR := schema.GroupVersionResource{
@@ -538,51 +529,49 @@ func TestHandler_DeployAgent(t *testing.T) {
 		k8sclientset := k8sfake.NewSimpleClientset()
 
 		handler := Handler{
-			agentNamespace: testPodNamespace,
+			agentNamespace: testDeploymentNamespace,
 			agentImage: &config.Image{
 				Repository: testImageRepository,
 				Tag:        testImageTag,
 			},
 			agentServiceAccountName: testServiceAccountName,
 			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
-			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
-			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+			deploymentClient:        fakeclient.DeploymentClient(k8sclientset.AppsV1().Deployments),
+			deploymentCache:         fakeclient.DeploymentCache(k8sclientset.AppsV1().Deployments),
 		}
 
 		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedStatus, status)
 
-		pod, err := handler.podClient.Get(testPodNamespace, testPodNameLong, metav1.GetOptions{})
+		deployment, err := handler.deploymentClient.Get(testDeploymentNamespace, testDeploymentNameLong, metav1.GetOptions{})
 		assert.Nil(t, err)
-		assert.Equal(t, expectedPod, pod)
+
+		assert.Equal(t, expectedDeployment, deployment)
 	})
 
-	t.Run("agent pod upgrade (from main to dev)", func(t *testing.T) {
+	t.Run("agent deployment upgrade (from main to dev)", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
 			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			NetworkName(testNetworkName).
-			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, "").Build()
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
-		givenPod, _ := prepareAgentPod(
+		givenDeployment, _ := prepareAgentDeployment(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
-			testPodNamespace,
+			testDeploymentNamespace,
 			testClusterNetwork,
 			testServiceAccountName,
-			&config.Image{
-				Repository: testImageRepository,
-				Tag:        testImageTag,
-			},
+			testImage,
 		)
 
 		expectedStatus := newTestIPPoolStatusBuilder().
-			AgentPodRef(testPodNamespace, testPodName, testImageNew, "").Build()
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImageNew, "").Build()
 
 		nadGVR := schema.GroupVersionResource{
 			Group:    "k8s.cni.cncf.io",
@@ -595,19 +584,19 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		k8sclientset := k8sfake.NewSimpleClientset()
-		err = k8sclientset.Tracker().Add(givenPod)
+		err = k8sclientset.Tracker().Add(givenDeployment)
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		handler := Handler{
-			agentNamespace: testPodNamespace,
+			agentNamespace: testDeploymentNamespace,
 			agentImage: &config.Image{
 				Repository: testImageRepository,
 				Tag:        testImageTagNew,
 			},
 			agentServiceAccountName: testServiceAccountName,
 			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
-			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
-			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+			deploymentClient:        fakeclient.DeploymentClient(k8sclientset.AppsV1().Deployments),
+			deploymentCache:         fakeclient.DeploymentCache(k8sclientset.AppsV1().Deployments),
 		}
 
 		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
@@ -615,32 +604,29 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Equal(t, expectedStatus, status)
 	})
 
-	t.Run("agent pod upgrade held back", func(t *testing.T) {
+	t.Run("agent deployment upgrade held back", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
 			Annotation(holdIPPoolAgentUpgradeAnnotationKey, "true").
 			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			NetworkName(testNetworkName).
-			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, "").Build()
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
-		givenPod, _ := prepareAgentPod(
+		givenDeployment, _ := prepareAgentDeployment(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
-			testPodNamespace,
+			testDeploymentNamespace,
 			testClusterNetwork,
 			testServiceAccountName,
-			&config.Image{
-				Repository: testImageRepository,
-				Tag:        testImageTag,
-			},
+			testImage,
 		)
 
 		expectedStatus := newTestIPPoolStatusBuilder().
-			AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, "").Build()
 
 		nadGVR := schema.GroupVersionResource{
 			Group:    "k8s.cni.cncf.io",
@@ -653,19 +639,19 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		k8sclientset := k8sfake.NewSimpleClientset()
-		err = k8sclientset.Tracker().Add(givenPod)
+		err = k8sclientset.Tracker().Add(givenDeployment)
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		handler := Handler{
-			agentNamespace: testPodNamespace,
+			agentNamespace: testDeploymentNamespace,
 			agentImage: &config.Image{
 				Repository: testImageRepository,
 				Tag:        testImageTagNew,
 			},
 			agentServiceAccountName: testServiceAccountName,
 			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
-			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
-			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+			deploymentClient:        fakeclient.DeploymentClient(k8sclientset.AppsV1().Deployments),
+			deploymentCache:         fakeclient.DeploymentCache(k8sclientset.AppsV1().Deployments),
 		}
 
 		status, err := handler.DeployAgent(givenIPPool, givenIPPool.Status)
@@ -673,27 +659,24 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Equal(t, expectedStatus, status)
 	})
 
-	t.Run("existing agent pod uid mismatch", func(t *testing.T) {
+	t.Run("existing agent deployment uid mismatch", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
 			ServerIP(testServerIP1).
 			CIDR(testCIDR).
 			NetworkName(testNetworkName).
-			AgentPodRef(testPodNamespace, testPodName, testImage, testUID).Build()
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, testUID).Build()
 		givenNAD := newTestNetworkAttachmentDefinitionBuilder().
 			Label(clusterNetworkLabelKey, testClusterNetwork).Build()
-		givenPod, _ := prepareAgentPod(
+		givenDeployment, _ := prepareAgentDeployment(
 			NewIPPoolBuilder(testIPPoolNamespace, testIPPoolName).
 				ServerIP(testServerIP1).
 				CIDR(testCIDR).
 				NetworkName(testNetworkName).Build(),
 			false,
-			testPodNamespace,
+			testDeploymentNamespace,
 			testClusterNetwork,
 			testServiceAccountName,
-			&config.Image{
-				Repository: testImageRepository,
-				Tag:        testImageTag,
-			},
+			testImage,
 		)
 
 		nadGVR := schema.GroupVersionResource{
@@ -707,23 +690,23 @@ func TestHandler_DeployAgent(t *testing.T) {
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		k8sclientset := k8sfake.NewSimpleClientset()
-		err = k8sclientset.Tracker().Add(givenPod)
+		err = k8sclientset.Tracker().Add(givenDeployment)
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		handler := Handler{
-			agentNamespace: testPodNamespace,
+			agentNamespace: testDeploymentNamespace,
 			agentImage: &config.Image{
 				Repository: testImageRepository,
 				Tag:        testImageTagNew,
 			},
 			agentServiceAccountName: testServiceAccountName,
 			nadCache:                fakeclient.NetworkAttachmentDefinitionCache(clientset.K8sCniCncfIoV1().NetworkAttachmentDefinitions),
-			podClient:               fakeclient.PodClient(k8sclientset.CoreV1().Pods),
-			podCache:                fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+			deploymentClient:        fakeclient.DeploymentClient(k8sclientset.AppsV1().Deployments),
+			deploymentCache:         fakeclient.DeploymentCache(k8sclientset.AppsV1().Deployments),
 		}
 
 		_, err = handler.DeployAgent(givenIPPool, givenIPPool.Status)
-		assert.Equal(t, fmt.Sprintf("agent pod %s uid mismatch", testPodName), err.Error())
+		assert.Equal(t, fmt.Sprintf("agent deployment %s uid mismatch", testDeploymentName), err.Error())
 	})
 }
 
@@ -838,54 +821,54 @@ func TestHandler_BuildCache(t *testing.T) {
 }
 
 func TestHandler_MonitorAgent(t *testing.T) {
-	t.Run("agent pod not found", func(t *testing.T) {
-		givenIPPool := newTestIPPoolBuilder().AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
-		givenPod := newPodBuilder("default", "nginx").Build()
+	t.Run("agent deployment not found", func(t *testing.T) {
+		givenIPPool := newTestIPPoolBuilder().AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, "").Build()
+		givenDeployment := newDeploymentBuilder("default", "nginx").Build()
 
 		k8sclientset := k8sfake.NewSimpleClientset()
 
-		err := k8sclientset.Tracker().Add(givenPod)
+		err := k8sclientset.Tracker().Add(givenDeployment)
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		handler := Handler{
-			podCache: fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+			deploymentCache: fakeclient.DeploymentCache(k8sclientset.AppsV1().Deployments),
 		}
 
 		_, err = handler.MonitorAgent(givenIPPool, givenIPPool.Status)
-		assert.Equal(t, fmt.Sprintf("pods \"%s\" not found", testPodName), err.Error())
+		assert.Equal(t, fmt.Sprintf("deployments.apps \"%s\" not found", testDeploymentName), err.Error())
 	})
 
-	t.Run("agent pod unready", func(t *testing.T) {
-		givenIPPool := newTestIPPoolBuilder().AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
-		givenPod := newTestPodBuilder().
+	t.Run("agent deployment unready", func(t *testing.T) {
+		givenIPPool := newTestIPPoolBuilder().AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, "").Build()
+		givenDeployment := newTestDeploymentBuilder().
 			Container(testContainerName, testImageRepository, testImageTag).Build()
 
 		k8sclientset := k8sfake.NewSimpleClientset()
 
-		err := k8sclientset.Tracker().Add(givenPod)
+		err := k8sclientset.Tracker().Add(givenDeployment)
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		handler := Handler{
-			podCache: fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+			deploymentCache: fakeclient.DeploymentCache(k8sclientset.AppsV1().Deployments),
 		}
 
 		_, err = handler.MonitorAgent(givenIPPool, givenIPPool.Status)
-		assert.Equal(t, fmt.Sprintf("agent pod %s not ready", testPodName), err.Error())
+		assert.Equal(t, fmt.Sprintf("agent deployment %s not ready", testDeploymentName), err.Error())
 	})
 
-	t.Run("agent pod ready", func(t *testing.T) {
-		givenIPPool := newTestIPPoolBuilder().AgentPodRef(testPodNamespace, testPodName, testImage, "").Build()
-		givenPod := newTestPodBuilder().
+	t.Run("agent deployment ready", func(t *testing.T) {
+		givenIPPool := newTestIPPoolBuilder().AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImage, "").Build()
+		givenDeployment := newTestDeploymentBuilder().
 			Container(testContainerName, testImageRepository, testImageTag).
-			PodReady(corev1.ConditionTrue).Build()
+			DeploymentReady(true).Build()
 
 		k8sclientset := k8sfake.NewSimpleClientset()
 
-		err := k8sclientset.Tracker().Add(givenPod)
+		err := k8sclientset.Tracker().Add(givenDeployment)
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		handler := Handler{
-			podCache: fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+			deploymentCache: fakeclient.DeploymentCache(k8sclientset.AppsV1().Deployments),
 		}
 
 		_, err = handler.MonitorAgent(givenIPPool, givenIPPool.Status)
@@ -912,7 +895,7 @@ func TestHandler_MonitorAgent(t *testing.T) {
 		assert.Nil(t, err)
 	})
 
-	t.Run("agentpodref not set", func(t *testing.T) {
+	t.Run("agent deployment ref not set", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().Build()
 
 		handler := Handler{}
@@ -921,27 +904,25 @@ func TestHandler_MonitorAgent(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf("agent for ippool %s is not deployed", testIPPoolNamespace+"/"+testIPPoolName), err.Error())
 	})
 
-	t.Run("outdated agent pod", func(t *testing.T) {
+	t.Run("outdated agent deployment", func(t *testing.T) {
 		givenIPPool := newTestIPPoolBuilder().
-			AgentPodRef(testPodNamespace, testPodName, testImageNew, "").Build()
-		givenPod := newTestPodBuilder().
+			AgentDeploymentRef(testDeploymentNamespace, testDeploymentName, testImageNew, "").Build()
+		givenDeployment := newTestDeploymentBuilder().
 			Container(testContainerName, testImageRepository, testImageTag).
-			PodReady(corev1.ConditionTrue).Build()
+			DeploymentReady(true).Build()
 
 		k8sclientset := k8sfake.NewSimpleClientset()
 
-		err := k8sclientset.Tracker().Add(givenPod)
+		err := k8sclientset.Tracker().Add(givenDeployment)
 		assert.Nil(t, err, "mock resource should add into fake controller tracker")
 
 		handler := Handler{
-			podClient: fakeclient.PodClient(k8sclientset.CoreV1().Pods),
-			podCache:  fakeclient.PodCache(k8sclientset.CoreV1().Pods),
+			deploymentClient: fakeclient.DeploymentClient(k8sclientset.AppsV1().Deployments),
+			deploymentCache:  fakeclient.DeploymentCache(k8sclientset.AppsV1().Deployments),
 		}
 
 		_, err = handler.MonitorAgent(givenIPPool, givenIPPool.Status)
-		assert.Equal(t, fmt.Sprintf("agent pod %s obsolete and purged", testPodName), err.Error())
+		assert.Equal(t, fmt.Sprintf("agent deployment %s image mismatch", testDeploymentName), err.Error())
 
-		_, err = handler.podClient.Get(testPodNamespace, testPodName, metav1.GetOptions{})
-		assert.Equal(t, fmt.Sprintf("pods \"%s\" not found", testPodName), err.Error())
 	})
 }
