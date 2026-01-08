@@ -121,6 +121,19 @@ func TestValidator_Create(t *testing.T) {
 				shouldErr: true,
 			},
 		},
+		{
+			name: "nad referenced has incomplete labels set to associate with the target ippool",
+			given: input{
+				vmNetCfg: newTestVirtualMachineNetworkConfigBuilder().
+					WithNetworkConfig("", "", testNetworkName).Build(),
+				ipPool: newTestIPPoolBuilder().Build(),
+				nad: newTestNetworkAttachmentDefinitionBuilder().
+					Label(util.IPPoolNameLabelKey, testIPPoolName).Build(),
+			},
+			expected: output{
+				shouldErr: true,
+			},
+		},
 	}
 
 	nadGVR := schema.GroupVersionResource{
