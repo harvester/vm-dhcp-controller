@@ -45,7 +45,13 @@ func (v *Validator) Create(request *admission.Request, newObj runtime.Object) er
 		}
 		ipPoolNamespace, ok := nad.Labels[util.IPPoolNamespaceLabelKey]
 		if !ok {
-			ipPoolNamespace = nadNamespace
+			return fmt.Errorf(
+				webhook.CreateErr,
+				vmNetCfg.Kind,
+				vmNetCfg.Namespace,
+				vmNetCfg.Name,
+				fmt.Errorf("%s label not found", util.IPPoolNamespaceLabelKey),
+			)
 		}
 		ipPoolName, ok := nad.Labels[util.IPPoolNameLabelKey]
 		if !ok {
