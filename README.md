@@ -245,6 +245,6 @@ $ curl -sfL localhost:8080/leases | jq .
 
 ## License
 
-Copyright 2023-2025 [SUSE, LLC.](https://www.suse.com/)
+Copyright 2023-2026 [SUSE, LLC.](https://www.suse.com/)
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](./LICENSE) file for details.

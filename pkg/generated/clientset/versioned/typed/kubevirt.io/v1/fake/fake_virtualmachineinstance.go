@@ -1,5 +1,5 @@
 /*
-Copyright 2025 Rancher Labs, Inc.
+Copyright 2026 SUSE, LLC.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -98,19 +98,6 @@ func (c *FakeVirtualMachineInstances) Update(ctx context.Context, virtualMachine
 	emptyResult := &v1.VirtualMachineInstance{}
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateActionWithOptions(virtualmachineinstancesResource, c.ns, virtualMachineInstance, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1.VirtualMachineInstance), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeVirtualMachineInstances) UpdateStatus(ctx context.Context, virtualMachineInstance *v1.VirtualMachineInstance, opts metav1.UpdateOptions) (result *v1.VirtualMachineInstance, err error) {
-	emptyResult := &v1.VirtualMachineInstance{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceActionWithOptions(virtualmachineinstancesResource, "status", c.ns, virtualMachineInstance, opts), emptyResult)
 
 	if obj == nil {
 		return emptyResult, err
