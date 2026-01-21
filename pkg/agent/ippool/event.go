@@ -2,6 +2,7 @@ package ippool
 
 import (
 	"context"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/fields"
@@ -33,6 +34,14 @@ type EventHandler struct {
 	poolRef       types.NamespacedName
 	dhcpAllocator *dhcp.DHCPAllocator
 	poolCache     map[string]string
+
+	InitialSyncDone chan struct{}
+	initialSyncOnce sync.Once
+}
+
+// GetPoolRef returns the string representation of the IPPool an EventHandler is responsible for.
+func (e *EventHandler) GetPoolRef() types.NamespacedName {
+	return e.poolRef
 }
 
 type Event struct {
@@ -57,6 +66,8 @@ func NewEventHandler(
 		poolRef:        poolRef,
 		dhcpAllocator:  dhcpAllocator,
 		poolCache:      poolCache,
+		InitialSyncDone: make(chan struct{}),
+		// initialSyncOnce is zero-valued sync.Once, which is ready to use
 	}
 }
 
@@ -94,31 +105,89 @@ func (e *EventHandler) EventListener(ctx context.Context) {
 	logrus.Info("(eventhandler.EventListener) starting IPPool event listener")
 
 	// TODO: could be more specific on what namespaces we want to watch and what fields we need
-	watcher := cache.NewListWatchFromClient(e.k8sClientset.NetworkV1alpha1().RESTClient(), "ippools", e.poolRef.Namespace, fields.Everything())
+	// Watch only the specific IPPool this EventHandler is responsible for.
+	nameSelector := fields.OneTermEqualSelector("metadata.name", e.poolRef.Name)
+	watcher := cache.NewListWatchFromClient(e.k8sClientset.NetworkV1alpha1().RESTClient(), "ippools", e.poolRef.Namespace, nameSelector)
 
 	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[Event]())
 
-	indexer, informer := cache.NewInformerWithOptions(cache.InformerOptions{
-		ListerWatcher: watcher,
-		ObjectType:    &networkv1.IPPool{},
-		ResyncPeriod:  0,
-		Handler: cache.ResourceEventHandlerFuncs{
-			UpdateFunc: func(old interface{}, new interface{}) {
-				key, err := cache.MetaNamespaceKeyFunc(new)
-				if err == nil {
+	indexer, informer := cache.NewIndexerInformer(watcher, &networkv1.IPPool{}, 0, cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				ipPool := obj.(*networkv1.IPPool)
+				// Ensure we only queue events for the specific IPPool this handler is for,
+				// even though the watcher is now scoped. This is a good safeguard.
+				if ipPool.Name == e.poolRef.Name && ipPool.Namespace == e.poolRef.Namespace {
+					queue.Add(Event{
+						key:             key,
+						action:          ADD,
+						poolName:        ipPool.ObjectMeta.Name,
+						poolNetworkName: ipPool.Spec.NetworkName,
+					})
+				}
+			}
+		},
+		UpdateFunc: func(old interface{}, new interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(new)
+			if err == nil {
+				ipPool := new.(*networkv1.IPPool)
+				// Ensure we only queue events for the specific IPPool this handler is for.
+				if ipPool.Name == e.poolRef.Name && ipPool.Namespace == e.poolRef.Namespace {
 					queue.Add(Event{
 						key:             key,
 						action:          UPDATE,
-						poolName:        new.(*networkv1.IPPool).Name,
-						poolNetworkName: new.(*networkv1.IPPool).Spec.NetworkName,
+						poolName:        ipPool.ObjectMeta.Name,
+						poolNetworkName: ipPool.Spec.NetworkName,
 					})
 				}
-			},
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj) // Important for handling deleted objects
+			if err == nil {
+				var poolName, poolNamespace string
+				// Attempt to get name and namespace from the object if possible
+				if ipPool, ok := obj.(*networkv1.IPPool); ok {
+					poolName = ipPool.ObjectMeta.Name
+					poolNamespace = ipPool.ObjectMeta.Namespace
+				} else if dslu, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+					// Try to get original object
+					if ipPoolOrig, okOrig := dslu.Obj.(*networkv1.IPPool); okOrig {
+						poolName = ipPoolOrig.ObjectMeta.Name
+						poolNamespace = ipPoolOrig.ObjectMeta.Namespace
+					} else { // Fallback to splitting the key
+						ns, name, keyErr := cache.SplitMetaNamespaceKey(key)
+						if keyErr == nil {
+							poolName = name
+							poolNamespace = ns
+						}
+					}
+				} else { // Fallback to splitting the key if obj is not IPPool or DeletedFinalStateUnknown
+					ns, name, keyErr := cache.SplitMetaNamespaceKey(key)
+					if keyErr == nil {
+						poolName = name
+						poolNamespace = ns
+					}
+				}
+
+				// Ensure we only queue events for the specific IPPool this handler is for.
+				if poolName == e.poolRef.Name && poolNamespace == e.poolRef.Namespace {
+					// For DELETE, poolNetworkName might not be available or relevant in the Event struct
+					// if the controller's delete logic primarily uses the key/poolRef.
+					queue.Add(Event{
+						key:      key,
+						action:   DELETE,
+						poolName: poolName,
+						// poolNetworkName could be omitted or fetched if truly needed for DELETE logic
+					})
+				}
+			}
 		},
 		Indexers: cache.Indexers{},
 	})
 
-	controller := NewController(queue, indexer.(cache.Indexer), informer, e.poolRef, e.dhcpAllocator, e.poolCache)
+	controller := NewController(queue, indexer, informer, e.poolRef, e.dhcpAllocator, e.poolCache, e.InitialSyncDone, &e.initialSyncOnce)
 
 	go controller.Run(1)
 

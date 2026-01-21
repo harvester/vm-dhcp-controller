@@ -1,157 +1,149 @@
 package ippool
 
 import (
-	"encoding/json"
-	"fmt"
-	"net"
 	"time"
 
 	cniv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	"github.com/rancher/wrangler/v3/pkg/kv"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
+	// "k8s.io/apimachinery/pkg/util/intstr" // No longer needed after prepareAgentPod removal
 
-	"github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io"
 	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
-	"github.com/harvester/vm-dhcp-controller/pkg/config"
-	"github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
-func prepareAgentPod(
-	ipPool *networkv1.IPPool,
-	noDHCP bool,
-	agentNamespace string,
-	clusterNetwork string,
-	agentServiceAccountName string,
-	agentImage *config.Image,
-) (*corev1.Pod, error) {
-	name := util.SafeAgentConcatName(ipPool.Namespace, ipPool.Name)
+// func prepareAgentPod(
+// 	ipPool *networkv1.IPPool,
+// 	noDHCP bool,
+// 	agentNamespace string,
+// 	clusterNetwork string,
+// 	agentServiceAccountName string,
+// 	agentImage *config.Image,
+// ) (*corev1.Pod, error) {
+// 	name := util.SafeAgentConcatName(ipPool.Namespace, ipPool.Name)
 
-	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
-	networks := []Network{
-		{
-			Namespace:     nadNamespace,
-			Name:          nadName,
-			InterfaceName: "eth1",
-		},
-	}
-	networksStr, err := json.Marshal(networks)
-	if err != nil {
-		return nil, err
-	}
+// 	nadNamespace, nadName := kv.RSplit(ipPool.Spec.NetworkName, "/")
+// 	networks := []Network{
+// 		{
+// 			Namespace:     nadNamespace,
+// 			Name:          nadName,
+// 			InterfaceName: "eth1",
+// 		},
+// 	}
+// 	networksStr, err := json.Marshal(networks)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	_, ipNet, err := net.ParseCIDR(ipPool.Spec.IPv4Config.CIDR)
-	if err != nil {
-		return nil, err
-	}
-	prefixLength, _ := ipNet.Mask.Size()
+// 	_, ipNet, err := net.ParseCIDR(ipPool.Spec.IPv4Config.CIDR)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	prefixLength, _ := ipNet.Mask.Size()
 
-	args := []string{
-		"--ippool-ref",
-		fmt.Sprintf("%s/%s", ipPool.Namespace, ipPool.Name),
-	}
-	if noDHCP {
-		args = append(args, "--dry-run")
-	}
+// 	args := []string{
+// 		"--ippool-ref",
+// 		fmt.Sprintf("%s/%s", ipPool.Namespace, ipPool.Name),
+// 	}
+// 	if noDHCP {
+// 		args = append(args, "--dry-run")
+// 	}
 
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Annotations: map[string]string{
-				multusNetworksAnnotationKey: string(networksStr),
-			},
-			Labels: map[string]string{
-				vmDHCPControllerLabelKey:     "agent",
-				util.IPPoolNamespaceLabelKey: ipPool.Namespace,
-				util.IPPoolNameLabelKey:      ipPool.Name,
-			},
-			Name:      name,
-			Namespace: agentNamespace,
-		},
-		Spec: corev1.PodSpec{
-			Affinity: &corev1.Affinity{
-				NodeAffinity: &corev1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-						NodeSelectorTerms: []corev1.NodeSelectorTerm{
-							{
-								MatchExpressions: []corev1.NodeSelectorRequirement{
-									{
-										Key:      network.GroupName + "/" + clusterNetwork,
-										Operator: corev1.NodeSelectorOpIn,
-										Values: []string{
-											"true",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			ServiceAccountName: agentServiceAccountName,
-			InitContainers: []corev1.Container{
-				{
-					Name:            "ip-setter",
-					Image:           agentImage.String(),
-					ImagePullPolicy: corev1.PullIfNotPresent,
-					Command: []string{
-						"/bin/sh",
-						"-c",
-						fmt.Sprintf(setIPAddrScript, ipPool.Spec.IPv4Config.ServerIP, prefixLength),
-					},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser:  &runAsUserID,
-						RunAsGroup: &runAsGroupID,
-						Capabilities: &corev1.Capabilities{
-							Add: []corev1.Capability{
-								"NET_ADMIN",
-							},
-						},
-					},
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "agent",
-					Image: agentImage.String(),
-					Args:  args,
-					Env: []corev1.EnvVar{
-						{
-							Name:  "VM_DHCP_AGENT_NAME",
-							Value: name,
-						},
-					},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser:  &runAsUserID,
-						RunAsGroup: &runAsGroupID,
-						Capabilities: &corev1.Capabilities{
-							Add: []corev1.Capability{
-								"NET_ADMIN",
-							},
-						},
-					},
-					LivenessProbe: &corev1.Probe{
-						ProbeHandler: corev1.ProbeHandler{
-							HTTPGet: &corev1.HTTPGetAction{
-								Path: "/healthz",
-								Port: intstr.FromInt(8080),
-							},
-						},
-					},
-					ReadinessProbe: &corev1.Probe{
-						ProbeHandler: corev1.ProbeHandler{
-							HTTPGet: &corev1.HTTPGetAction{
-								Path: "/readyz",
-								Port: intstr.FromInt(8080),
-							},
-						},
-					},
-				},
-			},
-		},
-	}, nil
-}
+// 	return &corev1.Pod{
+// 		ObjectMeta: metav1.ObjectMeta{
+// 			Annotations: map[string]string{
+// 				multusNetworksAnnotationKey: string(networksStr),
+// 			},
+// 			Labels: map[string]string{
+// 				vmDHCPControllerLabelKey:     "agent",
+// 				util.IPPoolNamespaceLabelKey: ipPool.Namespace,
+// 				util.IPPoolNameLabelKey:      ipPool.Name,
+// 			},
+// 			Name:      name,
+// 			Namespace: agentNamespace,
+// 		},
+// 		Spec: corev1.PodSpec{
+// 			Affinity: &corev1.Affinity{
+// 				NodeAffinity: &corev1.NodeAffinity{
+// 					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+// 						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+// 							{
+// 								MatchExpressions: []corev1.NodeSelectorRequirement{
+// 									{
+// 										Key:      network.GroupName + "/" + clusterNetwork,
+// 										Operator: corev1.NodeSelectorOpIn,
+// 										Values: []string{
+// 											"true",
+// 										},
+// 									},
+// 								},
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			ServiceAccountName: agentServiceAccountName,
+// 			InitContainers: []corev1.Container{
+// 				{
+// 					Name:            "ip-setter",
+// 					Image:           agentImage.String(),
+// 					ImagePullPolicy: corev1.PullIfNotPresent,
+// 					Command: []string{
+// 						"/bin/sh",
+// 						"-c",
+// 						fmt.Sprintf(setIPAddrScript, ipPool.Spec.IPv4Config.ServerIP, prefixLength),
+// 					},
+// 					SecurityContext: &corev1.SecurityContext{
+// 						RunAsUser:  &runAsUserID,
+// 						RunAsGroup: &runAsGroupID,
+// 						Capabilities: &corev1.Capabilities{
+// 							Add: []corev1.Capability{
+// 								"NET_ADMIN",
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 			Containers: []corev1.Container{
+// 				{
+// 					Name:  "agent",
+// 					Image: agentImage.String(),
+// 					Args:  args,
+// 					Env: []corev1.EnvVar{
+// 						{
+// 							Name:  "VM_DHCP_AGENT_NAME",
+// 							Value: name,
+// 						},
+// 					},
+// 					SecurityContext: &corev1.SecurityContext{
+// 						RunAsUser:  &runAsUserID,
+// 						RunAsGroup: &runAsGroupID,
+// 						Capabilities: &corev1.Capabilities{
+// 							Add: []corev1.Capability{
+// 								"NET_ADMIN",
+// 							},
+// 						},
+// 					},
+// 					LivenessProbe: &corev1.Probe{
+// 						ProbeHandler: corev1.ProbeHandler{
+// 							HTTPGet: &corev1.HTTPGetAction{
+// 								Path: "/healthz",
+// 								Port: intstr.FromInt(8080),
+// 							},
+// 						},
+// 					},
+// 					ReadinessProbe: &corev1.Probe{
+// 						ProbeHandler: corev1.ProbeHandler{
+// 							HTTPGet: &corev1.HTTPGetAction{
+// 								Path: "/readyz",
+// 								Port: intstr.FromInt(8080),
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		},
+// 	}, nil
+// }
 
 func setRegisteredCondition(ipPool *networkv1.IPPool, status corev1.ConditionStatus, reason, message string) {
 	networkv1.Registered.SetStatus(ipPool, string(status))
@@ -165,11 +157,11 @@ func setCacheReadyCondition(ipPool *networkv1.IPPool, status corev1.ConditionSta
 	networkv1.CacheReady.Message(ipPool, message)
 }
 
-func setAgentReadyCondition(ipPool *networkv1.IPPool, status corev1.ConditionStatus, reason, message string) {
-	networkv1.AgentReady.SetStatus(ipPool, string(status))
-	networkv1.AgentReady.Reason(ipPool, reason)
-	networkv1.AgentReady.Message(ipPool, message)
-}
+// func setAgentReadyCondition(ipPool *networkv1.IPPool, status corev1.ConditionStatus, reason, message string) {
+// 	networkv1.AgentReady.SetStatus(ipPool, string(status))
+// 	networkv1.AgentReady.Reason(ipPool, reason) // Removed
+// 	networkv1.AgentReady.Message(ipPool, message) // Removed
+// } // Removed
 
 func setStoppedCondition(ipPool *networkv1.IPPool, status corev1.ConditionStatus, reason, message string) {
 	networkv1.Stopped.SetStatus(ipPool, string(status))
@@ -243,16 +235,16 @@ func (b *IPPoolBuilder) Exclude(ipAddressList ...string) *IPPoolBuilder {
 	return b
 }
 
-func (b *IPPoolBuilder) AgentPodRef(namespace, name, image, uid string) *IPPoolBuilder {
-	if b.ipPool.Status.AgentPodRef == nil {
-		b.ipPool.Status.AgentPodRef = new(networkv1.PodReference)
-	}
-	b.ipPool.Status.AgentPodRef.Namespace = namespace
-	b.ipPool.Status.AgentPodRef.Name = name
-	b.ipPool.Status.AgentPodRef.Image = image
-	b.ipPool.Status.AgentPodRef.UID = types.UID(uid)
-	return b
-}
+// func (b *IPPoolBuilder) AgentPodRef(namespace, name, image, uid string) *IPPoolBuilder {
+// 	if b.ipPool.Status.AgentPodRef == nil {
+// 		b.ipPool.Status.AgentPodRef = new(networkv1.PodReference)
+// 	}
+// 	b.ipPool.Status.AgentPodRef.Namespace = namespace
+// 	b.ipPool.Status.AgentPodRef.Name = name
+// 	b.ipPool.Status.AgentPodRef.Image = image // Removed
+// 	b.ipPool.Status.AgentPodRef.UID = types.UID(uid) // Removed
+// 	return b // Removed
+// } // Removed
 
 func (b *IPPoolBuilder) Allocated(ipAddress, macAddress string) *IPPoolBuilder {
 	if b.ipPool.Status.IPv4 == nil {
@@ -291,10 +283,10 @@ func (b *IPPoolBuilder) CacheReadyCondition(status corev1.ConditionStatus, reaso
 	return b
 }
 
-func (b *IPPoolBuilder) AgentReadyCondition(status corev1.ConditionStatus, reason, message string) *IPPoolBuilder {
-	setAgentReadyCondition(b.ipPool, status, reason, message)
-	return b
-}
+// func (b *IPPoolBuilder) AgentReadyCondition(status corev1.ConditionStatus, reason, message string) *IPPoolBuilder { // Removed
+// 	setAgentReadyCondition(b.ipPool, status, reason, message) // Removed
+// 	return b // Removed
+// } // Removed
 
 func (b *IPPoolBuilder) StoppedCondition(status corev1.ConditionStatus, reason, message string) *IPPoolBuilder {
 	setStoppedCondition(b.ipPool, status, reason, message)
@@ -315,16 +307,16 @@ func newIPPoolStatusBuilder() *ipPoolStatusBuilder {
 	}
 }
 
-func (b *ipPoolStatusBuilder) AgentPodRef(namespace, name, image, uid string) *ipPoolStatusBuilder {
-	if b.ipPoolStatus.AgentPodRef == nil {
-		b.ipPoolStatus.AgentPodRef = new(networkv1.PodReference)
-	}
-	b.ipPoolStatus.AgentPodRef.Namespace = namespace
-	b.ipPoolStatus.AgentPodRef.Name = name
-	b.ipPoolStatus.AgentPodRef.Image = image
-	b.ipPoolStatus.AgentPodRef.UID = types.UID(uid)
-	return b
-}
+// func (b *ipPoolStatusBuilder) AgentPodRef(namespace, name, image, uid string) *ipPoolStatusBuilder {
+// 	if b.ipPoolStatus.AgentPodRef == nil {
+// 		b.ipPoolStatus.AgentPodRef = new(networkv1.PodReference)
+// 	}
+// 	b.ipPoolStatus.AgentPodRef.Namespace = namespace
+// 	b.ipPoolStatus.AgentPodRef.Name = name
+// 	b.ipPoolStatus.AgentPodRef.Image = image // Removed
+// 	b.ipPoolStatus.AgentPodRef.UID = types.UID(uid) // Removed
+// 	return b // Removed
+// } // Removed
 
 func (b *ipPoolStatusBuilder) RegisteredCondition(status corev1.ConditionStatus, reason, message string) *ipPoolStatusBuilder {
 	networkv1.Registered.SetStatus(&b.ipPoolStatus, string(status))
@@ -340,12 +332,12 @@ func (b *ipPoolStatusBuilder) CacheReadyCondition(status corev1.ConditionStatus,
 	return b
 }
 
-func (b *ipPoolStatusBuilder) AgentReadyCondition(status corev1.ConditionStatus, reason, message string) *ipPoolStatusBuilder {
-	networkv1.AgentReady.SetStatus(&b.ipPoolStatus, string(status))
-	networkv1.AgentReady.Reason(&b.ipPoolStatus, reason)
-	networkv1.AgentReady.Message(&b.ipPoolStatus, message)
-	return b
-}
+// func (b *ipPoolStatusBuilder) AgentReadyCondition(status corev1.ConditionStatus, reason, message string) *ipPoolStatusBuilder {
+// 	networkv1.AgentReady.SetStatus(&b.ipPoolStatus, string(status))
+// 	networkv1.AgentReady.Reason(&b.ipPoolStatus, reason) // Removed
+// 	networkv1.AgentReady.Message(&b.ipPoolStatus, message) // Removed
+// 	return b // Removed
+// } // Removed
 
 func (b *ipPoolStatusBuilder) StoppedCondition(status corev1.ConditionStatus, reason, message string) *ipPoolStatusBuilder {
 	networkv1.Stopped.SetStatus(&b.ipPoolStatus, string(status))
@@ -441,3 +433,4 @@ func SanitizeStatus(status *networkv1.IPPoolStatus) {
 		status.Conditions[i].LastUpdateTime = ""
 	}
 }
+

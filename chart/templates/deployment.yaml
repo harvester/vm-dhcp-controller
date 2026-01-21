@@ -35,12 +35,10 @@ spec:
           args:
           - --name
           - {{ include "harvester-vm-dhcp-controller.fullname" . }}
-          - --namespace
-          - {{ .Release.Namespace }}
-          - --image
-          - "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag | default .Chart.AppVersion }}"
-          - --service-account-name
-          - {{ include "harvester-vm-dhcp-controller.serviceAccountName" . }}-agent
+          # --image # Rimosso: l'agent ora ha il suo deployment
+          # - "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag | default .Chart.AppVersion }}" # Rimosso
+          # --service-account-name # Rimosso
+          # - {{ include "harvester-vm-dhcp-controller.serviceAccountName" . }}-agent # Rimosso
           ports:
           - name: metrics
             protocol: TCP
@@ -49,6 +47,15 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: AGENT_DEPLOYMENT_NAME
+              value: {{ include "harvester-vm-dhcp-controller.fullname" . }}-agent
+            - name: AGENT_CONTAINER_NAME
+              value: {{ .Chart.Name }}-agent
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- with .Values.volumeMounts }}

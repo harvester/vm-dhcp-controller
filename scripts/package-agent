@@ -12,6 +12,9 @@ IMAGE=${REPO}/vm-dhcp-agent:${TAG}
 DOCKERFILE=package/Dockerfile.agent
 
 buildx build --load \
+  --build-arg http_proxy="${http_proxy}" \
+  --build-arg https_proxy="${https_proxy}" \
+  --build-arg no_proxy="${no_proxy}" \
   -f ${DOCKERFILE} -t ${IMAGE} .
 echo Built ${IMAGE}
 
@@ -25,3 +28,4 @@ if [[ -n ${PUSH} ]];then
   docker --config=${DOCKER_CONFIG} push "${IMAGE_PUSH}"
   echo Pushed "${IMAGE_PUSH}"
 fi
+

@@ -4,14 +4,19 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rancher/wrangler/v3/pkg/kv"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/types"
+	// "k8s.io/apimachinery/pkg/types" // No longer needed for IPPoolRef
 
-	"github.com/harvester/vm-dhcp-controller/pkg/agent"
+	// "github.com/harvester/vm-dhcp-controller/pkg/agent" // DefaultNetworkInterface no longer used here
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	"github.com/harvester/vm-dhcp-controller/pkg/util"
+)
+
+const (
+	// Environment variable keys, must match controller-side
+	agentNetworkConfigsEnvKey = "AGENT_NETWORK_CONFIGS"
+	agentIPPoolRefsEnvKey     = "IPPOOL_REFS_JSON"
 )
 
 var (
@@ -20,11 +25,11 @@ var (
 
 	name               string
 	dryRun             bool
-	nic                string
 	enableCacheDumpAPI bool
 	kubeConfigPath     string
 	kubeContext        string
-	ippoolRef          string
+	noLeaderElection   bool
+	// Removed: nic, ippoolRef, serverIP, cidr
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -43,16 +48,29 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		ipPoolNamespace, ipPoolName := kv.RSplit(ippoolRef, "/")
+		// Populate options from environment variables
+		agentNetworkConfigsJSON := os.Getenv(agentNetworkConfigsEnvKey)
+		ipPoolRefsJSON := os.Getenv(agentIPPoolRefsEnvKey)
+
+		if agentNetworkConfigsJSON == "" {
+			// Log a warning or error, as this is critical for the agent's function
+			// Depending on desired behavior, could default to "[]" or exit.
+			// For now, warn and proceed; the agent logic should handle empty/invalid JSON.
+			logrus.Warnf("%s environment variable is not set or is empty. Agent may not configure any interfaces.", agentNetworkConfigsEnvKey)
+			agentNetworkConfigsJSON = "[]" // Default to empty JSON array
+		}
+
+		if ipPoolRefsJSON == "" {
+			logrus.Warnf("%s environment variable is not set or is empty.", agentIPPoolRefsEnvKey)
+			ipPoolRefsJSON = "[]" // Default to empty JSON array
+		}
+
 		options := &config.AgentOptions{
-			DryRun:         dryRun,
-			Nic:            nic,
-			KubeConfigPath: kubeConfigPath,
-			KubeContext:    kubeContext,
-			IPPoolRef: types.NamespacedName{
-				Namespace: ipPoolNamespace,
-				Name:      ipPoolName,
-			},
+			DryRun:                  dryRun,
+			KubeConfigPath:          kubeConfigPath,
+			KubeContext:             kubeContext,
+			AgentNetworkConfigsJSON: agentNetworkConfigsJSON,
+			IPPoolRefsJSON:          ipPoolRefsJSON,
 		}
 
 		if err := run(options); err != nil {
@@ -74,8 +92,12 @@ func init() {
 	rootCmd.Flags().StringVar(&kubeContext, "kubecontext", os.Getenv("KUBECONTEXT"), "Context name")
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Run vm-dhcp-agent without starting the DHCP server")
 	rootCmd.Flags().BoolVar(&enableCacheDumpAPI, "enable-cache-dump-api", false, "Enable cache dump APIs")
-	rootCmd.Flags().StringVar(&ippoolRef, "ippool-ref", os.Getenv("IPPOOL_REF"), "The IPPool object the agent should sync with")
-	rootCmd.Flags().StringVar(&nic, "nic", agent.DefaultNetworkInterface, "The network interface the embedded DHCP server listens on")
+	// Removed old flags that are now sourced from environment variables set by the controller:
+	// - ippool-ref
+	// - nic
+	// - server-ip
+	// - cidr
+	rootCmd.Flags().BoolVar(&noLeaderElection, "no-leader-election", false, "Disable leader election")
 }
 
 // execute adds all child commands to the root command and sets flags appropriately.

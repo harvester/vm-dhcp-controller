@@ -4,13 +4,11 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/condition"
 	"github.com/rancher/wrangler/v3/pkg/genericcondition"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 var (
 	Registered condition.Cond = "Registered"
 	CacheReady condition.Cond = "CacheReady"
-	AgentReady condition.Cond = "AgentReady"
 	Stopped    condition.Cond = "Stopped"
 )
 
@@ -23,7 +21,6 @@ var (
 // +kubebuilder:printcolumn:name="USED",type=integer,JSONPath=`.status.ipv4.used`
 // +kubebuilder:printcolumn:name="REGISTERED",type=string,JSONPath=`.status.conditions[?(@.type=='Registered')].status`
 // +kubebuilder:printcolumn:name="CACHEREADY",type=string,JSONPath=`.status.conditions[?(@.type=='CacheReady')].status`
-// +kubebuilder:printcolumn:name="AGENTREADY",type=string,JSONPath=`.status.conditions[?(@.type=='AgentReady')].status`
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=`.metadata.creationTimestamp`
 
 type IPPool struct {
@@ -119,11 +116,11 @@ type IPPoolStatus struct {
 
 	// +optional
 	// +kubebuilder:validation:Optional
-	AgentPodRef *PodReference `json:"agentPodRef,omitempty"`
+	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
 
 	// +optional
 	// +kubebuilder:validation:Optional
-	Conditions []genericcondition.GenericCondition `json:"conditions,omitempty"`
+	AgentPodRef *PodReference `json:"agentPodRef,omitempty"`
 }
 
 type IPv4Status struct {
@@ -132,9 +129,10 @@ type IPv4Status struct {
 	Available int               `json:"available"`
 }
 
+// PodReference contains enough information to locate the referenced pod.
 type PodReference struct {
-	Namespace string    `json:"namespace,omitempty"`
-	Name      string    `json:"name,omitempty"`
-	Image     string    `json:"image,omitempty"`
-	UID       types.UID `json:"uid,omitempty"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	UID       string `json:"uid"`
 }
+
