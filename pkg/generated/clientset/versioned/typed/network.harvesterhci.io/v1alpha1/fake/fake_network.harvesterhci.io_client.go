@@ -29,11 +29,11 @@ type FakeNetworkV1alpha1 struct {
 }
 
 func (c *FakeNetworkV1alpha1) IPPools(namespace string) v1alpha1.IPPoolInterface {
-	return &FakeIPPools{c, namespace}
+	return newFakeIPPools(c, namespace)
 }
 
 func (c *FakeNetworkV1alpha1) VirtualMachineNetworkConfigs(namespace string) v1alpha1.VirtualMachineNetworkConfigInterface {
-	return &FakeVirtualMachineNetworkConfigs{c, namespace}
+	return newFakeVirtualMachineNetworkConfigs(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

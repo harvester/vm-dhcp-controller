@@ -19,9 +19,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	networkharvesterhciiov1alpha1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	scheme "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -37,33 +37,34 @@ type IPPoolsGetter interface {
 
 // IPPoolInterface has methods to work with IPPool resources.
 type IPPoolInterface interface {
-	Create(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.CreateOptions) (*v1alpha1.IPPool, error)
-	Update(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.UpdateOptions) (*v1alpha1.IPPool, error)
+	Create(ctx context.Context, iPPool *networkharvesterhciiov1alpha1.IPPool, opts v1.CreateOptions) (*networkharvesterhciiov1alpha1.IPPool, error)
+	Update(ctx context.Context, iPPool *networkharvesterhciiov1alpha1.IPPool, opts v1.UpdateOptions) (*networkharvesterhciiov1alpha1.IPPool, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, iPPool *v1alpha1.IPPool, opts v1.UpdateOptions) (*v1alpha1.IPPool, error)
+	UpdateStatus(ctx context.Context, iPPool *networkharvesterhciiov1alpha1.IPPool, opts v1.UpdateOptions) (*networkharvesterhciiov1alpha1.IPPool, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.IPPool, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.IPPoolList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*networkharvesterhciiov1alpha1.IPPool, error)
+	List(ctx context.Context, opts v1.ListOptions) (*networkharvesterhciiov1alpha1.IPPoolList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.IPPool, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *networkharvesterhciiov1alpha1.IPPool, err error)
 	IPPoolExpansion
 }
 
 // iPPools implements IPPoolInterface
 type iPPools struct {
-	*gentype.ClientWithList[*v1alpha1.IPPool, *v1alpha1.IPPoolList]
+	*gentype.ClientWithList[*networkharvesterhciiov1alpha1.IPPool, *networkharvesterhciiov1alpha1.IPPoolList]
 }
 
 // newIPPools returns a IPPools
 func newIPPools(c *NetworkV1alpha1Client, namespace string) *iPPools {
 	return &iPPools{
-		gentype.NewClientWithList[*v1alpha1.IPPool, *v1alpha1.IPPoolList](
+		gentype.NewClientWithList[*networkharvesterhciiov1alpha1.IPPool, *networkharvesterhciiov1alpha1.IPPoolList](
 			"ippools",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.IPPool { return &v1alpha1.IPPool{} },
-			func() *v1alpha1.IPPoolList { return &v1alpha1.IPPoolList{} }),
+			func() *networkharvesterhciiov1alpha1.IPPool { return &networkharvesterhciiov1alpha1.IPPool{} },
+			func() *networkharvesterhciiov1alpha1.IPPoolList { return &networkharvesterhciiov1alpha1.IPPoolList{} },
+		),
 	}
 }
