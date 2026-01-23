@@ -19,9 +19,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	networkharvesterhciiov1alpha1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 	scheme "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -37,33 +37,38 @@ type VirtualMachineNetworkConfigsGetter interface {
 
 // VirtualMachineNetworkConfigInterface has methods to work with VirtualMachineNetworkConfig resources.
 type VirtualMachineNetworkConfigInterface interface {
-	Create(ctx context.Context, virtualMachineNetworkConfig *v1alpha1.VirtualMachineNetworkConfig, opts v1.CreateOptions) (*v1alpha1.VirtualMachineNetworkConfig, error)
-	Update(ctx context.Context, virtualMachineNetworkConfig *v1alpha1.VirtualMachineNetworkConfig, opts v1.UpdateOptions) (*v1alpha1.VirtualMachineNetworkConfig, error)
+	Create(ctx context.Context, virtualMachineNetworkConfig *networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig, opts v1.CreateOptions) (*networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig, error)
+	Update(ctx context.Context, virtualMachineNetworkConfig *networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig, opts v1.UpdateOptions) (*networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, virtualMachineNetworkConfig *v1alpha1.VirtualMachineNetworkConfig, opts v1.UpdateOptions) (*v1alpha1.VirtualMachineNetworkConfig, error)
+	UpdateStatus(ctx context.Context, virtualMachineNetworkConfig *networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig, opts v1.UpdateOptions) (*networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.VirtualMachineNetworkConfig, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.VirtualMachineNetworkConfigList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig, error)
+	List(ctx context.Context, opts v1.ListOptions) (*networkharvesterhciiov1alpha1.VirtualMachineNetworkConfigList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.VirtualMachineNetworkConfig, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig, err error)
 	VirtualMachineNetworkConfigExpansion
 }
 
 // virtualMachineNetworkConfigs implements VirtualMachineNetworkConfigInterface
 type virtualMachineNetworkConfigs struct {
-	*gentype.ClientWithList[*v1alpha1.VirtualMachineNetworkConfig, *v1alpha1.VirtualMachineNetworkConfigList]
+	*gentype.ClientWithList[*networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig, *networkharvesterhciiov1alpha1.VirtualMachineNetworkConfigList]
 }
 
 // newVirtualMachineNetworkConfigs returns a VirtualMachineNetworkConfigs
 func newVirtualMachineNetworkConfigs(c *NetworkV1alpha1Client, namespace string) *virtualMachineNetworkConfigs {
 	return &virtualMachineNetworkConfigs{
-		gentype.NewClientWithList[*v1alpha1.VirtualMachineNetworkConfig, *v1alpha1.VirtualMachineNetworkConfigList](
+		gentype.NewClientWithList[*networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig, *networkharvesterhciiov1alpha1.VirtualMachineNetworkConfigList](
 			"virtualmachinenetworkconfigs",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.VirtualMachineNetworkConfig { return &v1alpha1.VirtualMachineNetworkConfig{} },
-			func() *v1alpha1.VirtualMachineNetworkConfigList { return &v1alpha1.VirtualMachineNetworkConfigList{} }),
+			func() *networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig {
+				return &networkharvesterhciiov1alpha1.VirtualMachineNetworkConfig{}
+			},
+			func() *networkharvesterhciiov1alpha1.VirtualMachineNetworkConfigList {
+				return &networkharvesterhciiov1alpha1.VirtualMachineNetworkConfigList{}
+			},
+		),
 	}
 }
