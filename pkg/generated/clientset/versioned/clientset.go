@@ -19,8 +19,8 @@ limitations under the License.
 package versioned
 
 import (
-	"fmt"
-	"net/http"
+	fmt "fmt"
+	http "net/http"
 
 	k8scnicncfiov1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 	kubevirtv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/clientset/versioned/typed/kubevirt.io/v1"
