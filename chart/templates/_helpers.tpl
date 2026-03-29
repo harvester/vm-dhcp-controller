@@ -24,6 +24,17 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
+Return the agent service account name
+*/}}
+{{- define "harvester-vm-dhcp-controller.agentServiceAccountName" -}}
+{{- if .Values.agent.serviceAccount.create }}
+{{- default (printf "%s-agent" (include "harvester-vm-dhcp-controller.fullname" .)) .Values.agent.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.agent.serviceAccount.name }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Create chart name and version as used by the chart label.
 */}}
 {{- define "harvester-vm-dhcp-controller.chart" -}}
@@ -76,3 +87,14 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Return the appropriate apiVersion for rbac.
+*/}}
+{{- define "harvester-vm-dhcp-controller.rbac.apiVersion" -}}
+{{- if .Capabilities.APIVersions.Has "rbac.authorization.k8s.io/v1" }}
+{{- print "rbac.authorization.k8s.io/v1" }}
+{{- else }}
+{{- print "v1" }}
+{{- end }}
+{{- end -}}

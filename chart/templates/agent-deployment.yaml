@@ -1,0 +1,73 @@
+{{- if .Values.agent.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "harvester-vm-dhcp-controller.fullname" . }}-agent
+  labels:
+    {{- include "harvester-vm-dhcp-controller.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  replicas: {{ .Values.agent.replicaCount | default 2 }}
+  selector:
+    matchLabels:
+      {{- include "harvester-vm-dhcp-controller.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: agent
+  template:
+    metadata:
+      labels:
+        {{- include "harvester-vm-dhcp-controller.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: agent
+    spec:
+      serviceAccountName: {{ include "harvester-vm-dhcp-controller.agentServiceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.agent.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-agent
+          securityContext:
+            {{- $mergedSecContext := .Values.agent.securityContext | default dict -}}
+            {{- $capabilities := $mergedSecContext.capabilities | default dict -}}
+            {{- $addCapabilities := $capabilities.add | default list -}}
+            {{- if not (has "NET_ADMIN" $addCapabilities) -}}
+            {{- $addCapabilities = append $addCapabilities "NET_ADMIN" -}}
+            {{- end -}}
+            {{- $_ := set $capabilities "add" $addCapabilities -}}
+            {{- $_ := set $mergedSecContext "capabilities" $capabilities -}}
+            {{- toYaml $mergedSecContext | nindent 12 }}
+          image: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          args:
+            - {{ printf "--name=%s-agent" (include "harvester-vm-dhcp-controller.fullname" .) }}
+            # - {{ printf "--namespace=%s" .Release.Namespace }} # Rimosso
+            - "--kubeconfig=/etc/kubeconfig"
+            - {{ printf "--no-leader-election=%t" (.Values.agent.noLeaderElection | default false) }}
+            # Removed --nic argument, controller will manage interfaces via annotations and AGENT_NETWORK_CONFIGS
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # IPPOOL_REF is removed, replaced by AGENT_NETWORK_CONFIGS and IPPOOL_REFS_JSON
+            # These will be populated by the controller. Default to empty JSON arrays.
+            - name: AGENT_NETWORK_CONFIGS
+              value: "[]"
+            - name: IPPOOL_REFS_JSON
+              value: "[]"
+          resources:
+            {{- toYaml .Values.agent.resources | nindent 12 }}
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end -}}
