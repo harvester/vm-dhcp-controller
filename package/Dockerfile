@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.18.0
 
-FROM registry.suse.com/bci/bci-base:15.7
+FROM registry.suse.com/bci/bci-base:16.0
 
 RUN zypper -n rm container-suseconnect && \
-    zypper -n in curl dhcp-tools jq
+    zypper -n in curl jq
 
 ARG TARGETPLATFORM
 
