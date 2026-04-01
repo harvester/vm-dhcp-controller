@@ -1,4 +1,4 @@
-FROM registry.suse.com/bci/golang:1.25
+FROM registry.suse.com/bci/golang:1.25.7
 
 ARG DAPPER_HOST_ARCH
 ENV ARCH=$DAPPER_HOST_ARCH
@@ -13,7 +13,7 @@ RUN curl -sSfL https://github.com/docker/buildx/releases/download/v0.13.1/buildx
 	mv buildx-v0.13.1.linux-${ARCH} /usr/local/bin/buildx
 
 ## install controller-gen
-RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.17.1
+RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.18.0
 
 ENV DAPPER_ENV="REPO PUSH TAG DRONE_TAG ARCH"
 ENV DAPPER_SOURCE=/go/src/github.com/harvester/vm-dhcp-controller
