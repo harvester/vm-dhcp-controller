@@ -1,6 +1,6 @@
 module github.com/harvester/vm-dhcp-controller
 
-go 1.25.2
+go 1.25.7
 
 replace (
 	github.com/google/gnostic-models => github.com/google/gnostic-models v0.6.9
