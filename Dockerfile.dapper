@@ -5,12 +5,7 @@ ENV ARCH=$DAPPER_HOST_ARCH
 
 RUN zypper -n install tar gzip bash git docker less file curl wget
 
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s latest
-
-# The docker version in dapper is too old to have buildx. Install it manually.
-RUN curl -sSfL https://github.com/docker/buildx/releases/download/v0.13.1/buildx-v0.13.1.linux-${ARCH} -o buildx-v0.13.1.linux-${ARCH} && \
-	chmod +x buildx-v0.13.1.linux-${ARCH} && \
-	mv buildx-v0.13.1.linux-${ARCH} /usr/local/bin/buildx
+COPY --from=golangci/golangci-lint:v2.11.4-alpine@sha256:72bcd68512b4e27540dd3a778a1b7afd45759d8145cfb3c089f1d7af53e718e9 /usr/bin/golangci-lint /usr/local/bin/golangci-lint
 
 ## install controller-gen
 RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.18.0
