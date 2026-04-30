@@ -11,7 +11,7 @@ echo "Packaging webhook..."
 IMAGE=${REPO}/vm-dhcp-webhook:${TAG}
 DOCKERFILE=package/Dockerfile.webhook
 
-buildx build --load \
+docker buildx build --load \
   -f ${DOCKERFILE} -t ${IMAGE} .
 echo Built ${IMAGE}
 
