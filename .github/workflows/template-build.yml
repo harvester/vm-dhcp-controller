@@ -1,6 +1,9 @@
 on:
   workflow_call:
     inputs:
+      refs:
+        required: false
+        type: string
       release-tag-name:
         required: true
         type: string
@@ -21,8 +24,15 @@ jobs:
       contents: read
       id-token: write
     steps:
-    - name: Checkout code
+    - name: Checkout code without refs
+      if: ${{ inputs.refs == '' }}
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Checkout code with refs
+      if: ${{ inputs.refs != '' }}
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        ref: ${{ inputs.refs }}
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
