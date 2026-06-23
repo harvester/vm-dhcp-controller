@@ -3,7 +3,7 @@ module github.com/harvester/vm-dhcp-controller
 go 1.25.7
 
 replace (
-	github.com/google/gnostic-models => github.com/google/gnostic-models v0.6.9
+	github.com/google/gnostic-models => github.com/google/gnostic-models v0.7.1
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
 	k8s.io/api => k8s.io/api v0.33.5
