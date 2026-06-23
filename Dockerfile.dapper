@@ -1,7 +1,8 @@
-FROM registry.suse.com/bci/golang:1.25.7
+FROM registry.suse.com/bci/golang:1.25
 
 ARG DAPPER_HOST_ARCH
 ENV ARCH=$DAPPER_HOST_ARCH
+ENV GOTOOLCHAIN=auto
 
 RUN zypper -n install tar gzip bash git docker less file curl wget
 
