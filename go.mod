@@ -28,7 +28,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rancher/lasso v0.2.3
 	github.com/rancher/wrangler/v3 v3.2.4
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/sync v0.19.0
