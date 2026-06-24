@@ -7,13 +7,13 @@ replace (
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20191219222812-2987a591a72c
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20200521150516-05eb9880269c
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring => github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.68.0
-	k8s.io/api => k8s.io/api v0.32.5
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.32.5
-	k8s.io/apimachinery => k8s.io/apimachinery v0.32.5
-	k8s.io/apiserver => k8s.io/apiserver v0.32.5
-	k8s.io/client-go => k8s.io/client-go v0.32.5
-	k8s.io/code-generator => k8s.io/code-generator v0.32.5
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
+	k8s.io/api => k8s.io/api v0.36.2
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.36.2
+	k8s.io/apimachinery => k8s.io/apimachinery v0.36.2
+	k8s.io/apiserver => k8s.io/apiserver v0.36.2
+	k8s.io/client-go => k8s.io/client-go v0.36.2
+	k8s.io/code-generator => k8s.io/code-generator v0.36.2
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260624041617-8f3fa4921821
 	kubevirt.io/client-go => kubevirt.io/client-go v1.6.3
 	kubevirt.io/kubevirt => kubevirt.io/kubevirt v1.6.3
 )
@@ -27,13 +27,13 @@ require (
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rancher/lasso v0.2.3
-	github.com/rancher/wrangler/v3 v3.2.4
+	github.com/rancher/wrangler/v3 v3.7.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/sync v0.19.0
-	k8s.io/api v0.34.0
-	k8s.io/apimachinery v0.34.0
+	k8s.io/api v0.36.2
+	k8s.io/apimachinery v0.36.2
 	k8s.io/client-go v12.0.0+incompatible
 	kubevirt.io/api v1.6.3
 )
