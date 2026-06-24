@@ -14,6 +14,6 @@ RUN if [ "$TARGETPLATFORM" != "linux/amd64" ] && [ "$TARGETPLATFORM" != "linux/a
 
 ENV ARCH=${TARGETPLATFORM#linux/}
 
-COPY bin/vm-dhcp-controller-${ARCH} /usr/bin/vm-dhcp-controller
+COPY --from=bin vm-dhcp-controller-${ARCH} /usr/bin/vm-dhcp-controller
 
 ENTRYPOINT [ "vm-dhcp-controller" ]
