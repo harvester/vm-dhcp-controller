@@ -6,13 +6,13 @@ replace (
 	github.com/google/gnostic-models => github.com/google/gnostic-models v0.6.9
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20210105115604-44119421ec6b
 	github.com/openshift/client-go => github.com/openshift/client-go v0.0.0-20210112165513-ebc401615f47
-	k8s.io/api => k8s.io/api v0.33.5
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.33.5
-	k8s.io/apimachinery => k8s.io/apimachinery v0.33.5
-	k8s.io/apiserver => k8s.io/apiserver v0.33.5
-	k8s.io/client-go => k8s.io/client-go v0.33.5
-	k8s.io/code-generator => k8s.io/code-generator v0.33.5
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
+	k8s.io/api => k8s.io/api v0.36.2
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.36.2
+	k8s.io/apimachinery => k8s.io/apimachinery v0.36.2
+	k8s.io/apiserver => k8s.io/apiserver v0.36.2
+	k8s.io/client-go => k8s.io/client-go v0.36.2
+	k8s.io/code-generator => k8s.io/code-generator v0.36.2
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260624041617-8f3fa4921821
 	kubevirt.io/client-go => kubevirt.io/client-go v1.7.0
 	kubevirt.io/kubevirt => kubevirt.io/kubevirt v1.7.0
 )
@@ -26,13 +26,13 @@ require (
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	github.com/prometheus/client_golang v1.23.2
 	github.com/rancher/lasso v0.2.5
-	github.com/rancher/wrangler/v3 v3.3.1
+	github.com/rancher/wrangler/v3 v3.7.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.21.0
-	k8s.io/api v0.34.1
-	k8s.io/apimachinery v0.34.1
+	k8s.io/api v0.36.2
+	k8s.io/apimachinery v0.36.2
 	k8s.io/client-go v12.0.0+incompatible
 	kubevirt.io/api v1.7.0
 )
