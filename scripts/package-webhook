@@ -11,7 +11,10 @@ echo "Packaging webhook..."
 IMAGE=${REPO}/vm-dhcp-webhook:${TAG}
 DOCKERFILE=package/Dockerfile.webhook
 
+# bin/ is excluded from the main build context by .dockerignore; pass it as a
+# named build context so the package Dockerfile can reach it via COPY --from=bin.
 docker buildx build --load \
+  --build-context bin=./bin \
   -f ${DOCKERFILE} -t ${IMAGE} .
 echo Built ${IMAGE}
 

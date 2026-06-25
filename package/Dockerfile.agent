@@ -14,6 +14,6 @@ RUN if [ "$TARGETPLATFORM" != "linux/amd64" ] && [ "$TARGETPLATFORM" != "linux/a
 
 ENV ARCH=${TARGETPLATFORM#linux/}
 
-COPY bin/vm-dhcp-agent-${ARCH} /usr/bin/vm-dhcp-agent
+COPY --from=bin vm-dhcp-agent-${ARCH} /usr/bin/vm-dhcp-agent
 
 ENTRYPOINT [ "vm-dhcp-agent" ]

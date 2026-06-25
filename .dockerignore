@@ -7,4 +7,4 @@
 *.DS_Store
 /.vscode
 /.docker
-/scripts/.version_env
+.git
