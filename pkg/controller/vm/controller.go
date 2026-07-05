@@ -3,9 +3,11 @@ package vm
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"reflect"
+	"strings"
 
-	"github.com/harvester/harvester/pkg/util"
+	harvesterutil "github.com/harvester/harvester/pkg/util"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -15,6 +17,7 @@ import (
 	"github.com/harvester/vm-dhcp-controller/pkg/config"
 	ctlkubevirtv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/kubevirt.io/v1"
 	ctlnetworkv1 "github.com/harvester/vm-dhcp-controller/pkg/generated/controllers/network.harvesterhci.io/v1alpha1"
+	dhcputil "github.com/harvester/vm-dhcp-controller/pkg/util"
 )
 
 const (
@@ -58,13 +61,13 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 	ncm := make(map[string]networkv1.NetworkConfig, 1)
 
 	// Construct initial network config map from annotation
-	if vm.Annotations != nil && vm.Annotations[util.AnnotationMacAddressName] != "" {
+	if vm.Annotations != nil && vm.Annotations[harvesterutil.AnnotationMacAddressName] != "" {
 		nicToMacAddress := map[string]string{}
-		if err := json.Unmarshal([]byte(vm.Annotations[util.AnnotationMacAddressName]), &nicToMacAddress); err != nil {
+		if err := json.Unmarshal([]byte(vm.Annotations[harvesterutil.AnnotationMacAddressName]), &nicToMacAddress); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"name":      vm.Name,
 				"namespace": vm.Namespace,
-				"macs":      vm.Annotations[util.AnnotationMacAddressName],
+				"macs":      vm.Annotations[harvesterutil.AnnotationMacAddressName],
 			}).Error("failed to unmarshal mac-address from vm annotation")
 			return nil, nil
 		}
@@ -107,6 +110,8 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 			delete(ncm, i)
 		}
 	}
+
+	applyStaticIPAnnotations(vm, ncm)
 
 	// If no network config is found, return early
 	if len(ncm) == 0 {
@@ -163,4 +168,42 @@ func (h *Handler) OnChange(key string, vm *kubevirtv1.VirtualMachine) (*kubevirt
 	}
 
 	return vm, nil
+}
+
+func applyStaticIPAnnotations(vm *kubevirtv1.VirtualMachine, ncm map[string]networkv1.NetworkConfig) {
+	if len(vm.Annotations) == 0 {
+		return
+	}
+
+	for key, ipAddress := range vm.Annotations {
+		if !strings.HasPrefix(key, dhcputil.StaticIPAnnotationPrefix) {
+			continue
+		}
+
+		nicName := strings.TrimPrefix(key, dhcputil.StaticIPAnnotationPrefix)
+		nc, ok := ncm[nicName]
+		if nicName == "" || !ok {
+			logrus.WithFields(logrus.Fields{
+				"name":       vm.Name,
+				"namespace":  vm.Namespace,
+				"annotation": key,
+			}).Warn("static ip annotation references unknown nic")
+			continue
+		}
+
+		ip := net.ParseIP(ipAddress)
+		if ip == nil || ip.To4() == nil {
+			logrus.WithFields(logrus.Fields{
+				"name":       vm.Name,
+				"namespace":  vm.Namespace,
+				"annotation": key,
+				"ip":         ipAddress,
+			}).Warn("static ip annotation value is not a valid IPv4 address")
+			continue
+		}
+
+		normalizedIP := ip.To4().String()
+		nc.IPAddress = &normalizedIP
+		ncm[nicName] = nc
+	}
 }
