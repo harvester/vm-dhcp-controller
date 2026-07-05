@@ -144,11 +144,41 @@ metadata:
   namespace: default
 spec:
   vmName: test-vm
-  networkConfig:
+  networkConfigs:
   - macAddress: fa:cf:8e:50:82:fc
     networkName: default/net-48
 EOF
 ```
+
+### Static IPs from VM annotations
+
+For Harvester-created VMs, a desired DHCP lease can be pinned per NIC by adding
+annotations to the VirtualMachine:
+
+```
+metadata:
+  annotations:
+    static-ip.harvesterhci.io/nic-1: "192.168.48.86"
+    static-ip.harvesterhci.io/nic-2: "192.168.48.87"
+```
+
+The suffix after `static-ip.harvesterhci.io/` must match the VM interface name
+under `spec.template.spec.domain.devices.interfaces[].name`. The controller
+copies the requested address into the generated VirtualMachineNetworkConfig
+`spec.networkConfigs[].ipAddress`, and the DHCP agent serves that IP through
+the normal IPPool lease flow.
+
+Changing the annotation on an existing VM deallocates the old IP and pins the
+MAC to the new requested IP on the next reconciliation. Removing the annotation
+keeps the current allocation and returns that NIC to dynamic allocation for
+future changes. Harvester normally provides a MAC address for each interface; if
+no MAC can be resolved for a NIC, that NIC is skipped. The vmnetcfg webhook
+rejects invalid requested IPs where possible, which can appear as a denied API
+request in the vm controller logs before a VirtualMachineNetworkConfig is
+created. Allocation-time failures after the object exists are reported on the
+VirtualMachineNetworkConfig `Allocated` condition. Because removing the
+annotation keeps the current allocation, that IP cannot be requested by another
+VM until the old VirtualMachineNetworkConfig allocation is removed or changes.
 
 ## Observability
 
