@@ -21,7 +21,7 @@ replace (
 require (
 	github.com/go-bindata/go-bindata/v3 v3.1.3
 	github.com/gorilla/mux v1.8.1
-	github.com/harvester/harvester v1.7.0
+	github.com/harvester/harvester v1.8.0
 	github.com/harvester/webhook v0.1.5
 	github.com/insomniacslk/dhcp v0.0.0-20260603135910-a415979eb11e
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
