@@ -1,5 +1,12 @@
 {
   "extends": [
     "github>harvester/dependency-automation:renovate"
+  ],
+  "packageRules": [
+    {
+      "matchPackageNames": ["github.com/harvester/harvester"],
+      "matchBaseBranches": ["v1.7"],
+      "allowedVersions": "~1.7.0"
+    }
   ]
 }
