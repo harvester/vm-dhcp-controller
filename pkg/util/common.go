@@ -12,13 +12,19 @@ const (
 	ExcludedMark = "EXCLUDED"
 	ReservedMark = "RESERVED"
 
-	AgentSuffixName         = "agent"
-	NodeArgsAnnotationKey   = "rke2.io/node-args"
-	ServiceCIDRFlag         = "--service-cidr"
-	ManagementNodeLabelKey  = "node-role.kubernetes.io/control-plane"
-	IPPoolNamespaceLabelKey = network.GroupName + "/ippool-namespace"
-	IPPoolNameLabelKey      = network.GroupName + "/ippool-name"
+	AgentSuffixName          = "agent"
+	NodeArgsAnnotationKey    = "rke2.io/node-args"
+	ServiceCIDRFlag          = "--service-cidr"
+	ManagementNodeLabelKey   = "node-role.kubernetes.io/control-plane"
+	IPPoolNamespaceLabelKey  = network.GroupName + "/ippool-namespace"
+	IPPoolNameLabelKey       = network.GroupName + "/ippool-name"
+	StaticIPAnnotationPrefix = "static-ip.harvesterhci.io/"
 )
+
+type NetworkConfigKey struct {
+	NetworkName string
+	MACAddress  string
+}
 
 func agentConcatName(name ...string) string {
 	return strings.Join(append(name, AgentSuffixName), "-")

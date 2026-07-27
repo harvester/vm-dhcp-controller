@@ -2,13 +2,14 @@ package vm
 
 import (
 	"encoding/json"
+	"sort"
 
+	harvesterutil "github.com/harvester/harvester/pkg/util"
+	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
+	dhcputil "github.com/harvester/vm-dhcp-controller/pkg/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-
-	"github.com/harvester/harvester/pkg/util"
-	networkv1 "github.com/harvester/vm-dhcp-controller/pkg/apis/network.harvesterhci.io/v1alpha1"
 )
 
 func prepareVmNetCfg(vm *kubevirtv1.VirtualMachine, ncm map[string]networkv1.NetworkConfig) *networkv1.VirtualMachineNetworkConfig {
@@ -17,8 +18,13 @@ func prepareVmNetCfg(vm *kubevirtv1.VirtualMachine, ncm map[string]networkv1.Net
 	}
 
 	ncs := make([]networkv1.NetworkConfig, 0, len(ncm))
-	for _, nc := range ncm {
-		ncs = append(ncs, nc)
+	nicNames := make([]string, 0, len(ncm))
+	for nicName := range ncm {
+		nicNames = append(nicNames, nicName)
+	}
+	sort.Strings(nicNames)
+	for _, nicName := range nicNames {
+		ncs = append(ncs, ncm[nicName])
 	}
 
 	return &networkv1.VirtualMachineNetworkConfig{
@@ -67,7 +73,16 @@ func (b *vmBuilder) WithInterfaceInAnnotation(macAddress, nicName string) *vmBui
 	}
 
 	macAddressBytes, _ := json.Marshal(b.nicToMacAddress)
-	b.vm.Annotations[util.AnnotationMacAddressName] = string(macAddressBytes)
+	b.vm.Annotations[harvesterutil.AnnotationMacAddressName] = string(macAddressBytes)
+	return b
+}
+
+func (b *vmBuilder) WithStaticIPAnnotation(nicName, ipAddress string) *vmBuilder {
+	if b.vm.Annotations == nil {
+		b.vm.Annotations = make(map[string]string)
+	}
+
+	b.vm.Annotations[dhcputil.StaticIPAnnotationPrefix+nicName] = ipAddress
 	return b
 }
 
