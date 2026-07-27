@@ -146,14 +146,15 @@ func (h *Handler) Allocate(vmNetCfg *networkv1.VirtualMachineNetworkConfig, stat
 			if err != nil {
 				return status, err
 			}
+			if nc.IPAddress != nil && *nc.IPAddress != ip {
+				return status, fmt.Errorf("desired IP changed for mac %s from %s to %s; waiting for sync", nc.MACAddress, ip, *nc.IPAddress)
+			}
 		} else {
 			dIP := net.IPv4zero.String()
 			if nc.IPAddress != nil {
 				dIP = *nc.IPAddress
-			}
-
-			// Recover IP from status (resume from paused state)
-			if oIP, err := findIPAddressFromNetworkConfigStatusByMACAddress(vmNetCfg.Status.NetworkConfigs, nc.MACAddress); err == nil {
+			} else if oIP, err := findIPAddressFromNetworkConfigStatusByMACAddress(vmNetCfg.Status.NetworkConfigs, nc.MACAddress); err == nil {
+				// Recover IP from status (resume from paused state)
 				dIP = oIP
 			}
 
@@ -242,16 +243,24 @@ func (h *Handler) Sync(vmNetCfg *networkv1.VirtualMachineNetworkConfig, status n
 	logrus.Infof("(vmnetcfg.InSynced) vmnetcfg %s/%s is out-of-sync; start reconciling", vmNetCfg.Namespace, vmNetCfg.Name)
 
 	// Build a set of MAC addresses from the Spec
-	var macAddressSet = make(map[string]struct{})
+	var desiredIPByNetworkConfig = make(map[util.NetworkConfigKey]*string)
 	for _, nc := range vmNetCfg.Spec.NetworkConfigs {
-		macAddressSet[nc.MACAddress] = struct{}{}
+		desiredIPByNetworkConfig[util.NetworkConfigKey{
+			NetworkName: nc.NetworkName,
+			MACAddress:  nc.MACAddress,
+		}] = nc.IPAddress
 	}
 
-	// Mark the NetworkConfigStatus as stale if the MAC address is not in
-	// the Spec; otherwise, add it to the non-stale list.
+	// Mark the NetworkConfigStatus as stale if the network config is not in
+	// the Spec or its explicit desired IP changed; otherwise, add it to the
+	// non-stale list.
 	var nonStaleNetworkConfigs []networkv1.NetworkConfigStatus
 	for i, ncStatus := range status.NetworkConfigs {
-		if _, ok := macAddressSet[ncStatus.MACAddress]; !ok {
+		desiredIP, ok := desiredIPByNetworkConfig[util.NetworkConfigKey{
+			NetworkName: ncStatus.NetworkName,
+			MACAddress:  ncStatus.MACAddress,
+		}]
+		if !ok || (desiredIP != nil && *desiredIP != ncStatus.AllocatedIPAddress) {
 			status.NetworkConfigs[i].State = networkv1.StaleState
 			continue
 		}

@@ -25,7 +25,9 @@ const (
 	testMACAddress1       = "11:22:33:44:55:66"
 	testMACAddress2       = "22:33:44:55:66:77"
 	testIPAddress         = "192.168.100.100"
+	testIPAddress2        = "192.168.100.101"
 	testNICName           = "nic1"
+	testNICName2          = "nic2"
 	testVmNetCfgNamespace = "default"
 	testVmNetCfgName      = "test-vm"
 )
@@ -107,6 +109,142 @@ func TestHandler_OnChange(t *testing.T) {
 			}).
 			WithVMName(testVMName).
 			WithNetworkConfig("", testMACAddress1, testNetworkName).Build()
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Add(givenVM)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		handler := Handler{
+			vmnetcfgCache:  fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+			vmnetcfgClient: fakeclient.VirtualMachineNetworkConfigClient(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+		}
+
+		_, err = handler.OnChange(testKey, givenVM)
+		assert.Nil(t, err)
+
+		vmNetCfg, err := handler.vmnetcfgClient.Get(testVmNetCfgNamespace, testVmNetCfgName, metav1.GetOptions{})
+		assert.Nil(t, err)
+		assert.Equal(t, expectedVmNetCfg, vmNetCfg)
+	})
+
+	t.Run("new vm with static ip annotation", func(t *testing.T) {
+		givenVM := newTestVMBuilder().
+			WithInterfaceInSpec(testMACAddress1, testNICName).
+			WithNetwork(testNICName, testNetworkName).
+			WithStaticIPAnnotation(testNICName, testIPAddress).Build()
+
+		expectedVmNetCfg := newTestVmNetCfgBuilder().
+			Label(vmLabelKey, testVMName).
+			OwnerRef(metav1.OwnerReference{
+				Name: testVMName,
+			}).
+			WithVMName(testVMName).
+			WithNetworkConfig(testIPAddress, testMACAddress1, testNetworkName).Build()
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Add(givenVM)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		handler := Handler{
+			vmnetcfgCache:  fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+			vmnetcfgClient: fakeclient.VirtualMachineNetworkConfigClient(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+		}
+
+		_, err = handler.OnChange(testKey, givenVM)
+		assert.Nil(t, err)
+
+		vmNetCfg, err := handler.vmnetcfgClient.Get(testVmNetCfgNamespace, testVmNetCfgName, metav1.GetOptions{})
+		assert.Nil(t, err)
+		assert.Equal(t, expectedVmNetCfg, vmNetCfg)
+	})
+
+	t.Run("new vm ignores static ip annotation for unknown nic", func(t *testing.T) {
+		givenVM := newTestVMBuilder().
+			WithInterfaceInSpec(testMACAddress1, testNICName).
+			WithNetwork(testNICName, testNetworkName).
+			WithStaticIPAnnotation("unknown-nic", testIPAddress).Build()
+
+		expectedVmNetCfg := newTestVmNetCfgBuilder().
+			Label(vmLabelKey, testVMName).
+			OwnerRef(metav1.OwnerReference{
+				Name: testVMName,
+			}).
+			WithVMName(testVMName).
+			WithNetworkConfig("", testMACAddress1, testNetworkName).Build()
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Add(givenVM)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		handler := Handler{
+			vmnetcfgCache:  fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+			vmnetcfgClient: fakeclient.VirtualMachineNetworkConfigClient(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+		}
+
+		_, err = handler.OnChange(testKey, givenVM)
+		assert.Nil(t, err)
+
+		vmNetCfg, err := handler.vmnetcfgClient.Get(testVmNetCfgNamespace, testVmNetCfgName, metav1.GetOptions{})
+		assert.Nil(t, err)
+		assert.Equal(t, expectedVmNetCfg, vmNetCfg)
+	})
+
+	t.Run("new vm ignores malformed static ip annotation", func(t *testing.T) {
+		givenVM := newTestVMBuilder().
+			WithInterfaceInSpec(testMACAddress1, testNICName).
+			WithNetwork(testNICName, testNetworkName).
+			WithStaticIPAnnotation(testNICName, "not-an-ip").Build()
+
+		expectedVmNetCfg := newTestVmNetCfgBuilder().
+			Label(vmLabelKey, testVMName).
+			OwnerRef(metav1.OwnerReference{
+				Name: testVMName,
+			}).
+			WithVMName(testVMName).
+			WithNetworkConfig("", testMACAddress1, testNetworkName).Build()
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Add(givenVM)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		handler := Handler{
+			vmnetcfgCache:  fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+			vmnetcfgClient: fakeclient.VirtualMachineNetworkConfigClient(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+		}
+
+		_, err = handler.OnChange(testKey, givenVM)
+		assert.Nil(t, err)
+
+		vmNetCfg, err := handler.vmnetcfgClient.Get(testVmNetCfgNamespace, testVmNetCfgName, metav1.GetOptions{})
+		assert.Nil(t, err)
+		assert.Equal(t, expectedVmNetCfg, vmNetCfg)
+	})
+
+	t.Run("new vm maps static ip annotations to matching nics", func(t *testing.T) {
+		givenVM := newTestVMBuilder().
+			WithInterfaceInSpec(testMACAddress1, testNICName).
+			WithInterfaceInSpec(testMACAddress2, testNICName2).
+			WithNetwork(testNICName, testNetworkName).
+			WithNetwork(testNICName2, testNetworkName).
+			WithStaticIPAnnotation(testNICName, testIPAddress).
+			WithStaticIPAnnotation(testNICName2, testIPAddress2).Build()
+
+		expectedVmNetCfg := newTestVmNetCfgBuilder().
+			Label(vmLabelKey, testVMName).
+			OwnerRef(metav1.OwnerReference{
+				Name: testVMName,
+			}).
+			WithVMName(testVMName).
+			WithNetworkConfig(testIPAddress, testMACAddress1, testNetworkName).
+			WithNetworkConfig(testIPAddress2, testMACAddress2, testNetworkName).Build()
 
 		clientset := fake.NewSimpleClientset()
 		err := clientset.Tracker().Add(givenVM)
@@ -255,6 +393,49 @@ func TestHandler_OnChange(t *testing.T) {
 		vmNetCfg, err := handler.vmnetcfgClient.Get(testVmNetCfgNamespace, testVmNetCfgName, metav1.GetOptions{})
 		assert.Nil(t, err)
 		// The InSynced condition is the only thing we care about in this test
+		assert.Equal(t, expectedVmNetCfg.Status, vmNetCfg.Status)
+	})
+
+	t.Run("static ip annotation change should flag existing vmnetcfg as out-of-sync", func(t *testing.T) {
+		givenVM := newTestVMBuilder().
+			WithInterfaceInSpec(testMACAddress1, testNICName).
+			WithNetwork(testNICName, testNetworkName).
+			WithStaticIPAnnotation(testNICName, testIPAddress2).Build()
+		givenVmNetCfg := newTestVmNetCfgBuilder().
+			Label(vmLabelKey, testVMName).
+			WithVMName(testVMName).
+			WithNetworkConfig(testIPAddress, testMACAddress1, testNetworkName).
+			WithNetworkConfigStatus(testIPAddress, testMACAddress1, testNetworkName, networkv1.AllocatedState).
+			InSyncedCondition(corev1.ConditionTrue, "", "").Build()
+
+		expectedVmNetCfg := newTestVmNetCfgBuilder().
+			Label(vmLabelKey, testVMName).
+			WithVMName(testVMName).
+			WithNetworkConfig(testIPAddress, testMACAddress1, testNetworkName).
+			WithNetworkConfigStatus(testIPAddress, testMACAddress1, testNetworkName, networkv1.AllocatedState).
+			InSyncedCondition(corev1.ConditionFalse, "NetworkConfigChanged", "Network configuration of the upstrem virtual machine has been changed").Build()
+
+		clientset := fake.NewSimpleClientset()
+		err := clientset.Tracker().Add(givenVM)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = clientset.Tracker().Add(givenVmNetCfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		handler := Handler{
+			vmController:   fakecontroller.VirtualMachineController(clientset.KubevirtV1().VirtualMachines),
+			vmnetcfgCache:  fakeclient.VirtualMachineNetworkConfigCache(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+			vmnetcfgClient: fakeclient.VirtualMachineNetworkConfigClient(clientset.NetworkV1alpha1().VirtualMachineNetworkConfigs),
+		}
+
+		_, err = handler.OnChange(testKey, givenVM)
+		assert.Nil(t, err)
+
+		vmNetCfg, err := handler.vmnetcfgClient.Get(testVmNetCfgNamespace, testVmNetCfgName, metav1.GetOptions{})
+		assert.Nil(t, err)
 		assert.Equal(t, expectedVmNetCfg.Status, vmNetCfg.Status)
 	})
 
