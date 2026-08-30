@@ -15,7 +15,7 @@ replace (
 	k8s.io/code-generator => k8s.io/code-generator v0.32.5
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
 	kubevirt.io/client-go => kubevirt.io/client-go v1.6.3
-	kubevirt.io/kubevirt => kubevirt.io/kubevirt v1.6.3
+	kubevirt.io/kubevirt => kubevirt.io/kubevirt v1.9.0
 )
 
 require (
@@ -133,7 +133,7 @@ require (
 	kubevirt.io/client-go v1.6.3 // indirect
 	kubevirt.io/containerized-data-importer-api v1.62.0 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
-	kubevirt.io/kubevirt v1.6.3 // indirect
+	kubevirt.io/kubevirt v1.9.0 // indirect
 	sigs.k8s.io/controller-runtime v0.20.4 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
